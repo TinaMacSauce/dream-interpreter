@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: dream-interpreter
+    env: python
+    plan: starter
+
+    buildCommand: "pip install -r requirements.txt"
+    # Gunicorn = multi-worker, robust serving
+    startCommand: "gunicorn app:app --preload --bind 0.0.0.0:$PORT --timeout 120 --workers 2 --threads 4"
+
+    healthCheckPath: /healthz
+
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SHEET_KEY
+        value: 1ToWPpJ_u-Z14eqL9U1oJppXX6f63h_eZcjUVglKr4Zk
+      - key: WORKSHEET_NAME
+        value: Sheet1
+      - key: ALLOWED_ORIGINS
+        value: https://jamaicantruestories.com,https://www.jamaicantruestories.com,https://interpreter.jamaicantruestories.com
+      - key: GSPREAD_CREDENTIALS
+        value: /etc/secrets/credentials.json
+
+      # Behavior tuning (optional)
+      - key: DEFAULT_FALLBACK_MESSAGE
+        value: "Spiritual Meaning: Your spirit is asking for clarity and protection. Effects in the Physical Realm: You may feel confusion, delays, or mixed signals from people around you. What to Do: Pray, fast, write the dream in one simple line with keywords, and avoid eating/accepting items in dreams."
+      - key: RELOAD_SEC
+        value: "300"
+      - key: DISABLE_SEMANTIC
+        value: "0"     # set to "1" to disable SBERT on low-memory plans
+      - key: SEMANTIC_CUTOFF
+        value: "0.60"
+      - key: RATE_WINDOW_SEC
+        value: "60"
+      - key: RATE_LIMIT
+        value: "60"
+
+      # Optional Sentry
+      # - key: SENTRY_DSN
+      #   value: <your DSN>

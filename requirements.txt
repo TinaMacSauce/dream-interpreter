@@ -1,8 +1,0 @@
-Flask
-gunicorn
-gspread
-google-auth
-google-auth-oauthlib
-pandas
-python-dotenv
-flask-cors==4.0.1

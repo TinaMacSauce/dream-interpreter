@@ -1,0 +1,316 @@
+# app.py
+import os, re, time, difflib, logging
+from typing import List, Tuple, Optional
+from collections import defaultdict
+
+import pandas as pd
+import gspread
+from google.oauth2.service_account import Credentials
+from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
+
+# ───────────────────────── Optional Sentry ─────────────────────────
+try:
+    import sentry_sdk
+    if os.getenv("SENTRY_DSN"):
+        sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"), traces_sample_rate=0.1)
+except Exception:
+    pass
+
+# ───────────────────────── App & Logging ─────────────────────────
+app = Flask(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+# ───────────────────────── CORS (strict) ─────────────────────────
+allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if allowed_origins:
+    CORS(app, origins=allowed_origins)
+else:
+    CORS(app)  # dev fallback
+
+# ───────────────────────── Env Config ─────────────────────────
+SHEET_KEY        = os.getenv("SHEET_KEY")  # REQUIRED
+WORKSHEET_NAME   = os.getenv("WORKSHEET_NAME", "Sheet1")
+
+# Service account file location (Render secret file default)
+CREDENTIALS_PATH = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/etc/secrets/credentials.json")
+
+DEFAULT_FALLBACK_MESSAGE = os.getenv(
+    "DEFAULT_FALLBACK_MESSAGE",
+    ("Spiritual Meaning: Your spirit is asking for clarity and protection. "
+     "Effects in the Physical Realm: You may feel confusion, delays, or mixed signals from people around you. "
+     "What to Do: Pray for guidance, fast as you are led, write the dream plainly in one or two simple lines, "
+     "and repeat it using clear keywords (e.g., 'falling', 'snake bite on hand', 'teeth falling out'). "
+     "Avoid eating or accepting items in dreams; cover yourself spiritually before sleep.")
+)
+
+# Tunables / feature flags
+RELOAD_SEC       = int(os.getenv("RELOAD_SEC", "300"))        # sheet hot-reload cadence
+DISABLE_SEMANTIC = os.getenv("DISABLE_SEMANTIC", "0") == "1"  # set 1 to skip SBERT
+SEMANTIC_CUTOFF  = float(os.getenv("SEMANTIC_CUTOFF", "0.60"))  # hard floor
+SEMANTIC_SOFT    = float(os.getenv("SEMANTIC_SOFT", "0.45"))    # soft floor (low-confidence)
+
+# Simple rate limit (per IP)
+RL_WINDOW_SEC    = int(os.getenv("RATE_WINDOW_SEC", "60"))
+RL_LIMIT         = int(os.getenv("RATE_LIMIT", "60"))
+
+# ───────────────────────── Globals ─────────────────────────
+DF: Optional[pd.DataFrame] = None
+LAST_LOAD = 0.0
+SNAPSHOT = "/tmp/dream_dict.parquet"
+
+# gspread client (lazy)
+_GS_CLIENT = None
+
+# Semantic search globals (lazy)
+EMB_MODEL = None
+EMB_MATRIX = None
+
+# ───────────────────────── Utilities ─────────────────────────
+def normalize_text(s: str) -> str:
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9\s,/-]+", " ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+def _sheet_error(msg: str):
+    logging.error("❌ Sheet error: %s", msg)
+    return False, msg
+
+def _gs_client():
+    """Lazy-create gspread client using service account credentials."""
+    global _GS_CLIENT
+    if _GS_CLIENT is not None:
+        return _GS_CLIENT
+    if not os.path.exists(CREDENTIALS_PATH):
+        raise FileNotFoundError(f"Credentials file not found at {CREDENTIALS_PATH}")
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_file(CREDENTIALS_PATH, scopes=scopes)
+    _GS_CLIENT = gspread.authorize(creds)
+    return _GS_CLIENT
+
+# ───────────────────────── Sheet Loading (with snapshot fallback) ─────────────────────────
+def load_sheet(force: bool = False):
+    """Load Google Sheet into memory; on failure, fall back to snapshot if present."""
+    global DF, LAST_LOAD
+    if not force and DF is not None and (time.time() - LAST_LOAD) < RELOAD_SEC:
+        return True, "cached"
+
+    if not SHEET_KEY:
+        return _sheet_error("Missing SHEET_KEY")
+    try:
+        client = _gs_client()
+        ws = client.open_by_key(SHEET_KEY).worksheet(WORKSHEET_NAME)
+        records = ws.get_all_records()
+        if not records:
+            raise RuntimeError("Sheet is empty")
+
+        df = pd.DataFrame(records)
+        if "input" not in df.columns or "output" not in df.columns:
+            raise RuntimeError("Sheet must include columns: input, output (keywords optional)")
+
+        df["_input_norm"] = df["input"].astype(str).map(normalize_text)
+        if "keywords" in df.columns:
+            df["_kw_list"] = df["keywords"].astype(str).apply(
+                lambda v: [normalize_text(x) for x in re.split(r"[,\|;/]", v) if x.strip()]
+            )
+        else:
+            df["_kw_list"] = [[] for _ in range(len(df))]
+
+        # Save snapshot for resilience
+        try:
+            df.to_parquet(SNAPSHOT, index=False)
+        except Exception as e:
+            logging.warning("Snapshot write failed: %s", e)
+
+        DF, LAST_LOAD = df, time.time()
+        logging.info("✅ Sheet loaded: %d rows", len(df))
+
+        # Build semantic index (optional)
+        if not DISABLE_SEMANTIC:
+            build_embeddings(df)
+
+        return True, "loaded"
+
+    except Exception as e:
+        logging.error("❌ Live load failed: %s", e)
+        # Try snapshot
+        if os.path.exists(SNAPSHOT):
+            try:
+                df = pd.read_parquet(SNAPSHOT)
+                DF, LAST_LOAD = df, time.time()
+                logging.info("⚠️ Using snapshot with %d rows", len(df))
+                if not DISABLE_SEMANTIC:
+                    build_embeddings(df)
+                return True, "snapshot"
+            except Exception as e2:
+                return _sheet_error(f"Snapshot read failed: {e2}")
+        return _sheet_error(str(e))
+
+# ───────────────────────── Matching ─────────────────────────
+def score_by_keywords(text_norm: str, kw_list: List[str]) -> int:
+    return sum(1 for kw in kw_list if kw and kw in text_norm)
+
+def find_best_match(user_input: str) -> Tuple[Optional[str], dict]:
+    """
+    Rank by precedence: exact > fuzzy > keywords > semantic (>= cutoff).
+    If semantic is between soft & hard thresholds, return it as low-confidence
+    rather than 'No response'.
+    """
+    ok, msg = load_sheet()
+    if not ok or DF is None:
+        return None, {"status": "sheet_unavailable", "detail": msg}
+
+    t = normalize_text(user_input)
+
+    # 1) EXACT
+    try:
+        inputs = DF["_input_norm"].tolist()
+        if t in inputs:
+            idx = inputs.index(t)
+            return DF.iloc[idx]["output"], {"method": "exact"}
+    except Exception:
+        pass
+
+    # 2) FUZZY
+    try:
+        inputs = DF["_input_norm"].tolist()
+        fuzzy = difflib.get_close_matches(t, inputs, n=1, cutoff=0.82)
+        if fuzzy:
+            idx = inputs.index(fuzzy[0])
+            return DF.iloc[idx]["output"], {"method": "fuzzy", "similar": fuzzy[0]}
+    except Exception:
+        pass
+
+    # Keep a best candidate (keywords or low semantic) if we have one
+    best = {"method": "none", "idx": None, "score": 0.0, "payload": {}}
+
+    # 3) KEYWORDS
+    try:
+        kw_scores = [(score_by_keywords(t, row["_kw_list"]), i) for i, row in DF.iterrows()]
+        kw_scores = [(s, i) for s, i in kw_scores if s > 0]
+        if kw_scores:
+            kw_scores.sort(reverse=True)
+            s, idx = kw_scores[0]
+            best = {"method": "keywords", "idx": idx, "score": float(s), "payload": {"kw_score": int(s)}}
+    except Exception:
+        pass
+
+    # 4) SEMANTIC
+    sem_text = None
+    if not DISABLE_SEMANTIC:
+        sem_text, meta = semantic_search(t)
+        sem_score = float(meta.get("score", 0.0)) if isinstance(meta, dict) else 0.0
+
+        # Strong semantic wins outright
+        if sem_score >= SEMANTIC_CUTOFF and sem_text:
+            return sem_text, {"method": "semantic", "score": sem_score}
+
+        # Soft semantic becomes candidate if we don't already have keywords
+        if sem_score >= SEMANTIC_SOFT and sem_text and best["method"] != "keywords":
+            best = {"method": "semantic_low", "idx": None, "score": sem_score,
+                    "payload": {"score": sem_score, "low_confidence": True, "similarity": sem_score}}
+
+    # Return best candidate if present
+    if best["method"] == "keywords":
+        return DF.iloc[best["idx"]]["output"], {"method": "keywords", **best["payload"]}
+    if best["method"] == "semantic_low":
+        return sem_text, {"method": "semantic_low", **best["payload"]}
+
+    # Nothing decent → caller returns fallback
+    return None, {"method": "none"}
+
+# ───────────────────────── Semantic Search (SBERT) ─────────────────────────
+def build_embeddings(df: pd.DataFrame):
+    global EMB_MODEL, EMB_MATRIX
+    try:
+        from sentence_transformers import SentenceTransformer
+        EMB_MODEL = EMB_MODEL or SentenceTransformer("all-MiniLM-L6-v2")
+        texts = df["_input_norm"].tolist()
+        EMB_MATRIX = EMB_MODEL.encode(texts, convert_to_numpy=True, normalize_embeddings=True)
+        logging.info("🔎 Semantic index built: %d vectors", len(texts))
+    except Exception as e:
+        logging.warning("Semantic disabled (build failed): %s", e)
+        EMB_MATRIX = None
+
+def semantic_search(query_norm: str):
+    """Return (best_text, meta{score, idx}) without enforcing the cutoff here."""
+    try:
+        if EMB_MODEL is None or EMB_MATRIX is None:
+            return None, {"method": "semantic", "status": "not_ready"}
+        from sklearn.metrics.pairwise import cosine_similarity
+        q = EMB_MODEL.encode([query_norm], convert_to_numpy=True, normalize_embeddings=True)
+        sims = cosine_similarity(q, EMB_MATRIX)[0]
+        idx = int(sims.argmax())
+        score = float(sims[idx])
+        return DF.iloc[idx]["output"], {"method": "semantic", "score": score, "idx": idx}
+    except Exception as e:
+        logging.warning("Semantic search error: %s", e)
+        return None, {"method": "semantic", "status": "error"}
+
+# ───────────────────────── Rate Limiting ─────────────────────────
+_bucket = defaultdict(list)
+def _client_ip():
+    return request.headers.get("X-Forwarded-For", request.remote_addr or "unknown").split(",")[0].strip()
+
+@app.before_request
+def throttle():
+    if request.endpoint == "interpret":
+        ip = _client_ip()
+        now = time.time()
+        _bucket[ip] = [t for t in _bucket[ip] if now - t < RL_WINDOW_SEC]
+        if len(_bucket[ip]) >= RL_LIMIT:
+            return jsonify({"error": "Too many requests"}), 429
+        _bucket[ip].append(now)
+
+# ───────────────────────── Routes ─────────────────────────
+@app.route("/")
+def index():
+    try:
+        return render_template("index.html")
+    except Exception:
+        return "Dream Interpreter API", 200
+
+@app.route("/interpret", methods=["POST"])
+def interpret():
+    data = request.get_json(silent=True) or {}
+    dream = (data.get("dream") or "").strip()
+    if not dream:
+        return jsonify({"interpretation": "Please enter a dream."}), 400
+
+    result, meta = find_best_match(dream)
+    logging.info("Dream from %s → %s", _client_ip(), meta)
+
+    if result is None:
+        return jsonify({
+            "interpretation": DEFAULT_FALLBACK_MESSAGE,
+            "meta": {**meta, "method": "fallback"}
+        }), 200
+    return jsonify({"interpretation": result, "meta": meta}), 200
+
+@app.route("/reload", methods=["POST", "GET"])
+def reload_sheet():
+    ok, detail = load_sheet(force=True)
+    return jsonify({"ok": ok, "detail": detail}), (200 if ok else 500)
+
+@app.route("/healthz")
+def healthz():
+    """
+    Returns status + whether the sheet is loaded.
+    Also tries a lazy non-forced load so health checks can pass immediately.
+    """
+    ok, detail = load_sheet(force=False)
+    has_key = bool(SHEET_KEY)
+    has_creds = os.path.exists(CREDENTIALS_PATH)
+    return jsonify({
+        "status": "OK",
+        "loaded": (DF is not None),
+        "source": detail,
+        "has_sheet_key": has_key,
+        "has_credentials_file": has_creds,
+        "worksheet": WORKSHEET_NAME
+    }), 200
+
+# ───────────────────────── Entrypoint ─────────────────────────
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)

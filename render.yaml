@@ -1,0 +1,46 @@
+# render.yaml
+services:
+  - type: web
+    name: dream-interpreter-0015
+    env: python
+    plan: free                 # or 'starter' / 'standard' / etc.
+    region: oregon             # pick your region
+    autoDeploy: true
+    healthCheckPath: /healthz
+
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+
+    startCommand: |
+      gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+
+    envVars:
+      # ---- Core config pulled from your .env guidance ----
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: /etc/secrets/credentials.json
+      - key: GSPREAD_CREDENTIALS
+        value: /etc/secrets/credentials.json
+
+      - key: SHEET_KEY
+        value: 1ToWPpJ_u-Z14eqL9U1oJppXX6f63h_eZcjUVglKr4Zk
+      - key: WORKSHEET_NAME
+        value: Sheet1
+
+      # ---- CORS allow-list: NO spaces, NO trailing slashes ----
+      - key: ALLOWED_ORIGINS
+        value: https://jamaicantruestories.com,https://www.jamaicantruestories.com,https://plqwhd-jm.myshopify.com
+
+      # Optional tuning (you can keep defaults in code if you prefer)
+      - key: RELOAD_SEC
+        value: "300"
+      - key: RATE_WINDOW_SEC
+        value: "60"
+      - key: RATE_LIMIT
+        value: "60"
+      - key: DISABLE_SEMANTIC
+        value: "1"      # keep semantic off unless you've added the extra deps
+
+      # Flask
+      - key: FLASK_ENV
+        value: production

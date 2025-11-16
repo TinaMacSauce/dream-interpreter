@@ -1,0 +1,43 @@
+# --- Secrets & env ---
+.env
+*.env
+credentials.json
+*.pem
+*.key
+
+# --- Python caches & build ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.build/
+dist/
+build/
+*.egg-info/
+
+# --- Virtualenvs ---
+venv/
+.venv/
+env/
+.envrc
+.python-version
+
+# --- Editors & OS noise ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# --- Tools / linters ---
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+
+# --- Logs & misc ---
+*.log
+logs/

@@ -185,6 +185,13 @@ def compose_output(keys: List[str]) -> Dict[str, object]:
 app = Flask(__name__)
 CORS(app)
 
+# Load the Google Sheet into memory when the app starts
+try:
+    refresh_cache()
+except Exception as e:
+    logging.error("Error loading sheet at startup: %s", e)
+
+
 @app.get("/health")
 def health():
     return {"ok": True, "loaded_rows": len(INPUTS), "worksheet": WORKSHEET_NAME}
@@ -301,6 +308,5 @@ def stripe_cancel():
 
 # ── Entrypoint ──────────────────────────────────────────────────────
 if __name__ == "__main__":
-    refresh_cache()
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
  

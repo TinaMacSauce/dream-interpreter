@@ -264,8 +264,8 @@ def create_checkout():
         mode="subscription",
         customer_email=email if email else None,
         line_items=[{"price": price_id, "quantity": 1}],
-        success_url="http://127.0.0.1:5000/stripe/success?session_id={CHECKOUT_SESSION_ID}",
-        cancel_url="http://127.0.0.1:5000/stripe/cancel",
+        success_url="http://interpreter.jamaicantruestories.com/stripe/success?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url="http://interpreter.jamaicantruestories.com/stripe/cancel",
         client_reference_id=email or None,
         allow_promotion_codes=True
     )

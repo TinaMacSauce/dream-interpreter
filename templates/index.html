@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-F3STGBBPBV"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-F3STGBBPBV', { send_page_view: true });
+  </script>
+
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jamaican True Stories • Dream Interpreter</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0b0b0e;
+      --panel:#121218;
+      --ink:#e9e9ef;
+      --muted:#b7b7c2;
+      --gold:#d4af37;
+      --gold-2:#b8921e;
+      --red:#f87171;
+      --edge:#2b2730;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:
+        radial-gradient(1200px 600px at 10% -10%, rgba(212,175,55,.07), transparent 60%),
+        var(--bg);
+      color:var(--ink);
+      font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      display:flex; align-items:center; justify-content:center;
+      padding:32px;
+    }
+
+    .card{
+      width:min(880px,100%);
+      background:
+        linear-gradient(180deg, rgba(212,175,55,.05), transparent 160px),
+        var(--panel);
+      border:1px solid rgba(212,175,55,.18);
+      border-radius:20px;
+      box-shadow:0 10px 30px rgba(0,0,0,.45);
+      padding:28px 24px 22px;
+      position:relative; overflow:hidden;
+    }
+    .card::before{
+      content:""; position:absolute; inset:0; pointer-events:none; opacity:.18;
+      background-image:
+        radial-gradient(rgba(255,255,255,.09) 1px, transparent 1.2px),
+        radial-gradient(rgba(255,255,255,.06) 1px, transparent 1.2px);
+      background-size:3px 3px,5px 5px; background-position:0 0, 10px 8px;
+    }
+
+    .brand{display:flex; align-items:center; gap:14px; margin-bottom:12px; position:relative; z-index:1;}
+    .logo{
+      width:56px; height:56px; border-radius:50%;
+      object-fit:cover; background:#0e0e14;
+      border:1px solid rgba(212,175,55,.35);
+      box-shadow: inset 0 0 0 1px rgba(212,175,55,.14), 0 0 18px rgba(212,175,55,.18);
+    }
+    .brand-text{display:flex; flex-direction:column}
+    h1{
+      font-family:Cinzel,serif; font-weight:700; letter-spacing:.5px;
+      margin:0; font-size:1.35rem;
+      text-shadow:0 0 16px rgba(212,175,55,.18);
+    }
+    .sub{color:var(--muted); margin:6px 0 22px; font-size:.95rem}
+
+    label.mini{color:var(--muted); font-size:.85rem}
+    textarea{
+      width:100%; min-height:140px;
+      background:#0e0e14; color:var(--ink);
+      border:1px solid rgba(212,175,55,.2); border-radius:14px;
+      padding:14px 14px 42px 14px;
+      outline:none; resize:vertical; caret-color:var(--gold);
+      box-shadow:inset 0 0 0 1px rgba(212,175,55,.06);
+    }
+    .controls{display:flex; gap:12px; align-items:center; justify-content:space-between; margin-top:10px;}
+    .mini{color:var(--muted); font-size:.85rem}
+
+    .btn{
+      appearance:none; border:none; border-radius:999px; padding:12px 18px; font-weight:600; cursor:pointer;
+      background:linear-gradient(180deg, var(--gold), var(--gold-2)); color:#0b0b0e;
+      box-shadow:0 6px 18px rgba(212,175,55,.25);
+    }
+    .btn:disabled{opacity:.6; cursor:not-allowed; box-shadow:none}
+
+    .samples{margin-top:6px; display:flex; flex-wrap:wrap; gap:8px}
+    .chip{
+      border:1px solid rgba(212,175,55,.22); color:var(--ink);
+      padding:6px 10px; border-radius:999px; font-size:.85rem; cursor:pointer;
+      background:#0b0b11;
+    }
+
+    .result{margin-top:18px; border:1px solid rgba(212,175,55,.18); border-radius:16px; background:#0f0f15; padding:16px;}
+    .result h3{margin:0 0 8px; font-family:Cinzel,serif; font-size:1.05rem; color:var(--gold)}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9rem; color:#dcdcf4}
+    .err{color:var(--red)}
+    .footer{margin-top:14px; color:var(--muted); font-size:.85rem}
+    a{color:var(--gold)}
+
+    .section-title{
+      font-weight:600;
+      color:var(--gold);
+      margin-top:8px;
+      margin-bottom:2px;
+      font-size:.95rem;
+    }
+
+    .paywall-box{
+      margin-top:6px;
+      padding:12px;
+      border-radius:12px;
+      border:1px dashed rgba(212,175,55,.4);
+      background:rgba(0,0,0,.55);
+      font-size:.9rem;
+    }
+    .paywall-actions{
+      margin-top:10px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .btn-outline{
+      border-radius:999px;
+      padding:8px 14px;
+      font-size:.85rem;
+      border:1px solid rgba(212,175,55,.7);
+      background:transparent;
+      color:var(--ink);
+      text-decoration:none;
+      cursor:pointer;
+    }
+
+    /* Full Interpretation UI */
+    .toggle-btn{
+      margin-top:12px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:100%;
+      gap:8px;
+      border-radius:999px;
+      padding:10px 14px;
+      font-size:.9rem;
+      border:1px solid rgba(212,175,55,.7);
+      background:transparent;
+      color:var(--ink);
+      cursor:pointer;
+    }
+    .toggle-btn:hover{
+      border-color: rgba(212,175,55,.9);
+      box-shadow: 0 0 0 3px rgba(212,175,55,.08);
+    }
+    .full-box{
+      margin-top:10px;
+      padding:14px;
+      border-radius:14px;
+      border:1px solid rgba(212,175,55,.22);
+      background:rgba(0,0,0,.45);
+      line-height:1.55;
+      white-space:pre-wrap;
+    }
+    .full-hint{
+      margin-top:8px;
+      opacity:.8;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="card">
+    <div class="brand">
+      <img class="logo" src="https://cdn.shopify.com/s/files/1/0740/7245/7431/files/transparent_jts_logo.png?v=1749773424" alt="Jamaican True Stories logo">
+      <div class="brand-text">
+        <h1>Jamaican True Stories — Dream Interpreter</h1>
+        <div class="sub">Type your dream below. We’ll search your meanings and return a clear, gentle interpretation.</div>
+      </div>
+    </div>
+
+    <label for="dream" class="mini">Your dream</label>
+    <textarea id="dream" placeholder="Example: I was riding a bicycle…"></textarea>
+
+    <div class="controls">
+      <div class="mini" id="count">0 characters</div>
+      <button id="go" class="btn">Interpret Dream</button>
+    </div>
+
+    <div class="samples mini">
+      Try:
+      <span class="chip">“teeth falling out”</span>
+      <span class="chip">“snake bite on my hand”</span>
+      <span class="chip">“running late for an exam”</span>
+      <span class="chip">“flying over the sea at night”</span>
+    </div>
+
+    <section id="out" class="result" style="display:none">
+      <h3>Interpretation</h3>
+
+      <!-- Quick Decode -->
+      <div id="interp"></div>
+
+      <!-- Full Interpretation -->
+      <div id="fullWrap" style="display:none;">
+        <button id="toggleFull" type="button" class="toggle-btn">View Full Interpretation</button>
+        <div id="fullBox" class="full-box" style="display:none;"></div>
+        <div class="mini full-hint">This section turns your doctrine results into a readable paragraph without adding new meaning.</div>
+      </div>
+
+      <div class="mini" style="margin-top:8px">
+        Status: <span class="mono" id="method">—</span>
+        <span id="usesWrap" style="display:none"> • Free uses left: <span class="mono" id="uses">—</span></span>
+      </div>
+    </section>
+
+    <div class="footer">Health: <a href="/health" target="_blank">/health</a></div>
+  </main>
+
+  <script>
+    // ---------------------------
+    // BASIC USER TRACKING (v1)
+    // ---------------------------
+    function safeRandomId() {
+      if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+      return Math.random().toString(16).slice(2) + Date.now().toString(16);
+    }
+
+    function getAnonymousId() {
+      let id = localStorage.getItem("anon_user_id");
+      if (!id) {
+        id = "anon_" + safeRandomId();
+        localStorage.setItem("anon_user_id", id);
+      }
+      return id;
+    }
+
+    async function track(event_type, metadata = {}) {
+      try {
+        const payload = { user_id: getAnonymousId(), event_type, metadata };
+        await fetch("/track", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(payload)
+        });
+      } catch (e) {
+        console.warn("Tracking failed:", e);
+      }
+    }
+
+    track("visit", { path: window.location.pathname, referrer: document.referrer || "" });
+
+    // ---------------------------
+    // HELPERS (XSS-safe rendering)
+    // ---------------------------
+    function escapeHtml(str) {
+      return String(str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function escapeAndFormat(str) {
+      const safe = escapeHtml(str);
+      return safe
+        .split(/\n\n+/)
+        .map(block => `<div style="margin-bottom:10px;">${block.replace(/\n/g, "<br>")}</div>`)
+        .join("");
+    }
+
+    // ---------------------------
+    // UI ELEMENTS
+    // ---------------------------
+    const txt = document.getElementById("dream");
+    const btn = document.getElementById("go");
+    const out = document.getElementById("out");
+    const interp = document.getElementById("interp");
+    const methodEl = document.getElementById("method");
+    const usesWrap = document.getElementById("usesWrap");
+    const usesEl = document.getElementById("uses");
+    const count = document.getElementById("count");
+
+    // Full Interpretation elements
+    const fullWrap = document.getElementById("fullWrap");
+    const toggleFull = document.getElementById("toggleFull");
+    const fullBox = document.getElementById("fullBox");
+
+    function resetFullInterpretationUI() {
+      if (!fullWrap || !toggleFull || !fullBox) return;
+      fullWrap.style.display = "none";
+      fullBox.style.display = "none";
+      fullBox.textContent = "";
+      toggleFull.textContent = "View Full Interpretation";
+    }
+
+    function setFullInterpretation(text) {
+      if (!fullWrap || !toggleFull || !fullBox) return;
+      const val = (text || "").trim();
+      if (!val) {
+        resetFullInterpretationUI();
+        return;
+      }
+      fullWrap.style.display = "block";
+      fullBox.style.display = "none";
+      fullBox.textContent = val;
+      toggleFull.textContent = "View Full Interpretation";
+    }
+
+    if (toggleFull && fullBox) {
+      toggleFull.addEventListener("click", () => {
+        const open = fullBox.style.display === "block";
+        fullBox.style.display = open ? "none" : "block";
+        toggleFull.textContent = open ? "View Full Interpretation" : "Hide Full Interpretation";
+      });
+    }
+
+    // ---------------------------
+    // INPUT BEHAVIOR
+    // ---------------------------
+    txt.addEventListener("input", () => {
+      count.textContent = `${txt.value.length} characters`;
+    });
+
+    document.querySelectorAll(".chip").forEach(c =>
+      c.addEventListener("click", () => {
+        txt.value = c.textContent.replace(/^“|”$/g, "");
+        txt.dispatchEvent(new Event("input"));
+      })
+    );
+
+    // ---------------------------
+    // MAIN RUN
+    // ---------------------------
+    async function run() {
+      const dream = txt.value.trim();
+      if (!dream) { txt.focus(); return; }
+
+      track("dream_submitted", { chars: dream.length });
+
+      btn.disabled = true;
+      btn.textContent = "Interpreting…";
+      out.style.display = "none";
+      interp.textContent = "";
+      methodEl.textContent = "—";
+      usesWrap.style.display = "none";
+      resetFullInterpretationUI();
+
+      try {
+        const res = await fetch("/interpret", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: dream })
+        });
+
+        const data = await res.json();
+        out.style.display = "block";
+
+        // Paywall support (safe to keep even if unused)
+        if (data.paywall) {
+          track("paywall_viewed", {
+            has_weekly: Boolean(data.checkout_weekly),
+            has_monthly: Boolean(data.checkout_monthly)
+          });
+
+          const weekly = data.checkout_weekly;
+          const monthly = data.checkout_monthly;
+
+          let html = `
+            <div class="paywall-box">
+              <div>${escapeHtml(data.message || "Free limit reached. Please subscribe to continue.")}</div>
+              <div class="paywall-actions">
+          `;
+          if (weekly) html += `<a class="btn-outline" href="${weekly}" data-track-upgrade="weekly">Unlock Weekly Access</a>`;
+          if (monthly) html += `<a class="btn-outline" href="${monthly}" data-track-upgrade="monthly">Unlock Monthly Access</a>`;
+          html += `</div></div>`;
+
+          interp.innerHTML = html;
+          methodEl.textContent = "Free limit reached";
+          usesWrap.style.display = "inline";
+          usesEl.textContent = "0";
+          resetFullInterpretationUI();
+
+          interp.querySelectorAll("[data-track-upgrade]").forEach(a => {
+            a.addEventListener("click", () => {
+              const plan = a.getAttribute("data-track-upgrade");
+              track("upgrade_clicked", { plan });
+            });
+          });
+
+          return;
+        }
+
+        track("interpretation_generated", {
+          pro: Boolean(data.pro) || Boolean(data.is_paid) || data.access === "paid",
+          top_symbols_count: (data.receipt && Array.isArray(data.receipt.top_symbols)) ? data.receipt.top_symbols.length : 0
+        });
+
+        // Backend compatibility (supports both spellings)
+        const i = data.interpretation || {};
+        const spiritual = (i.spiritual_meaning || "").trim();
+        const effects = (i.effects_in_physical_realm || i.effects_in_the_physical_realm || "").trim();
+        const wtd = (i.what_to_do || "").trim();
+
+        let html = "";
+        if (spiritual) {
+          html += `<div class="section">
+            <div class="section-title">Spiritual Meaning</div>
+            <div>${escapeAndFormat(spiritual)}</div>
+          </div>`;
+        }
+        if (effects) {
+          html += `<div class="section">
+            <div class="section-title">Effects in the Physical Realm</div>
+            <div>${escapeAndFormat(effects)}</div>
+          </div>`;
+        }
+        if (wtd) {
+          html += `<div class="section">
+            <div class="section-title">What to Do</div>
+            <div>${escapeAndFormat(wtd)}</div>
+          </div>`;
+        }
+
+        const receiptSymbols = (data.receipt && Array.isArray(data.receipt.top_symbols)) ? data.receipt.top_symbols : [];
+        if (receiptSymbols.length) {
+          html += `<div class="mini" style="margin-top:10px;opacity:.8;">
+            Symbols matched: <span class="mono">${escapeHtml(receiptSymbols.join(", "))}</span>
+          </div>`;
+        }
+
+        if (data.disclaimer) {
+          html += `<div class="mini" style="margin-top:10px;opacity:.7;"><em>${escapeHtml(data.disclaimer)}</em></div>`;
+        }
+
+        if (!html) html = `<span class="err">No interpretation returned.</span>`;
+        interp.innerHTML = html;
+
+        // Full Interpretation (NEW)
+        setFullInterpretation(data.full_interpretation);
+
+        // Status + free uses
+        const isPro = Boolean(data.pro) || Boolean(data.is_paid) || data.access === "paid";
+        if (isPro) {
+          methodEl.textContent = "PRO — Full interpretation unlocked";
+          usesWrap.style.display = "none";
+        } else {
+          methodEl.textContent = "Free tier interpretation";
+          if (typeof data.free_uses_left === "number") {
+            usesWrap.style.display = "inline";
+            usesEl.textContent = String(data.free_uses_left);
+          }
+        }
+
+      } catch (e) {
+        out.style.display = "block";
+        interp.innerHTML = `<span class="err">Network error. Please try again.</span>`;
+        methodEl.textContent = "—";
+        usesWrap.style.display = "none";
+        resetFullInterpretationUI();
+        track("error", { type: "network_error" });
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Interpret Dream";
+      }
+    }
+
+    btn.addEventListener("click", run);
+    txt.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run();
+    });
+  </script>
+</body>
+</html>

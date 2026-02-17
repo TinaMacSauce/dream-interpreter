@@ -1,15 +1,23 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.6 — ADMIN PANEL + AUTO-ADD + OPTIMIZE)
-# Based on your current Phase 2.9.5 (subsumption + compound priority + admin import/clean).
-# Adds:
-# - ✅ /admin (mobile-friendly Admin Panel UI, locked behind ADMIN_KEY)
-# - ✅ /admin/add-symbol (add or upsert ONE symbol row into Sheet1, formatting-only)
-# - ✅ /admin/batch-add (add/upsert MANY symbol rows from JSON, formatting-only)
-# - ✅ /admin/optimize-dictionary (formatting-only optimization + de-dupe by input)
-# Keeps:
-# - /, /health, /healthz, /interpret, /track
-# - strict matching + compound priority + subsumption pruning
-# - doctrine-safe Full Interpretation
-# - admin clean/import routes
+# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.7 — NOUN-FIRST + POSITION PRIORITY + ADMIN PANEL)
+# Upgrade goals (requested):
+# ✅ Fix "falling" beating "hair" when both are single-word matches:
+#    - Prefer EARLIER occurrence in the dream text (position priority)
+#    - Prefer NOUN-like tokens over VERB-like tokens (simple safe heuristic)
+# ✅ Keep your current engine:
+#    - strict word-boundary matching
+#    - compound priority + subsumption pruning
+#    - doctrine-safe Full Interpretation
+# ✅ Keep Admin system:
+#    - /admin (mobile panel)
+#    - /admin/add-symbol, /admin/batch-add, /admin/optimize-dictionary
+#    - /admin/clean-sheet, /admin/import-sheet
+#
+# Notes:
+# - "Noun vs verb" is implemented as a SAFE heuristic:
+#   token is considered verb-like if it ends with "ing" OR is in VERB_LIKE_TOKENS env list.
+#   This avoids heavy NLP and keeps the system deterministic.
+# - Final ranking order:
+#   score DESC → hit-type priority DESC → noun-first (verb-like last) → position ASC → length DESC
 
 import os
 import json
@@ -51,7 +59,7 @@ CORS(
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
-# IMPORTANT: write scope is required for admin routes
+# Write scope required for admin routes that update Sheets
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -62,12 +70,22 @@ _CACHE: Dict[str, Any] = {"loaded_at": 0.0, "rows": [], "headers": []}
 
 DEBUG_MATCH = os.getenv("DEBUG_MATCH", "").strip().lower() in {"1", "true", "yes", "on"}
 
-# Narrative style knobs (optional)
+# Narrative style knobs
 NARRATIVE_ENABLED = os.getenv("NARRATIVE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
 NARRATIVE_MAX_SYMBOLS = int(os.getenv("NARRATIVE_MAX_SYMBOLS", "3"))
 
-# Admin auth (required for admin routes)
+# Admin key
 ADMIN_KEY = os.getenv("ADMIN_KEY", "").strip()
+
+# Heuristic list of verb-like tokens to deprioritize vs nouns when scores tie.
+# You can extend this in Render env var:
+# VERB_LIKE_TOKENS=falling,running,flying,chasing,crying,walking,swimming
+_default_verbs = "falling,running,flying,chasing,crying,walking,swimming,drowning,climbing,driving,slipping"
+VERB_LIKE_TOKENS = {
+    v.strip().lower()
+    for v in os.getenv("VERB_LIKE_TOKENS", _default_verbs).split(",")
+    if v.strip()
+}
 
 
 # ----------------------------
@@ -183,6 +201,17 @@ def _normalize_keywords_cell(raw: str) -> str:
     return ", ".join(out)
 
 
+def _is_verb_like_token(token_norm: str) -> bool:
+    """
+    Safe heuristic only:
+    - endswith 'ing' OR explicitly listed
+    """
+    t = (token_norm or "").strip().lower()
+    if not t:
+        return False
+    return (t in VERB_LIKE_TOKENS) or t.endswith("ing")
+
+
 def _get_credentials() -> Credentials:
     raw = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
     if raw:
@@ -224,7 +253,6 @@ def _load_sheet_rows(force: bool = False) -> List[Dict]:
 
     headers = [_normalize_header(h) for h in values[0]]
     rows: List[Dict] = []
-
     for r in values[1:]:
         if len(r) < len(headers):
             r = r + [""] * (len(headers) - len(r))
@@ -260,17 +288,15 @@ def _compile_boundary_regex(token: str) -> re.Pattern:
 def _is_subsumed(short_sym: str, long_sym: str) -> bool:
     a = _normalize_text(short_sym)
     b = _normalize_text(long_sym)
-    if not a or not b:
-        return False
-    if a == b:
+    if not a or not b or a == b:
         return False
     rx = re.compile(rf"(?<!\w){re.escape(a)}(?!\w)")
     return bool(rx.search(b))
 
 
 def _prune_subsumed_matches(
-    matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]
-) -> List[Tuple[Dict, int, Optional[Dict[str, str]]]]:
+    matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]
+) -> List[Tuple[Dict, int, Optional[Dict[str, Any]]]]:
     if not matches:
         return matches
 
@@ -300,7 +326,14 @@ def _prune_subsumed_matches(
 _HIT_PRIORITY = {"symbol_phrase": 3, "symbol": 2, "keyword": 1}
 
 
-def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[str, str]]]:
+def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[str, Any]]]:
+    """
+    Returns (score, hit) where hit includes:
+      - type: symbol | symbol_phrase | keyword
+      - token: matched token
+      - pos: start position in dream_norm (for precedence)
+      - verb_like: bool (for noun-first heuristic on single-word)
+    """
     symbol_raw = (row.get("input") or row.get("symbol") or "").strip()
     if not symbol_raw:
         return 0, None
@@ -312,28 +345,48 @@ def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[st
     symbol_words = symbol.split()
     keywords = _split_keywords(row.get("keywords", ""))
 
+    # SYMBOL MATCH RULES
     if len(symbol_words) == 1:
-        if _compile_boundary_regex(symbol).search(dream_norm):
-            return 100, {"type": "symbol", "token": symbol}
+        rx = _compile_boundary_regex(symbol)
+        m = rx.search(dream_norm)
+        if m:
+            return 100, {
+                "type": "symbol",
+                "token": symbol,
+                "pos": m.start(),
+                "verb_like": _is_verb_like_token(symbol),
+            }
     else:
         phrase_rx = re.compile(rf"(?<!\w){re.escape(symbol)}(?!\w)")
-        if phrase_rx.search(dream_norm):
-            return 100, {"type": "symbol_phrase", "token": symbol}
+        m = phrase_rx.search(dream_norm)
+        if m:
+            return 100, {"type": "symbol_phrase", "token": symbol, "pos": m.start(), "verb_like": False}
 
+    # KEYWORD MATCH RULES (guarded: only single-word symbols)
     if len(symbol_words) == 1:
         for kw in keywords:
-            if kw and _compile_boundary_regex(kw).search(dream_norm):
-                return 96, {"type": "keyword", "token": kw}
+            if not kw:
+                continue
+            rx = _compile_boundary_regex(kw)
+            m = rx.search(dream_norm)
+            if m:
+                return 96, {"type": "keyword", "token": kw, "pos": m.start(), "verb_like": _is_verb_like_token(symbol)}
 
     return 0, None
 
 
-def _match_symbols_strict(dream: str, rows: List[Dict], top_k: int = 3) -> List[Tuple[Dict, int, Optional[Dict[str, str]]]]:
+def _match_symbols_strict(
+    dream: str, rows: List[Dict], top_k: int = 3
+) -> List[Tuple[Dict, int, Optional[Dict[str, Any]]]]:
     dream_norm = _normalize_text(dream)
     if not dream_norm:
         return []
 
-    scored: List[Tuple[Dict, int, Optional[Dict[str, str]]]] = []
+    _log("\n--- DEBUG_MATCH ON ---")
+    _log("DREAM_RAW:", repr(dream))
+    _log("DREAM_NORM:", repr(dream_norm))
+
+    scored: List[Tuple[Dict, int, Optional[Dict[str, Any]]]] = []
     for row in rows:
         sc, hit = _score_row_strict(dream_norm, row)
         if sc > 0:
@@ -343,14 +396,24 @@ def _match_symbols_strict(dream: str, rows: List[Dict], top_k: int = 3) -> List[
         row, sc, hit = item
         sym = (row.get("input") or row.get("symbol") or "").strip()
         sym_len = len(_normalize_text(sym))
+
         hit_type = (hit or {}).get("type", "")
         hit_pri = _HIT_PRIORITY.get(hit_type, 0)
-        return (-sc, -hit_pri, -sym_len)
+
+        # NEW: position priority (earlier in dream wins)
+        pos = (hit or {}).get("pos", 10**9)
+
+        # NEW: noun-first heuristic (verb-like tokens lose ties)
+        verb_like = 1 if (hit or {}).get("verb_like", False) else 0
+
+        # Sort order:
+        # score DESC → hit priority DESC → verb_like ASC (nouns first) → pos ASC → length DESC
+        return (-sc, -hit_pri, verb_like, pos, -sym_len)
 
     scored.sort(key=_sort_key)
 
     seen = set()
-    out: List[Tuple[Dict, int, Optional[Dict[str, str]]]] = []
+    out: List[Tuple[Dict, int, Optional[Dict[str, Any]]]] = []
     for row, sc, hit in scored:
         sym = (row.get("input") or row.get("symbol") or "").strip()
         sym_key = _normalize_text(sym)
@@ -361,10 +424,19 @@ def _match_symbols_strict(dream: str, rows: List[Dict], top_k: int = 3) -> List[
         if len(out) >= top_k:
             break
 
+    if out:
+        _log("MATCHES:")
+        for row, sc, hit in out:
+            sym = (row.get("input") or row.get("symbol") or "").strip()
+            _log(f" - {sym!r} score={sc} via={hit}")
+    else:
+        _log("MATCHES: (none)")
+    _log("--- END DEBUG_MATCH ---\n")
+
     return out
 
 
-def _combine_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]) -> Dict[str, str]:
+def _combine_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
     spiritual_parts: List[str] = []
     physical_parts: List[str] = []
     action_parts: List[str] = []
@@ -398,7 +470,7 @@ def _make_receipt_id() -> str:
     return f"JTS-{secrets.token_hex(4).upper()}"
 
 
-def _compute_seal(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]) -> Dict[str, str]:
+def _compute_seal(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
     if not matches:
         return {"status": "Delayed", "type": "Unclear", "risk": "High"}
 
@@ -426,7 +498,7 @@ def _dedupe_preserve_order(items: List[str]) -> List[str]:
     return out
 
 
-def _extract_symbol_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]], max_n: int = 3):
+def _extract_symbol_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]], max_n: int = 3):
     symbols: List[str] = []
     meanings: List[str] = []
     effects: List[str] = []
@@ -447,7 +519,7 @@ def _extract_symbol_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, str
     return symbols, meanings, effects, actions
 
 
-def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]) -> str:
+def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> str:
     if not matches or not NARRATIVE_ENABLED:
         return ""
 
@@ -499,6 +571,9 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
     return "\n\n".join([_clean_sentence(p).strip() for p in parts if p.strip()]).strip()
 
 
+# ----------------------------
+# Dictionary maintenance helpers (formatting-only)
+# ----------------------------
 def _clean_values_table(headers_raw: List[str], data_rows: List[List[str]]) -> Tuple[List[str], List[List[str]], Dict[str, int]]:
     headers_norm = [_normalize_header(h) for h in headers_raw]
     required = {"input", "spiritual meaning", "physical effects", "action", "keywords"}
@@ -551,9 +626,6 @@ def _clean_values_table(headers_raw: List[str], data_rows: List[List[str]]) -> T
     return headers_raw, cleaned_rows, changes
 
 
-# ----------------------------
-# NEW: Dictionary automation helpers
-# ----------------------------
 def _get_sheet_table(ws):
     values = ws.get_all_values()
     if not values:
@@ -636,8 +708,8 @@ def health():
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
         "admin_key_set": bool(ADMIN_KEY),
-        "match_mode": "strict_word_boundary_only_with_compound_priority_plus_subsumption",
-        "build": "2.9.6",
+        "match_mode": "strict_word_boundary_only_with_compound_priority_plus_subsumption_plus_position_plus_noun_first",
+        "build": "2.9.7",
     })
 
 
@@ -661,6 +733,7 @@ def interpret():
     except Exception as e:
         return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
 
+    # Get more candidates → prune subsumed → final top 3
     matches = _match_symbols_strict(dream, rows, top_k=8)
     matches = _prune_subsumed_matches(matches)
     matches = matches[:3]
@@ -709,7 +782,6 @@ def interpret():
 def track():
     if request.method == "OPTIONS":
         return _preflight_ok()
-
     payload = request.get_json(silent=True) or {}
     return jsonify({
         "ok": True,
@@ -747,12 +819,13 @@ def admin_panel():
     .out{margin-top:10px;white-space:pre-wrap;background:#0e0e14;border:1px solid rgba(212,175,55,.18);border-radius:12px;padding:10px 12px;font-size:13px;color:#dcdcf4}
     .muted{color:#b7b7c2;font-size:12px;line-height:1.5}
     a{color:#d4af37}
+    code{color:#f3e28a}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>JTS Admin Panel (Build 2.9.6)</h1>
+      <h1>JTS Admin Panel (Build 2.9.7)</h1>
       <div class="muted">Keep this link private. Health: <a href="/health" target="_blank">/health</a></div>
     </div>
 
@@ -785,7 +858,7 @@ def admin_panel():
 
     <div class="card">
       <h2>Batch Add Symbols (JSON)</h2>
-      <div class="muted">Paste an array under <code>rows</code>. Each row needs: input, spiritual_meaning, physical_effects, action, keywords.</div>
+      <div class="muted">Paste JSON with <code>{"rows":[...]}</code>. Each row needs: input, spiritual_meaning, physical_effects, action, keywords.</div>
 
       <label>Mode</label>
       <select id="modeBatch">
@@ -895,12 +968,11 @@ def admin_panel():
 def admin_add_symbol():
     if request.method == "OPTIONS":
         return _preflight_ok()
-
     if not _admin_ok(request):
         return jsonify({"error": "Unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
-    mode = (payload.get("mode") or "append").strip().lower()  # append | upsert
+    mode = (payload.get("mode") or "append").strip().lower()
     if mode not in {"append", "upsert"}:
         mode = "append"
 
@@ -940,13 +1012,12 @@ def admin_add_symbol():
 def admin_batch_add():
     if request.method == "OPTIONS":
         return _preflight_ok()
-
     if not _admin_ok(request):
         return jsonify({"error": "Unauthorized"}), 401
 
     payload = request.get_json(silent=True) or {}
     rows_payload = payload.get("rows") or []
-    mode = (payload.get("mode") or "append").strip().lower()  # append | upsert
+    mode = (payload.get("mode") or "append").strip().lower()
     if mode not in {"append", "upsert"}:
         mode = "append"
 
@@ -996,14 +1067,7 @@ def admin_batch_add():
 
         _load_sheet_rows(force=True)
 
-        return jsonify({
-            "ok": True,
-            "mode": mode,
-            "added": added,
-            "updated": updated,
-            "skipped": skipped,
-            "errors": errors[:50],
-        })
+        return jsonify({"ok": True, "mode": mode, "added": added, "updated": updated, "skipped": skipped, "errors": errors[:50]})
 
     except ValueError as ve:
         return jsonify({"error": "Validation failed", "details": str(ve)}), 400
@@ -1015,7 +1079,6 @@ def admin_batch_add():
 def admin_optimize_dictionary():
     if request.method == "OPTIONS":
         return _preflight_ok()
-
     if not _admin_ok(request):
         return jsonify({"error": "Unauthorized"}), 401
 
@@ -1030,6 +1093,7 @@ def admin_optimize_dictionary():
 
         headers_raw, cleaned_rows, changes = _clean_values_table(headers_raw, data_rows)
 
+        # de-dupe by input (keep first)
         idx = _required_idx_from_headers(headers_raw)
         seen = set()
         deduped = []
@@ -1058,12 +1122,11 @@ def admin_optimize_dictionary():
         return jsonify({"error": "Optimize-dictionary failed", "details": str(e)}), 500
 
 
-# -------- EXISTING ADMIN ROUTES (kept) --------
+# Keep your existing admin clean/import routes (still useful)
 @app.route("/admin/clean-sheet", methods=["POST", "OPTIONS"])
 def admin_clean_sheet():
     if request.method == "OPTIONS":
         return _preflight_ok()
-
     if not _admin_ok(request):
         return jsonify({"error": "Unauthorized"}), 401
 
@@ -1093,7 +1156,6 @@ def admin_clean_sheet():
 def admin_import_sheet():
     if request.method == "OPTIONS":
         return _preflight_ok()
-
     if not _admin_ok(request):
         return jsonify({"error": "Unauthorized"}), 401
 

@@ -233,7 +233,11 @@
       </div>
     </section>
 
-    <div class="footer">Health: <a href="/health" target="_blank">/health</a></div>
+    <!-- ✅ UPDATED FOOTER: added build stamp -->
+    <div class="footer">
+      Health: <a href="/health" target="_blank">/health</a>
+      <span style="margin-left:10px; opacity:.6;">Build 2.9.5</span>
+    </div>
   </main>
 
   <script>
@@ -316,7 +320,6 @@
       }
       fullWrap.style.display = "block";
       fullBox.style.display = "none";
-      // XSS-safe, preserve line breaks via CSS `white-space: pre-line`
       fullBox.textContent = val;
       toggleFull.textContent = "View Full Interpretation";
     }
@@ -367,7 +370,6 @@
           body: JSON.stringify({ text: dream })
         });
 
-        // ✅ Robust parsing: handles JSON + non-JSON error bodies
         let data = {};
         const raw = await res.text();
         try { data = JSON.parse(raw); } catch { data = { error: raw || "Unknown error" }; }
@@ -378,7 +380,6 @@
 
         out.style.display = "block";
 
-        // Paywall support (safe to keep even if unused today)
         if (data.paywall) {
           track("paywall_viewed", {
             has_weekly: Boolean(data.checkout_weekly),
@@ -461,7 +462,6 @@
           `;
         }
 
-        // ✅ Display the Seal (your backend already computes this)
         const seal = data.seal || null;
         if (seal) {
           html += `
@@ -478,10 +478,8 @@
         if (!html) html = `<span class="err">No interpretation returned.</span>`;
         interp.innerHTML = html;
 
-        // Full Interpretation
         setFullInterpretation(data.full_interpretation);
 
-        // Status + free uses
         const isPro = Boolean(data.pro) || Boolean(data.is_paid) || data.access === "paid";
         if (isPro) {
           methodEl.textContent = "PRO — Full interpretation unlocked";

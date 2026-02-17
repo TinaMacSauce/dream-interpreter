@@ -1,23 +1,5 @@
 # app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.7 — NOUN-FIRST + POSITION PRIORITY + ADMIN PANEL)
-# Upgrade goals (requested):
-# ✅ Fix "falling" beating "hair" when both are single-word matches:
-#    - Prefer EARLIER occurrence in the dream text (position priority)
-#    - Prefer NOUN-like tokens over VERB-like tokens (simple safe heuristic)
-# ✅ Keep your current engine:
-#    - strict word-boundary matching
-#    - compound priority + subsumption pruning
-#    - doctrine-safe Full Interpretation
-# ✅ Keep Admin system:
-#    - /admin (mobile panel)
-#    - /admin/add-symbol, /admin/batch-add, /admin/optimize-dictionary
-#    - /admin/clean-sheet, /admin/import-sheet
-#
-# Notes:
-# - "Noun vs verb" is implemented as a SAFE heuristic:
-#   token is considered verb-like if it ends with "ing" OR is in VERB_LIKE_TOKENS env list.
-#   This avoids heavy NLP and keeps the system deterministic.
-# - Final ranking order:
-#   score DESC → hit-type priority DESC → noun-first (verb-like last) → position ASC → length DESC
+# Full file. Copy/paste entire contents.
 
 import os
 import json
@@ -59,7 +41,6 @@ CORS(
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
-# Write scope required for admin routes that update Sheets
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -70,16 +51,11 @@ _CACHE: Dict[str, Any] = {"loaded_at": 0.0, "rows": [], "headers": []}
 
 DEBUG_MATCH = os.getenv("DEBUG_MATCH", "").strip().lower() in {"1", "true", "yes", "on"}
 
-# Narrative style knobs
 NARRATIVE_ENABLED = os.getenv("NARRATIVE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
 NARRATIVE_MAX_SYMBOLS = int(os.getenv("NARRATIVE_MAX_SYMBOLS", "3"))
 
-# Admin key
 ADMIN_KEY = os.getenv("ADMIN_KEY", "").strip()
 
-# Heuristic list of verb-like tokens to deprioritize vs nouns when scores tie.
-# You can extend this in Render env var:
-# VERB_LIKE_TOKENS=falling,running,flying,chasing,crying,walking,swimming
 _default_verbs = "falling,running,flying,chasing,crying,walking,swimming,drowning,climbing,driving,slipping"
 VERB_LIKE_TOKENS = {
     v.strip().lower()
@@ -96,11 +72,6 @@ def _preflight_ok():
 
 
 def _admin_ok(req) -> bool:
-    """
-    Admin auth. Accepts either:
-    - Header: X-Admin-Key: <key>
-    - Query:  ?key=<key>
-    """
     if not ADMIN_KEY:
         return False
     k = (req.headers.get("X-Admin-Key") or req.args.get("key") or "").strip()
@@ -173,6 +144,7 @@ def _fix_typos_light(s: str) -> str:
     replacements = [
         (r"\bembarassment\b", "embarrassment"),
         (r"\bembarrasment\b", "embarrassment"),
+        (r"\bcommcommunity\b", "community"),
         (r"\bcommmunity\b", "community"),
         (r"\bcommnity\b", "community"),
         (r"\bcomunity\b", "community"),
@@ -202,10 +174,6 @@ def _normalize_keywords_cell(raw: str) -> str:
 
 
 def _is_verb_like_token(token_norm: str) -> bool:
-    """
-    Safe heuristic only:
-    - endswith 'ing' OR explicitly listed
-    """
     t = (token_norm or "").strip().lower()
     if not t:
         return False
@@ -284,7 +252,7 @@ def _compile_boundary_regex(token: str) -> re.Pattern:
     return re.compile(rf"(?<!\w){re.escape(token_n)}(?!\w)")
 
 
-# ---------- Subsumption helpers ----------
+# ---------- Subsumption ----------
 def _is_subsumed(short_sym: str, long_sym: str) -> bool:
     a = _normalize_text(short_sym)
     b = _normalize_text(long_sym)
@@ -299,10 +267,8 @@ def _prune_subsumed_matches(
 ) -> List[Tuple[Dict, int, Optional[Dict[str, Any]]]]:
     if not matches:
         return matches
-
     syms = [(row.get("input") or row.get("symbol") or "").strip() for row, _, _ in matches]
     keep = [True] * len(matches)
-
     for i in range(len(matches)):
         if not keep[i]:
             continue
@@ -318,22 +284,14 @@ def _prune_subsumed_matches(
             if _is_subsumed(si, sj):
                 keep[i] = False
                 break
-
     return [m for m, k in zip(matches, keep) if k]
 
 
-# Match ranking priorities
+# ---------- Matching ----------
 _HIT_PRIORITY = {"symbol_phrase": 3, "symbol": 2, "keyword": 1}
 
 
 def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[str, Any]]]:
-    """
-    Returns (score, hit) where hit includes:
-      - type: symbol | symbol_phrase | keyword
-      - token: matched token
-      - pos: start position in dream_norm (for precedence)
-      - verb_like: bool (for noun-first heuristic on single-word)
-    """
     symbol_raw = (row.get("input") or row.get("symbol") or "").strip()
     if not symbol_raw:
         return 0, None
@@ -345,24 +303,17 @@ def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[st
     symbol_words = symbol.split()
     keywords = _split_keywords(row.get("keywords", ""))
 
-    # SYMBOL MATCH RULES
     if len(symbol_words) == 1:
         rx = _compile_boundary_regex(symbol)
         m = rx.search(dream_norm)
         if m:
-            return 100, {
-                "type": "symbol",
-                "token": symbol,
-                "pos": m.start(),
-                "verb_like": _is_verb_like_token(symbol),
-            }
+            return 100, {"type": "symbol", "token": symbol, "pos": m.start(), "verb_like": _is_verb_like_token(symbol)}
     else:
         phrase_rx = re.compile(rf"(?<!\w){re.escape(symbol)}(?!\w)")
         m = phrase_rx.search(dream_norm)
         if m:
             return 100, {"type": "symbol_phrase", "token": symbol, "pos": m.start(), "verb_like": False}
 
-    # KEYWORD MATCH RULES (guarded: only single-word symbols)
     if len(symbol_words) == 1:
         for kw in keywords:
             if not kw:
@@ -375,16 +326,10 @@ def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[st
     return 0, None
 
 
-def _match_symbols_strict(
-    dream: str, rows: List[Dict], top_k: int = 3
-) -> List[Tuple[Dict, int, Optional[Dict[str, Any]]]]:
+def _match_symbols_strict(dream: str, rows: List[Dict], top_k: int = 3) -> List[Tuple[Dict, int, Optional[Dict[str, Any]]]]:
     dream_norm = _normalize_text(dream)
     if not dream_norm:
         return []
-
-    _log("\n--- DEBUG_MATCH ON ---")
-    _log("DREAM_RAW:", repr(dream))
-    _log("DREAM_NORM:", repr(dream_norm))
 
     scored: List[Tuple[Dict, int, Optional[Dict[str, Any]]]] = []
     for row in rows:
@@ -400,14 +345,9 @@ def _match_symbols_strict(
         hit_type = (hit or {}).get("type", "")
         hit_pri = _HIT_PRIORITY.get(hit_type, 0)
 
-        # NEW: position priority (earlier in dream wins)
         pos = (hit or {}).get("pos", 10**9)
-
-        # NEW: noun-first heuristic (verb-like tokens lose ties)
         verb_like = 1 if (hit or {}).get("verb_like", False) else 0
 
-        # Sort order:
-        # score DESC → hit priority DESC → verb_like ASC (nouns first) → pos ASC → length DESC
         return (-sc, -hit_pri, verb_like, pos, -sym_len)
 
     scored.sort(key=_sort_key)
@@ -424,18 +364,10 @@ def _match_symbols_strict(
         if len(out) >= top_k:
             break
 
-    if out:
-        _log("MATCHES:")
-        for row, sc, hit in out:
-            sym = (row.get("input") or row.get("symbol") or "").strip()
-            _log(f" - {sym!r} score={sc} via={hit}")
-    else:
-        _log("MATCHES: (none)")
-    _log("--- END DEBUG_MATCH ---\n")
-
     return out
 
 
+# ---------- Output formatting ----------
 def _combine_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
     spiritual_parts: List[str] = []
     physical_parts: List[str] = []
@@ -572,60 +504,8 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
 
 
 # ----------------------------
-# Dictionary maintenance helpers (formatting-only)
+# Dictionary automation helpers
 # ----------------------------
-def _clean_values_table(headers_raw: List[str], data_rows: List[List[str]]) -> Tuple[List[str], List[List[str]], Dict[str, int]]:
-    headers_norm = [_normalize_header(h) for h in headers_raw]
-    required = {"input", "spiritual meaning", "physical effects", "action", "keywords"}
-    missing = [h for h in required if h not in set(headers_norm)]
-    if missing:
-        raise ValueError(f"Missing required columns: {missing}")
-
-    idx = {h: headers_norm.index(h) for h in required}
-
-    cleaned_rows: List[List[str]] = []
-    changes = {
-        "rows_in": len(data_rows),
-        "rows_out": 0,
-        "rows_dropped_blank_input": 0,
-        "cells_changed": 0,
-        "keywords_normalized": 0,
-        "typos_fixed": 0,
-    }
-
-    for row in data_rows:
-        if len(row) < len(headers_norm):
-            row = row + [""] * (len(headers_norm) - len(row))
-        row = [("" if v is None else str(v)) for v in row]
-
-        for col in ["input", "spiritual meaning", "physical effects", "action"]:
-            i = idx[col]
-            before = row[i]
-            after = _fix_typos_light(before)
-            if after != before:
-                changes["cells_changed"] += 1
-                if re.search(r"(embarass|commmun|comunity|commnity)", before or "", re.IGNORECASE):
-                    changes["typos_fixed"] += 1
-            row[i] = after
-
-        kw_i = idx["keywords"]
-        before_kw = row[kw_i]
-        after_kw = _normalize_keywords_cell(before_kw)
-        if after_kw != before_kw:
-            changes["cells_changed"] += 1
-            changes["keywords_normalized"] += 1
-        row[kw_i] = after_kw
-
-        if not str(row[idx["input"]]).strip():
-            changes["rows_dropped_blank_input"] += 1
-            continue
-
-        cleaned_rows.append(row)
-
-    changes["rows_out"] = len(cleaned_rows)
-    return headers_raw, cleaned_rows, changes
-
-
 def _get_sheet_table(ws):
     values = ws.get_all_values()
     if not values:
@@ -688,6 +568,58 @@ def _find_existing_row_index(data_rows: List[List[str]], headers_raw: List[str],
     return None
 
 
+def _clean_values_table(headers_raw: List[str], data_rows: List[List[str]]) -> Tuple[List[str], List[List[str]], Dict[str, int]]:
+    headers_norm = [_normalize_header(h) for h in headers_raw]
+    required = {"input", "spiritual meaning", "physical effects", "action", "keywords"}
+    missing = [h for h in required if h not in set(headers_norm)]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+
+    idx = {h: headers_norm.index(h) for h in required}
+
+    cleaned_rows: List[List[str]] = []
+    changes = {
+        "rows_in": len(data_rows),
+        "rows_out": 0,
+        "rows_dropped_blank_input": 0,
+        "cells_changed": 0,
+        "keywords_normalized": 0,
+        "typos_fixed": 0,
+    }
+
+    for row in data_rows:
+        if len(row) < len(headers_norm):
+            row = row + [""] * (len(headers_norm) - len(row))
+        row = [("" if v is None else str(v)) for v in row]
+
+        for col in ["input", "spiritual meaning", "physical effects", "action"]:
+            i = idx[col]
+            before = row[i]
+            after = _fix_typos_light(before)
+            if after != before:
+                changes["cells_changed"] += 1
+                if re.search(r"(embarass|commmun|comunity|commnity)", before or "", re.IGNORECASE):
+                    changes["typos_fixed"] += 1
+            row[i] = after
+
+        kw_i = idx["keywords"]
+        before_kw = row[kw_i]
+        after_kw = _normalize_keywords_cell(before_kw)
+        if after_kw != before_kw:
+            changes["cells_changed"] += 1
+            changes["keywords_normalized"] += 1
+        row[kw_i] = after_kw
+
+        if not str(row[idx["input"]]).strip():
+            changes["rows_dropped_blank_input"] += 1
+            continue
+
+        cleaned_rows.append(row)
+
+    changes["rows_out"] = len(cleaned_rows)
+    return headers_raw, cleaned_rows, changes
+
+
 # ----------------------------
 # Routes
 # ----------------------------
@@ -708,7 +640,7 @@ def health():
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
         "admin_key_set": bool(ADMIN_KEY),
-        "match_mode": "strict_word_boundary_only_with_compound_priority_plus_subsumption_plus_position_plus_noun_first",
+        "match_mode": "compound_priority + subsumption + position_priority + noun_first_heuristic",
         "build": "2.9.7",
     })
 
@@ -733,7 +665,6 @@ def interpret():
     except Exception as e:
         return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
 
-    # Get more candidates → prune subsumed → final top 3
     matches = _match_symbols_strict(dream, rows, top_k=8)
     matches = _prune_subsumed_matches(matches)
     matches = matches[:3]
@@ -750,8 +681,8 @@ def interpret():
             "receipt": {"id": receipt_id, "top_symbols": [], "share_phrase": "I decoded my dream on Jamaican True Stories."},
             "interpretation": {
                 "spiritual_meaning": "No matching symbols were found for the exact words in this dream.",
-                "effects_in_physical_realm": "Tip: use clear symbol words (people, animals, places, objects) that exist in your Symbols sheet.",
-                "what_to_do": "Add 1–2 more key symbols (objects, people, animals, places) and try again."
+                "effects_in_physical_realm": "Tip: use clear symbol words that exist in your Symbols sheet.",
+                "what_to_do": "Add 1–2 more key symbols and try again."
             },
             "full_interpretation": ""
         })
@@ -783,15 +714,11 @@ def track():
     if request.method == "OPTIONS":
         return _preflight_ok()
     payload = request.get_json(silent=True) or {}
-    return jsonify({
-        "ok": True,
-        "event": payload.get("event", "unknown"),
-        "free_uses_left": payload.get("free_uses_left", 3),
-    })
+    return jsonify({"ok": True, "event": payload.get("event", "unknown")})
 
 
 # ----------------------------
-# Admin Panel UI (phone-friendly)
+# Admin Panel UI
 # ----------------------------
 @app.route("/admin", methods=["GET"])
 def admin_panel():
@@ -841,16 +768,16 @@ def admin_panel():
       <input id="input" placeholder="e.g., hair falling out"/>
 
       <label>Spiritual Meaning</label>
-      <textarea id="sm" placeholder="Doctrine meaning only. No extra guessing."></textarea>
+      <textarea id="sm"></textarea>
 
       <label>Physical Effects</label>
-      <textarea id="pe" placeholder="How it shows up in the natural realm."></textarea>
+      <textarea id="pe"></textarea>
 
       <label>What to Do (Action)</label>
-      <textarea id="ac" placeholder="Clear instruction (prayer + practical steps)."></textarea>
+      <textarea id="ac"></textarea>
 
       <label>Keywords (comma-separated)</label>
-      <textarea id="kw" placeholder="e.g., hair falling out, shedding, bald spots, clumps"></textarea>
+      <textarea id="kw"></textarea>
 
       <button class="btn" id="saveOne">Save Symbol</button>
       <div class="out" id="outOne" style="display:none;"></div>
@@ -858,7 +785,7 @@ def admin_panel():
 
     <div class="card">
       <h2>Batch Add Symbols (JSON)</h2>
-      <div class="muted">Paste JSON with <code>{"rows":[...]}</code>. Each row needs: input, spiritual_meaning, physical_effects, action, keywords.</div>
+      <div class="muted">Paste JSON with <code>{"rows":[...]}</code>.</div>
 
       <label>Mode</label>
       <select id="modeBatch">
@@ -875,7 +802,6 @@ def admin_panel():
 
     <div class="card">
       <h2>Optimize Dictionary (formatting-only)</h2>
-      <div class="muted">Fixes typos, trims spacing, normalizes keywords, removes blank inputs, removes duplicate inputs. Does NOT rewrite meanings.</div>
       <button class="btn2" id="optimize">Run Optimize</button>
       <div class="out" id="outOpt" style="display:none;"></div>
     </div>
@@ -887,10 +813,7 @@ def admin_panel():
   async function post(path, payload) {
     const res = await fetch(path, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Admin-Key": ADMIN_KEY
-      },
+      headers: { "Content-Type": "application/json", "X-Admin-Key": ADMIN_KEY },
       body: payload ? JSON.stringify(payload) : null
     });
     const txt = await res.text();
@@ -916,43 +839,26 @@ def admin_panel():
       action: document.getElementById("ac").value.trim(),
       keywords: document.getElementById("kw").value.trim()
     };
-    try {
-      const data = await post("/admin/add-symbol", payload);
-      show(out, data);
-    } catch (e) {
-      show(out, { error: String(e.message || e) });
-    }
+    try { show(out, await post("/admin/add-symbol", payload)); }
+    catch (e) { show(out, { error: String(e.message || e) }); }
   });
 
   document.getElementById("saveBatch").addEventListener("click", async () => {
     const out = document.getElementById("outBatch");
     out.style.display = "none";
     let payload = {};
-    try {
-      payload = JSON.parse(document.getElementById("batchJson").value || "{}");
-    } catch (e) {
-      show(out, { error: "Invalid JSON" });
-      return;
-    }
+    try { payload = JSON.parse(document.getElementById("batchJson").value || "{}"); }
+    catch { show(out, { error: "Invalid JSON" }); return; }
     payload.mode = document.getElementById("modeBatch").value;
-
-    try {
-      const data = await post("/admin/batch-add", payload);
-      show(out, data);
-    } catch (e) {
-      show(out, { error: String(e.message || e) });
-    }
+    try { show(out, await post("/admin/batch-add", payload)); }
+    catch (e) { show(out, { error: String(e.message || e) }); }
   });
 
   document.getElementById("optimize").addEventListener("click", async () => {
     const out = document.getElementById("outOpt");
     out.style.display = "none";
-    try {
-      const data = await post("/admin/optimize-dictionary", {});
-      show(out, data);
-    } catch (e) {
-      show(out, { error: String(e.message || e) });
-    }
+    try { show(out, await post("/admin/optimize-dictionary", {})); }
+    catch (e) { show(out, { error: String(e.message || e) }); }
   });
 </script>
 </body>
@@ -1069,8 +975,6 @@ def admin_batch_add():
 
         return jsonify({"ok": True, "mode": mode, "added": added, "updated": updated, "skipped": skipped, "errors": errors[:50]})
 
-    except ValueError as ve:
-        return jsonify({"error": "Validation failed", "details": str(ve)}), 400
     except Exception as e:
         return jsonify({"error": "Batch-add failed", "details": str(e)}), 500
 
@@ -1093,7 +997,6 @@ def admin_optimize_dictionary():
 
         headers_raw, cleaned_rows, changes = _clean_values_table(headers_raw, data_rows)
 
-        # de-dupe by input (keep first)
         idx = _required_idx_from_headers(headers_raw)
         seen = set()
         deduped = []
@@ -1122,32 +1025,25 @@ def admin_optimize_dictionary():
         return jsonify({"error": "Optimize-dictionary failed", "details": str(e)}), 500
 
 
-# Keep your existing admin clean/import routes (still useful)
+# Keep your existing admin clean/import routes
 @app.route("/admin/clean-sheet", methods=["POST", "OPTIONS"])
 def admin_clean_sheet():
     if request.method == "OPTIONS":
         return _preflight_ok()
     if not _admin_ok(request):
         return jsonify({"error": "Unauthorized"}), 401
-
     try:
         ws = _get_ws()
         values = ws.get_all_values()
         if not values or len(values) < 2:
             return jsonify({"ok": True, "message": "Sheet is empty. Nothing to clean."})
-
         headers_raw = values[0]
         data_rows = values[1:]
-
         headers_raw, cleaned_rows, changes = _clean_values_table(headers_raw, data_rows)
-
         ws.clear()
         ws.update("A1", [headers_raw] + cleaned_rows)
-
         _load_sheet_rows(force=True)
-
         return jsonify({"ok": True, "message": "Sheet cleaned and updated.", "changes": changes})
-
     except Exception as e:
         return jsonify({"error": "Clean-sheet failed", "details": str(e)}), 500
 
@@ -1158,13 +1054,8 @@ def admin_import_sheet():
         return _preflight_ok()
     if not _admin_ok(request):
         return jsonify({"error": "Unauthorized"}), 401
-
     try:
         content_type = (request.headers.get("Content-Type") or "").lower()
-
-        headers_raw: List[str]
-        data_rows: List[List[str]]
-
         if "application/json" in content_type:
             payload = request.get_json(silent=True) or {}
             headers_raw = payload.get("headers") or []
@@ -1172,37 +1063,22 @@ def admin_import_sheet():
             if not isinstance(headers_raw, list) or not isinstance(data_rows, list) or not headers_raw:
                 return jsonify({"error": "Invalid JSON. Provide 'headers' list and 'rows' list."}), 400
         else:
-            raw = request.get_data(as_text=True) or ""
-            raw = raw.strip("\ufeff").strip()
+            raw = (request.get_data(as_text=True) or "").strip("\ufeff").strip()
             if not raw:
                 return jsonify({"error": "Empty body. Send JSON or CSV."}), 400
-
             reader = csv.reader(io.StringIO(raw))
             table = list(reader)
             if len(table) < 2:
                 return jsonify({"error": "CSV must include header row + at least 1 data row."}), 400
-
             headers_raw = table[0]
             data_rows = table[1:]
 
         headers_raw, cleaned_rows, changes = _clean_values_table(headers_raw, data_rows)
-
         ws = _get_ws()
         ws.clear()
         ws.update("A1", [headers_raw] + cleaned_rows)
-
         _load_sheet_rows(force=True)
-
-        return jsonify({
-            "ok": True,
-            "message": "Sheet imported + cleaned + updated.",
-            "changes": changes,
-            "rows_written": len(cleaned_rows),
-            "columns_written": len(headers_raw),
-        })
-
-    except ValueError as ve:
-        return jsonify({"error": "Import validation failed", "details": str(ve)}), 400
+        return jsonify({"ok": True, "message": "Sheet imported + cleaned + updated.", "changes": changes})
     except Exception as e:
         return jsonify({"error": "Import failed", "details": str(e)}), 500
 

@@ -1,10 +1,9 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.2 — COMPOUND PRIORITY FIX)
-# Updates (Phase 2.9.2):
-# - ✅ Guarantees compound (longer) symbols are prioritized over base symbols
-# - ✅ Removes length penalty that was unintentionally demoting longer phrases
-# - ✅ Tie-breaks by: score DESC → hit-type priority → symbol length DESC → stable order
+# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.3 — UI ROUTE + COMPOUND PRIORITY FIX)
+# Updates (Phase 2.9.3):
+# - ✅ Serves templates/index.html at "/" (so your UI loads)
+# - ✅ (Optional) Adds /healthz alias (keeps Render configs flexible)
 # Keeps:
-# - Strict matching + compound guard rules
+# - Strict matching + compound priority rules
 # - Debug matching mode
 # - Receipt + seal logic
 # - No forced lowercasing of sheet outputs (keeps your sheet wording intact)
@@ -17,7 +16,7 @@ import re
 import secrets
 from typing import Dict, List, Tuple, Any, Optional
 
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, render_template
 from flask_cors import CORS
 
 import gspread
@@ -463,6 +462,12 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
 # ----------------------------
 # Routes
 # ----------------------------
+@app.route("/", methods=["GET"])
+def home():
+    # Serves templates/index.html
+    return render_template("index.html")
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({
@@ -476,6 +481,12 @@ def health():
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
     })
+
+
+# Optional alias if you ever use /healthz in Render
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    return health()
 
 
 @app.route("/interpret", methods=["POST", "OPTIONS"])
@@ -535,7 +546,7 @@ def interpret():
         "is_paid": False,
         "free_uses_left": 3,
         "seal": seal,
-        "interpretation": interpretation,          # Quick Decode (formatted)
+        "interpretation": interpretation,            # Quick Decode (formatted)
         "full_interpretation": full_interpretation,  # Full Interpretation (polished)
         "receipt": {
             "id": receipt_id,

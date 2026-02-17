@@ -125,7 +125,7 @@
     }
     .block + .block{ margin-top:10px; }
 
-    /* IMPORTANT: This makes \n show as clean line breaks (works with your updated app.py). */
+    /* IMPORTANT: This makes \n show as clean line breaks */
     .prelines{ white-space: pre-line; }
 
     .paywall-box{
@@ -256,7 +256,8 @@
 
     async function track(event_type, metadata = {}) {
       try {
-        const payload = { user_id: getAnonymousId(), event_type, metadata };
+        // ✅ Backend expects `event`, not `event_type`
+        const payload = { user_id: getAnonymousId(), event: event_type, metadata };
         await fetch("/track", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
@@ -279,16 +280,6 @@
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
-    }
-
-    // Converts text with newlines into safe HTML blocks
-    // - Your backend now returns quick blocks joined with "\n"
-    // - and full interpretation joined with "\n\n"
-    function toSafeBlocks(str) {
-      const safe = escapeHtml(str);
-      // split on one-or-more blank lines -> paragraphs
-      const paras = safe.split(/\n\s*\n+/);
-      return paras.map(p => `<div class="prelines">${p}</div>`).join("");
     }
 
     // ---------------------------
@@ -325,7 +316,7 @@
       }
       fullWrap.style.display = "block";
       fullBox.style.display = "none";
-      // Use textContent so it remains XSS-safe; CSS pre-line handles line breaks.
+      // XSS-safe, preserve line breaks via CSS `white-space: pre-line`
       fullBox.textContent = val;
       toggleFull.textContent = "View Full Interpretation";
     }
@@ -376,10 +367,18 @@
           body: JSON.stringify({ text: dream })
         });
 
-        const data = await res.json();
+        // ✅ Robust parsing: handles JSON + non-JSON error bodies
+        let data = {};
+        const raw = await res.text();
+        try { data = JSON.parse(raw); } catch { data = { error: raw || "Unknown error" }; }
+
+        if (!res.ok) {
+          throw new Error(data.error || `Request failed (${res.status})`);
+        }
+
         out.style.display = "block";
 
-        // Paywall support (safe to keep even if unused)
+        // Paywall support (safe to keep even if unused today)
         if (data.paywall) {
           track("paywall_viewed", {
             has_weekly: Boolean(data.checkout_weekly),
@@ -419,7 +418,6 @@
           top_symbols_count: (data.receipt && Array.isArray(data.receipt.top_symbols)) ? data.receipt.top_symbols.length : 0
         });
 
-        // Backend compatibility (supports both spellings)
         const i = data.interpretation || {};
         const spiritual = String(i.spiritual_meaning || "").trim();
         const effects = String(i.effects_in_physical_realm || i.effects_in_the_physical_realm || "").trim();
@@ -463,6 +461,16 @@
           `;
         }
 
+        // ✅ Display the Seal (your backend already computes this)
+        const seal = data.seal || null;
+        if (seal) {
+          html += `
+            <div class="mini" style="margin-top:10px;opacity:.85;">
+              Seal: <span class="mono">${escapeHtml(`${seal.status} • ${seal.type} • Risk: ${seal.risk}`)}</span>
+            </div>
+          `;
+        }
+
         if (data.disclaimer) {
           html += `<div class="mini" style="margin-top:10px;opacity:.7;"><em>${escapeHtml(data.disclaimer)}</em></div>`;
         }
@@ -488,11 +496,11 @@
 
       } catch (e) {
         out.style.display = "block";
-        interp.innerHTML = `<span class="err">Network error. Please try again.</span>`;
+        interp.innerHTML = `<span class="err">${escapeHtml(e && e.message ? e.message : "Network error. Please try again.")}</span>`;
         methodEl.textContent = "—";
         usesWrap.style.display = "none";
         resetFullInterpretationUI();
-        track("error", { type: "network_error" });
+        track("error", { type: "network_or_server_error", message: (e && e.message) ? e.message : "" });
       } finally {
         btn.disabled = false;
         btn.textContent = "Interpret Dream";

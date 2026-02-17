@@ -1,12 +1,14 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.1 — QUICK DECODE + FULL INTERPRETATION)
-# Updates:
-# - ✅ Fixes articulation, grammar, punctuation in Full Interpretation + receipt blocks
-# - ✅ Stops forced lowercasing (keeps your sheet wording intact)
-# - ✅ Produces clean, readable sentences WITHOUT adding meaning
+# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.2 — COMPOUND PRIORITY FIX)
+# Updates (Phase 2.9.2):
+# - ✅ Guarantees compound (longer) symbols are prioritized over base symbols
+# - ✅ Removes length penalty that was unintentionally demoting longer phrases
+# - ✅ Tie-breaks by: score DESC → hit-type priority → symbol length DESC → stable order
 # Keeps:
 # - Strict matching + compound guard rules
 # - Debug matching mode
 # - Receipt + seal logic
+# - No forced lowercasing of sheet outputs (keeps your sheet wording intact)
+# - Doctrine-safe Full Interpretation (built only from sheet fields)
 
 import os
 import json
@@ -20,6 +22,7 @@ from flask_cors import CORS
 
 import gspread
 from google.oauth2.service_account import Credentials
+
 
 # ----------------------------
 # App setup
@@ -74,6 +77,8 @@ def _normalize_header(h: str) -> str:
 
 
 def _normalize_text(s: str) -> str:
+    # NOTE: This normalization is only for matching logic.
+    # We do NOT use this to overwrite/alter your sheet values in output.
     s = (s or "").lower()
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
@@ -197,18 +202,13 @@ def _compile_boundary_regex(token: str) -> re.Pattern:
     return re.compile(rf"(?<!\w){re.escape(token_n)}(?!\w)")
 
 
-def _symbol_length_penalty(symbol: str) -> int:
-    words = [w for w in _normalize_text(symbol).split() if w]
-    n = len(words)
-    if n <= 2:
-        return 0
-    if n == 3:
-        return 2
-    if n == 4:
-        return 6
-    if n == 5:
-        return 12
-    return 18
+# Hit-type priority ensures exact multi-word phrases rank above single-word matches,
+# and single-word symbol matches rank above keyword-only triggers.
+_HIT_PRIORITY = {
+    "symbol_phrase": 3,
+    "symbol": 2,
+    "keyword": 1,
+}
 
 
 def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[str, str]]]:
@@ -227,16 +227,15 @@ def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[st
     # SYMBOL MATCH RULES
     # ----------------------------
     if len(symbol_words) == 1:
-        # single-word symbol can match as a word
+        # single-word symbol can match as a word boundary token
         if _compile_boundary_regex(symbol).search(dream_norm):
-            score = 100
-            return score, {"type": "symbol", "token": symbol}
+            return 100, {"type": "symbol", "token": symbol}
     else:
         # multi-word symbol must match FULL phrase exactly
         phrase_rx = re.compile(rf"(?<!\w){re.escape(symbol)}(?!\w)")
         if phrase_rx.search(dream_norm):
-            score = 100 - _symbol_length_penalty(symbol_raw)
-            return int(score), {"type": "symbol_phrase", "token": symbol}
+            # IMPORTANT: No length penalty. We want longer compounds to be strong, not weaker.
+            return 100, {"type": "symbol_phrase", "token": symbol}
 
     # ----------------------------
     # KEYWORD MATCH RULES (guarded)
@@ -245,8 +244,7 @@ def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[st
     if len(symbol_words) == 1:
         for kw in keywords:
             if kw and _compile_boundary_regex(kw).search(dream_norm):
-                score = 96
-                return score, {"type": "keyword", "token": kw}
+                return 96, {"type": "keyword", "token": kw}
 
     return 0, None
 
@@ -269,11 +267,18 @@ def _match_symbols_strict(
         if sc > 0:
             scored.append((row, sc, hit))
 
-    # Sort by score DESC, then symbol length ASC
+    # Sort by:
+    # 1) score DESC
+    # 2) hit-type priority DESC (phrase > symbol > keyword)
+    # 3) symbol length DESC (compound guard: longer beats shorter)
+    # 4) stable fallback (original order is preserved by Python's stable sort)
     def _sort_key(item: Tuple[Dict, int, Optional[Dict[str, str]]]):
-        row, sc, _hit = item
+        row, sc, hit = item
         sym = (row.get("input") or row.get("symbol") or "").strip()
-        return (-sc, len(_normalize_text(sym)))
+        sym_len = len(_normalize_text(sym))
+        hit_type = (hit or {}).get("type", "")
+        hit_pri = _HIT_PRIORITY.get(hit_type, 0)
+        return (-sc, -hit_pri, -sym_len)
 
     scored.sort(key=_sort_key)
 
@@ -429,8 +434,6 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
         if len(action_lines) == 1:
             action_text = _ensure_terminal_punct(f"What to do: {action_lines[0]}")
         else:
-            # Keep your meaning, just make it readable.
-            # Example: "Pray for release. Then pray."
             joined = ". Then, ".join([_strip_trailing_punct(a) for a in action_lines])
             action_text = _ensure_terminal_punct(f"What to do: {joined}")
 
@@ -468,7 +471,7 @@ def health():
         "sheet": WORKSHEET_NAME,
         "has_spreadsheet_id": bool(SPREADSHEET_ID),
         "allowed_origins": allowed_origins,
-        "match_mode": "strict_word_boundary_only_with_compound_guard",
+        "match_mode": "strict_word_boundary_only_with_compound_priority",
         "debug_match": DEBUG_MATCH,
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
@@ -525,7 +528,6 @@ def interpret():
 
     share_phrase = f"My dream had symbols like: {', '.join(top_symbols[:3])}. I decoded it on Jamaican True Stories."
 
-    # Full Interpretation (narrative layer) - doctrine safe + polished
     full_interpretation = build_full_interpretation_from_doctrine(matches)
 
     return jsonify({
@@ -533,7 +535,7 @@ def interpret():
         "is_paid": False,
         "free_uses_left": 3,
         "seal": seal,
-        "interpretation": interpretation,  # Quick Decode (formatted)
+        "interpretation": interpretation,          # Quick Decode (formatted)
         "full_interpretation": full_interpretation,  # Full Interpretation (polished)
         "receipt": {
             "id": receipt_id,

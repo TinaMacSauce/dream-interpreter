@@ -1,15 +1,15 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.5 — SUBSUMPTION FILTER)
-# Based on your current Phase 2.9.4 file.
-# Upgrade:
-# - ✅ Subsumption filter: removes redundant matches when a shorter symbol is contained inside a longer matched symbol
-#   Example: if "standing on a high place naked" matches, drop "high place" from Top Symbols / Quick Decode.
-# Implementation:
-# - We first fetch more candidates (top_k=8), then prune subsumed matches, then return top 3.
+# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.6 — ADMIN PANEL + AUTO-ADD + OPTIMIZE)
+# Based on your current Phase 2.9.5 (subsumption + compound priority + admin import/clean).
+# Adds:
+# - ✅ /admin (mobile-friendly Admin Panel UI, locked behind ADMIN_KEY)
+# - ✅ /admin/add-symbol (add or upsert ONE symbol row into Sheet1, formatting-only)
+# - ✅ /admin/batch-add (add/upsert MANY symbol rows from JSON, formatting-only)
+# - ✅ /admin/optimize-dictionary (formatting-only optimization + de-dupe by input)
 # Keeps:
-# - Admin clean/import routes
-# - Compound priority scoring
-# - UI route + health/healthz
-# - Doctrine-safe narrative output
+# - /, /health, /healthz, /interpret, /track
+# - strict matching + compound priority + subsumption pruning
+# - doctrine-safe Full Interpretation
+# - admin clean/import routes
 
 import os
 import json
@@ -51,7 +51,7 @@ CORS(
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
-# IMPORTANT: write scope is required for admin clean/import routes
+# IMPORTANT: write scope is required for admin routes
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.readonly",
@@ -256,12 +256,8 @@ def _compile_boundary_regex(token: str) -> re.Pattern:
     return re.compile(rf"(?<!\w){re.escape(token_n)}(?!\w)")
 
 
-# ---------- NEW: Subsumption helpers ----------
+# ---------- Subsumption helpers ----------
 def _is_subsumed(short_sym: str, long_sym: str) -> bool:
-    """
-    True if short_sym is fully contained as a word-boundary phrase inside long_sym.
-    Uses normalized text to avoid punctuation/case issues.
-    """
     a = _normalize_text(short_sym)
     b = _normalize_text(long_sym)
     if not a or not b:
@@ -275,11 +271,6 @@ def _is_subsumed(short_sym: str, long_sym: str) -> bool:
 def _prune_subsumed_matches(
     matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]
 ) -> List[Tuple[Dict, int, Optional[Dict[str, str]]]]:
-    """
-    Removes redundant matches when a shorter symbol is contained inside a longer matched symbol.
-    Example: if "standing on a high place naked" matches, drop "high place".
-    Keeps ranked order (already sorted).
-    """
     if not matches:
         return matches
 
@@ -561,6 +552,71 @@ def _clean_values_table(headers_raw: List[str], data_rows: List[List[str]]) -> T
 
 
 # ----------------------------
+# NEW: Dictionary automation helpers
+# ----------------------------
+def _get_sheet_table(ws):
+    values = ws.get_all_values()
+    if not values:
+        return [], []
+    headers_raw = values[0]
+    data_rows = values[1:] if len(values) > 1 else []
+    return headers_raw, data_rows
+
+
+def _required_idx_from_headers(headers_raw: List[str]) -> Dict[str, int]:
+    headers_norm = [_normalize_header(h) for h in headers_raw]
+    required = {"input", "spiritual meaning", "physical effects", "action", "keywords"}
+    missing = [h for h in required if h not in set(headers_norm)]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
+    return {h: headers_norm.index(h) for h in required}
+
+
+def _make_row_from_payload(payload: Dict[str, Any], headers_raw: List[str]) -> List[str]:
+    idx = _required_idx_from_headers(headers_raw)
+
+    inp = (payload.get("input") or payload.get("symbol") or "").strip()
+    sm = (payload.get("spiritual meaning") or payload.get("spiritual_meaning") or "").strip()
+    pe = (payload.get("physical effects") or payload.get("physical_effects") or "").strip()
+    ac = (payload.get("action") or "").strip()
+    kw = (payload.get("keywords") or "").strip()
+
+    inp = _fix_typos_light(inp)
+    sm = _fix_typos_light(sm)
+    pe = _fix_typos_light(pe)
+    ac = _fix_typos_light(ac)
+    kw = _normalize_keywords_cell(kw)
+
+    if not inp:
+        raise ValueError("Missing required field: input")
+    if not sm:
+        raise ValueError("Missing required field: spiritual_meaning")
+    if not pe:
+        raise ValueError("Missing required field: physical_effects")
+    if not ac:
+        raise ValueError("Missing required field: action")
+
+    row = [""] * len(headers_raw)
+    row[idx["input"]] = inp
+    row[idx["spiritual meaning"]] = sm
+    row[idx["physical effects"]] = pe
+    row[idx["action"]] = ac
+    row[idx["keywords"]] = kw
+    return row
+
+
+def _find_existing_row_index(data_rows: List[List[str]], headers_raw: List[str], input_value: str) -> Optional[int]:
+    idx = _required_idx_from_headers(headers_raw)
+    target = _normalize_text(input_value)
+    for i, r in enumerate(data_rows):
+        if len(r) <= idx["input"]:
+            continue
+        if _normalize_text(r[idx["input"]] or "") == target:
+            return i
+    return None
+
+
+# ----------------------------
 # Routes
 # ----------------------------
 @app.route("/", methods=["GET"])
@@ -581,7 +637,7 @@ def health():
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
         "admin_key_set": bool(ADMIN_KEY),
         "match_mode": "strict_word_boundary_only_with_compound_priority_plus_subsumption",
-        "build": "2.9.5",
+        "build": "2.9.6",
     })
 
 
@@ -605,7 +661,6 @@ def interpret():
     except Exception as e:
         return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
 
-    # NEW: Fetch more, prune subsumed, then take top 3
     matches = _match_symbols_strict(dream, rows, top_k=8)
     matches = _prune_subsumed_matches(matches)
     matches = matches[:3]
@@ -663,7 +718,347 @@ def track():
     })
 
 
-# -------- ADMIN ROUTES --------
+# ----------------------------
+# Admin Panel UI (phone-friendly)
+# ----------------------------
+@app.route("/admin", methods=["GET"])
+def admin_panel():
+    if not _admin_ok(request):
+        return make_response("Unauthorized", 401)
+
+    html = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>JTS Admin Panel</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b0b0e;color:#f1f1f1;padding:16px}
+    .wrap{max-width:860px;margin:0 auto}
+    .card{background:#121218;border:1px solid rgba(212,175,55,.25);border-radius:16px;padding:16px;margin-bottom:14px}
+    h1{margin:0 0 10px;font-size:18px;color:#d4af37}
+    h2{margin:0 0 10px;font-size:15px;color:#f3e28a}
+    label{display:block;margin:10px 0 6px;color:#cfcfda;font-size:13px}
+    input,textarea,select{width:100%;box-sizing:border-box;background:#0e0e14;color:#fff;border:1px solid rgba(212,175,55,.25);border-radius:12px;padding:10px 12px;font-size:14px;outline:none}
+    textarea{min-height:88px;resize:vertical}
+    .btn{margin-top:12px;width:100%;background:linear-gradient(90deg,#d4af37,#f3e28a);color:#111;border:0;border-radius:999px;padding:12px 14px;font-weight:800;cursor:pointer}
+    .btn2{margin-top:10px;width:100%;background:transparent;color:#f3e28a;border:1px solid rgba(212,175,55,.6);border-radius:999px;padding:10px 12px;font-weight:700;cursor:pointer}
+    .out{margin-top:10px;white-space:pre-wrap;background:#0e0e14;border:1px solid rgba(212,175,55,.18);border-radius:12px;padding:10px 12px;font-size:13px;color:#dcdcf4}
+    .muted{color:#b7b7c2;font-size:12px;line-height:1.5}
+    a{color:#d4af37}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>JTS Admin Panel (Build 2.9.6)</h1>
+      <div class="muted">Keep this link private. Health: <a href="/health" target="_blank">/health</a></div>
+    </div>
+
+    <div class="card">
+      <h2>Add / Update ONE Symbol</h2>
+      <label>Mode</label>
+      <select id="mode">
+        <option value="append">append (error if exists)</option>
+        <option value="upsert" selected>upsert (update if exists)</option>
+      </select>
+
+      <label>Input (symbol phrase)</label>
+      <input id="input" placeholder="e.g., hair falling out"/>
+
+      <label>Spiritual Meaning</label>
+      <textarea id="sm" placeholder="Doctrine meaning only. No extra guessing."></textarea>
+
+      <label>Physical Effects</label>
+      <textarea id="pe" placeholder="How it shows up in the natural realm."></textarea>
+
+      <label>What to Do (Action)</label>
+      <textarea id="ac" placeholder="Clear instruction (prayer + practical steps)."></textarea>
+
+      <label>Keywords (comma-separated)</label>
+      <textarea id="kw" placeholder="e.g., hair falling out, shedding, bald spots, clumps"></textarea>
+
+      <button class="btn" id="saveOne">Save Symbol</button>
+      <div class="out" id="outOne" style="display:none;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Batch Add Symbols (JSON)</h2>
+      <div class="muted">Paste an array under <code>rows</code>. Each row needs: input, spiritual_meaning, physical_effects, action, keywords.</div>
+
+      <label>Mode</label>
+      <select id="modeBatch">
+        <option value="append">append (skip existing)</option>
+        <option value="upsert" selected>upsert (update existing)</option>
+      </select>
+
+      <label>Rows JSON</label>
+      <textarea id="batchJson" placeholder='{"rows":[{"input":"hair","spiritual_meaning":"Problems.","physical_effects":"Stress.","action":"Pray.","keywords":"hair"}]}'></textarea>
+
+      <button class="btn2" id="saveBatch">Batch Add</button>
+      <div class="out" id="outBatch" style="display:none;"></div>
+    </div>
+
+    <div class="card">
+      <h2>Optimize Dictionary (formatting-only)</h2>
+      <div class="muted">Fixes typos, trims spacing, normalizes keywords, removes blank inputs, removes duplicate inputs. Does NOT rewrite meanings.</div>
+      <button class="btn2" id="optimize">Run Optimize</button>
+      <div class="out" id="outOpt" style="display:none;"></div>
+    </div>
+  </div>
+
+<script>
+  const ADMIN_KEY = new URLSearchParams(window.location.search).get("key") || "";
+
+  async function post(path, payload) {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Admin-Key": ADMIN_KEY
+      },
+      body: payload ? JSON.stringify(payload) : null
+    });
+    const txt = await res.text();
+    let data;
+    try { data = JSON.parse(txt); } catch { data = { raw: txt }; }
+    if (!res.ok) throw new Error(JSON.stringify(data, null, 2));
+    return data;
+  }
+
+  function show(el, obj) {
+    el.style.display = "block";
+    el.textContent = JSON.stringify(obj, null, 2);
+  }
+
+  document.getElementById("saveOne").addEventListener("click", async () => {
+    const out = document.getElementById("outOne");
+    out.style.display = "none";
+    const payload = {
+      mode: document.getElementById("mode").value,
+      input: document.getElementById("input").value.trim(),
+      spiritual_meaning: document.getElementById("sm").value.trim(),
+      physical_effects: document.getElementById("pe").value.trim(),
+      action: document.getElementById("ac").value.trim(),
+      keywords: document.getElementById("kw").value.trim()
+    };
+    try {
+      const data = await post("/admin/add-symbol", payload);
+      show(out, data);
+    } catch (e) {
+      show(out, { error: String(e.message || e) });
+    }
+  });
+
+  document.getElementById("saveBatch").addEventListener("click", async () => {
+    const out = document.getElementById("outBatch");
+    out.style.display = "none";
+    let payload = {};
+    try {
+      payload = JSON.parse(document.getElementById("batchJson").value || "{}");
+    } catch (e) {
+      show(out, { error: "Invalid JSON" });
+      return;
+    }
+    payload.mode = document.getElementById("modeBatch").value;
+
+    try {
+      const data = await post("/admin/batch-add", payload);
+      show(out, data);
+    } catch (e) {
+      show(out, { error: String(e.message || e) });
+    }
+  });
+
+  document.getElementById("optimize").addEventListener("click", async () => {
+    const out = document.getElementById("outOpt");
+    out.style.display = "none";
+    try {
+      const data = await post("/admin/optimize-dictionary", {});
+      show(out, data);
+    } catch (e) {
+      show(out, { error: String(e.message || e) });
+    }
+  });
+</script>
+</body>
+</html>
+"""
+    return make_response(html, 200)
+
+
+# ----------------------------
+# Admin Dictionary Automation Routes
+# ----------------------------
+@app.route("/admin/add-symbol", methods=["POST", "OPTIONS"])
+def admin_add_symbol():
+    if request.method == "OPTIONS":
+        return _preflight_ok()
+
+    if not _admin_ok(request):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    mode = (payload.get("mode") or "append").strip().lower()  # append | upsert
+    if mode not in {"append", "upsert"}:
+        mode = "append"
+
+    try:
+        ws = _get_ws()
+        headers_raw, data_rows = _get_sheet_table(ws)
+        if not headers_raw:
+            return jsonify({"error": "Sheet has no header row."}), 400
+
+        new_row = _make_row_from_payload(payload, headers_raw)
+        idx = _required_idx_from_headers(headers_raw)
+        new_input = new_row[idx["input"]]
+
+        existing_idx = _find_existing_row_index(data_rows, headers_raw, new_input)
+
+        if existing_idx is not None and mode != "upsert":
+            return jsonify({"error": "Symbol already exists. Use mode=upsert to overwrite.", "input": new_input}), 409
+
+        if existing_idx is not None and mode == "upsert":
+            data_rows[existing_idx] = new_row
+            ws.update("A2", data_rows)
+            action = "updated"
+        else:
+            ws.append_row(new_row, value_input_option="RAW")
+            action = "added"
+
+        _load_sheet_rows(force=True)
+        return jsonify({"ok": True, "action": action, "input": new_input})
+
+    except ValueError as ve:
+        return jsonify({"error": "Validation failed", "details": str(ve)}), 400
+    except Exception as e:
+        return jsonify({"error": "Add-symbol failed", "details": str(e)}), 500
+
+
+@app.route("/admin/batch-add", methods=["POST", "OPTIONS"])
+def admin_batch_add():
+    if request.method == "OPTIONS":
+        return _preflight_ok()
+
+    if not _admin_ok(request):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    rows_payload = payload.get("rows") or []
+    mode = (payload.get("mode") or "append").strip().lower()  # append | upsert
+    if mode not in {"append", "upsert"}:
+        mode = "append"
+
+    if not isinstance(rows_payload, list) or not rows_payload:
+        return jsonify({"error": "Provide JSON with a 'rows' array."}), 400
+
+    try:
+        ws = _get_ws()
+        headers_raw, data_rows = _get_sheet_table(ws)
+        if not headers_raw:
+            return jsonify({"error": "Sheet has no header row."}), 400
+
+        idx = _required_idx_from_headers(headers_raw)
+
+        existing_map = {}
+        for i, r in enumerate(data_rows):
+            if len(r) > idx["input"]:
+                existing_map[_normalize_text(r[idx["input"]] or "")] = i
+
+        added = 0
+        updated = 0
+        skipped = 0
+        errors = []
+        to_append = []
+
+        for n, row_obj in enumerate(rows_payload, start=1):
+            try:
+                new_row = _make_row_from_payload(row_obj, headers_raw)
+                key = _normalize_text(new_row[idx["input"]])
+                if key in existing_map:
+                    if mode == "upsert":
+                        data_rows[existing_map[key]] = new_row
+                        updated += 1
+                    else:
+                        skipped += 1
+                else:
+                    to_append.append(new_row)
+                    added += 1
+            except Exception as ex:
+                errors.append({"row": n, "error": str(ex)})
+
+        if updated:
+            ws.update("A2", data_rows)
+
+        if to_append:
+            ws.append_rows(to_append, value_input_option="RAW")
+
+        _load_sheet_rows(force=True)
+
+        return jsonify({
+            "ok": True,
+            "mode": mode,
+            "added": added,
+            "updated": updated,
+            "skipped": skipped,
+            "errors": errors[:50],
+        })
+
+    except ValueError as ve:
+        return jsonify({"error": "Validation failed", "details": str(ve)}), 400
+    except Exception as e:
+        return jsonify({"error": "Batch-add failed", "details": str(e)}), 500
+
+
+@app.route("/admin/optimize-dictionary", methods=["POST", "OPTIONS"])
+def admin_optimize_dictionary():
+    if request.method == "OPTIONS":
+        return _preflight_ok()
+
+    if not _admin_ok(request):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    try:
+        ws = _get_ws()
+        values = ws.get_all_values()
+        if not values or len(values) < 2:
+            return jsonify({"ok": True, "message": "Sheet empty. Nothing to optimize."})
+
+        headers_raw = values[0]
+        data_rows = values[1:]
+
+        headers_raw, cleaned_rows, changes = _clean_values_table(headers_raw, data_rows)
+
+        idx = _required_idx_from_headers(headers_raw)
+        seen = set()
+        deduped = []
+        dropped_dupes = 0
+        for r in cleaned_rows:
+            key = _normalize_text(r[idx["input"]] if len(r) > idx["input"] else "")
+            if not key:
+                continue
+            if key in seen:
+                dropped_dupes += 1
+                continue
+            seen.add(key)
+            deduped.append(r)
+
+        changes["rows_dropped_duplicate_input"] = dropped_dupes
+        changes["rows_out"] = len(deduped)
+
+        ws.clear()
+        ws.update("A1", [headers_raw] + deduped)
+
+        _load_sheet_rows(force=True)
+
+        return jsonify({"ok": True, "message": "Dictionary optimized (formatting-only).", "changes": changes})
+
+    except Exception as e:
+        return jsonify({"error": "Optimize-dictionary failed", "details": str(e)}), 500
+
+
+# -------- EXISTING ADMIN ROUTES (kept) --------
 @app.route("/admin/clean-sheet", methods=["POST", "OPTIONS"])
 def admin_clean_sheet():
     if request.method == "OPTIONS":
@@ -696,16 +1091,6 @@ def admin_clean_sheet():
 
 @app.route("/admin/import-sheet", methods=["POST", "OPTIONS"])
 def admin_import_sheet():
-    """
-    Imports data into Sheet1 then cleans it.
-
-    Supports:
-    1) JSON:
-       {"headers":[...],"rows":[[...],[...]]}
-
-    2) CSV body:
-       First row headers, remaining rows data.
-    """
     if request.method == "OPTIONS":
         return _preflight_ok()
 

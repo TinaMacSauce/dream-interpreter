@@ -1,4 +1,15 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.4 — ADMIN CLEAN + ADMIN IMPORT)
+# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.5 — SUBSUMPTION FILTER)
+# Based on your current Phase 2.9.4 file.
+# Upgrade:
+# - ✅ Subsumption filter: removes redundant matches when a shorter symbol is contained inside a longer matched symbol
+#   Example: if "standing on a high place naked" matches, drop "high place" from Top Symbols / Quick Decode.
+# Implementation:
+# - We first fetch more candidates (top_k=8), then prune subsumed matches, then return top 3.
+# Keeps:
+# - Admin clean/import routes
+# - Compound priority scoring
+# - UI route + health/healthz
+# - Doctrine-safe narrative output
 
 import os
 import json
@@ -245,6 +256,56 @@ def _compile_boundary_regex(token: str) -> re.Pattern:
     return re.compile(rf"(?<!\w){re.escape(token_n)}(?!\w)")
 
 
+# ---------- NEW: Subsumption helpers ----------
+def _is_subsumed(short_sym: str, long_sym: str) -> bool:
+    """
+    True if short_sym is fully contained as a word-boundary phrase inside long_sym.
+    Uses normalized text to avoid punctuation/case issues.
+    """
+    a = _normalize_text(short_sym)
+    b = _normalize_text(long_sym)
+    if not a or not b:
+        return False
+    if a == b:
+        return False
+    rx = re.compile(rf"(?<!\w){re.escape(a)}(?!\w)")
+    return bool(rx.search(b))
+
+
+def _prune_subsumed_matches(
+    matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]
+) -> List[Tuple[Dict, int, Optional[Dict[str, str]]]]:
+    """
+    Removes redundant matches when a shorter symbol is contained inside a longer matched symbol.
+    Example: if "standing on a high place naked" matches, drop "high place".
+    Keeps ranked order (already sorted).
+    """
+    if not matches:
+        return matches
+
+    syms = [(row.get("input") or row.get("symbol") or "").strip() for row, _, _ in matches]
+    keep = [True] * len(matches)
+
+    for i in range(len(matches)):
+        if not keep[i]:
+            continue
+        si = syms[i]
+        if not si:
+            continue
+        for j in range(len(matches)):
+            if i == j or not keep[j]:
+                continue
+            sj = syms[j]
+            if not sj:
+                continue
+            if _is_subsumed(si, sj):
+                keep[i] = False
+                break
+
+    return [m for m, k in zip(matches, keep) if k]
+
+
+# Match ranking priorities
 _HIT_PRIORITY = {"symbol_phrase": 3, "symbol": 2, "keyword": 1}
 
 
@@ -416,7 +477,9 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
     for sym, eff in zip(symbols, effects):
         eff_clean = _strip_trailing_punct(eff)
         if sym and eff_clean:
-            effect_sentences.append(_ensure_terminal_punct(f"{_title_case_symbol(sym)} can show up as {eff_clean} in the natural realm"))
+            effect_sentences.append(_ensure_terminal_punct(
+                f"{_title_case_symbol(sym)} can show up as {eff_clean} in the natural realm"
+            ))
 
     action_lines = _dedupe_preserve_order([_strip_trailing_punct(a) for a in actions if a])
     action_text = ""
@@ -517,6 +580,8 @@ def health():
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
         "admin_key_set": bool(ADMIN_KEY),
+        "match_mode": "strict_word_boundary_only_with_compound_priority_plus_subsumption",
+        "build": "2.9.5",
     })
 
 
@@ -540,7 +605,11 @@ def interpret():
     except Exception as e:
         return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
 
-    matches = _match_symbols_strict(dream, rows, top_k=3)
+    # NEW: Fetch more, prune subsumed, then take top 3
+    matches = _match_symbols_strict(dream, rows, top_k=8)
+    matches = _prune_subsumed_matches(matches)
+    matches = matches[:3]
+
     receipt_id = _make_receipt_id()
     seal = _compute_seal(matches)
 

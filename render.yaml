@@ -3,10 +3,10 @@ services:
   - type: web
     name: dream-interpreter-0015
     env: python
-    plan: free                 # or 'starter' / 'standard' / etc.
-    region: oregon             # pick your region
+    plan: starter
+    region: oregon
     autoDeploy: true
-    healthCheckPath: /healthz
+    healthCheckPath: /health
 
     buildCommand: |
       pip install --upgrade pip
@@ -16,31 +16,34 @@ services:
       gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
 
     envVars:
-      # ---- Core config pulled from your .env guidance ----
-      - key: GOOGLE_APPLICATION_CREDENTIALS
-        value: /etc/secrets/credentials.json
-      - key: GSPREAD_CREDENTIALS
-        value: /etc/secrets/credentials.json
-
-      - key: SHEET_KEY
+      # --- Sheet ---
+      - key: SPREADSHEET_ID
         value: 1ToWPpJ_u-Z14eqL9U1oJppXX6f63h_eZcjUVglKr4Zk
       - key: WORKSHEET_NAME
         value: Sheet1
 
-      # ---- CORS allow-list: NO spaces, NO trailing slashes ----
+      # --- CORS ---
       - key: ALLOWED_ORIGINS
         value: https://jamaicantruestories.com,https://www.jamaicantruestories.com,https://plqwhd-jm.myshopify.com
 
-      # Optional tuning (you can keep defaults in code if you prefer)
-      - key: RELOAD_SEC
-        value: "300"
-      - key: RATE_WINDOW_SEC
-        value: "60"
-      - key: RATE_LIMIT
-        value: "60"
-      - key: DISABLE_SEMANTIC
-        value: "1"      # keep semantic off unless you've added the extra deps
+      # --- Optional cache tuning (your app.py uses SHEET_CACHE_TTL) ---
+      - key: SHEET_CACHE_TTL
+        value: "120"
 
-      # Flask
-      - key: FLASK_ENV
-        value: production
+      # --- Debug (optional) ---
+      - key: DEBUG_MATCH
+        value: "0"
+      - key: NARRATIVE_ENABLED
+        value: "1"
+      - key: NARRATIVE_MAX_SYMBOLS
+        value: "3"
+
+      # --- Google credentials (use ONE of the two approaches below) ---
+
+      # Option A (RECOMMENDED): store service account JSON in Render as an env var
+      # Set this in the Render dashboard as a Secret value:
+      # GOOGLE_SERVICE_ACCOUNT_JSON
+
+      # Option B: if you are mounting a credentials.json file into the container:
+      - key: GOOGLE_SERVICE_ACCOUNT_FILE
+        value: /etc/secrets/credentials.json

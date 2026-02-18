@@ -1,14 +1,14 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.2 — QUICK DECODE + FULL INTERPRETATION + DEBUG)
-# What this version fixes:
-# - ✅ Robust header normalization (handles "Input (symbol)" -> "input symbol", etc.)
-# - ✅ Flexible column getters (so sheet column naming variations won't break matching/output)
-# - ✅ Adds /healthz (Render health check friendly)
-# - ✅ Adds /debug/config (shows exactly which SPREADSHEET_ID + WORKSHEET_NAME the server is using)
-# - ✅ Adds /debug/sheet (shows headers + sample row keys + what the app reads as the symbol)
-# Keeps:
-# - Strict matching rules + keyword guard
-# - Receipt + seal logic
-# - Doctrine-safe narrative builder (only from sheet fields; no guessing from raw dream)
+# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.3 — QUICK DECODE + FULL INTERPRETATION + DEBUG + ADMIN)
+# What this version includes:
+# - ✅ Interpreter API: /interpret, /track
+# - ✅ Health: /health and /healthz (Render-friendly)
+# - ✅ Debug: /debug/config and /debug/sheet (guarded by DEBUG_MATCH=1)
+# - ✅ JTS Admin Panel (RESTORED): /admin (HTML) + /admin/upsert (writes to Google Sheet)
+# - ✅ Robust header normalization + flexible field getters
+# - ✅ Cache invalidation after admin writes (so new symbols show up fast)
+#
+# IMPORTANT:
+# - Your old code had read-only scopes; Admin needs WRITE scopes to update Google Sheets.
 
 import os
 import json
@@ -17,7 +17,7 @@ import re
 import secrets
 from typing import Dict, List, Tuple, Any, Optional
 
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response, Response
 from flask_cors import CORS
 
 import gspread
@@ -47,9 +47,17 @@ CORS(
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
+# Admin key (you can name it either way)
+ADMIN_KEY = (
+    os.getenv("JTS_ADMIN_KEY", "").strip()
+    or os.getenv("ADMIN_KEY", "").strip()
+    or os.getenv("JTS_ADMIN", "").strip()
+)
+
+# ✅ WRITE scopes needed for Admin to edit the sheet
 SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets.readonly",
-    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
 ]
 
 CACHE_TTL_SECONDS = int(os.getenv("SHEET_CACHE_TTL", "120"))
@@ -72,13 +80,10 @@ def _preflight_ok():
 def _normalize_header(h: str) -> str:
     """
     Normalizes sheet headers so real-world names still map correctly.
-    Examples:
-      "Input (symbol)" -> "input symbol"
-      "Effects in the Physical Realm" -> "effects in the physical realm"
+    Example: "Input (symbol)" -> "input symbol"
     """
     h = (h or "").strip().lower()
-    # Turn punctuation into spaces (removes parentheses/slashes/etc. but keeps words)
-    h = re.sub(r"[^a-z0-9\s_]", " ", h)
+    h = re.sub(r"[^a-z0-9\s_]", " ", h)  # punctuation -> spaces
     h = re.sub(r"\s+", " ", h).strip()
     return h
 
@@ -102,7 +107,7 @@ def _clean_sentence(s: str) -> str:
     s = str(s).strip()
     s = re.sub(r"\s+", " ", s)
     s = s.replace(" ,", ",").replace(" .", ".").replace(" :", ":").replace(" ;", ";")
-    s = re.sub(r"([.!?]){2,}", r"\1", s)  # collapse repeated punctuation
+    s = re.sub(r"([.!?]){2,}", r"\1", s)
     return s
 
 
@@ -136,11 +141,16 @@ def _format_label_value(symbol: str, text: str) -> str:
     return f"{symbol}: {text}"
 
 
+def _invalidate_cache():
+    _CACHE["loaded_at"] = 0.0
+    _CACHE["rows"] = []
+    _CACHE["headers"] = []
+
+
 # ----------------------------
 # Sheet field getters (robust)
 # ----------------------------
 def _get_symbol_cell(row: Dict) -> str:
-    # Common header variants after normalization
     return (
         row.get("input")
         or row.get("symbol")
@@ -163,7 +173,6 @@ def _get_spiritual_meaning_cell(row: Dict) -> str:
 
 
 def _get_effects_cell(row: Dict) -> str:
-    # Supports BOTH preferred label + older naming
     return (
         row.get("effects in the physical realm")
         or row.get("effects_in_the_physical_realm")
@@ -189,7 +198,7 @@ def _get_keywords_cell(row: Dict) -> str:
 
 
 # ----------------------------
-# Google credentials + sheet load
+# Google credentials + sheet access
 # ----------------------------
 def _get_credentials() -> Credentials:
     raw = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
@@ -207,21 +216,24 @@ def _get_credentials() -> Credentials:
     return Credentials.from_service_account_file(cred_path, scopes=SCOPES)
 
 
+def _get_ws():
+    if not SPREADSHEET_ID:
+        raise RuntimeError("SPREADSHEET_ID env var is not set.")
+    creds = _get_credentials()
+    gc = gspread.authorize(creds)
+    sh = gc.open_by_key(SPREADSHEET_ID)
+    ws = sh.worksheet(WORKSHEET_NAME)
+    return ws
+
+
 def _load_sheet_rows(force: bool = False) -> List[Dict]:
     now = time.time()
     if (not force) and _CACHE["rows"] and (now - _CACHE["loaded_at"] < CACHE_TTL_SECONDS):
         return _CACHE["rows"]
 
-    if not SPREADSHEET_ID:
-        raise RuntimeError("SPREADSHEET_ID env var is not set.")
-
-    creds = _get_credentials()
-    gc = gspread.authorize(creds)
-
-    sh = gc.open_by_key(SPREADSHEET_ID)
-    ws = sh.worksheet(WORKSHEET_NAME)
-
+    ws = _get_ws()
     values = ws.get_all_values()
+
     if not values or len(values) < 2:
         _CACHE["rows"] = []
         _CACHE["headers"] = []
@@ -291,30 +303,19 @@ def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[st
     symbol_words = symbol.split()
     keywords = _split_keywords(_get_keywords_cell(row))
 
-    # ----------------------------
-    # SYMBOL MATCH RULES
-    # ----------------------------
     if len(symbol_words) == 1:
-        # single-word symbol can match as a word
         if _compile_boundary_regex(symbol).search(dream_norm):
-            score = 100
-            return score, {"type": "symbol", "token": symbol}
+            return 100, {"type": "symbol", "token": symbol}
     else:
-        # multi-word symbol must match FULL phrase exactly
         phrase_rx = re.compile(rf"(?<!\w){re.escape(symbol)}(?!\w)")
         if phrase_rx.search(dream_norm):
             score = 100 - _symbol_length_penalty(symbol_raw)
             return int(score), {"type": "symbol_phrase", "token": symbol}
 
-    # ----------------------------
-    # KEYWORD MATCH RULES (guarded)
-    # - keywords only trigger single-word symbols
-    # ----------------------------
     if len(symbol_words) == 1:
         for kw in keywords:
             if kw and _compile_boundary_regex(kw).search(dream_norm):
-                score = 96
-                return score, {"type": "keyword", "token": kw}
+                return 96, {"type": "keyword", "token": kw}
 
     return 0, None
 
@@ -331,13 +332,11 @@ def _match_symbols_strict(
     _log("DREAM_NORM:", repr(dream_norm))
 
     scored: List[Tuple[Dict, int, Optional[Dict[str, str]]]] = []
-
     for row in rows:
         sc, hit = _score_row_strict(dream_norm, row)
         if sc > 0:
             scored.append((row, sc, hit))
 
-    # Sort by score DESC, then symbol length ASC
     def _sort_key(item: Tuple[Dict, int, Optional[Dict[str, str]]]):
         row, sc, _hit = item
         sym = _get_symbol_cell(row)
@@ -360,8 +359,7 @@ def _match_symbols_strict(
     if out:
         _log("MATCHES:")
         for row, sc, hit in out:
-            sym = _get_symbol_cell(row)
-            _log(f" - {sym!r} score={sc} via={hit}")
+            _log(f" - {_get_symbol_cell(row)!r} score={sc} via={hit}")
     else:
         _log("MATCHES: (none)")
 
@@ -373,7 +371,6 @@ def _match_symbols_strict(
 # Output building
 # ----------------------------
 def _combine_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]) -> Dict[str, str]:
-    """Quick Decode blocks (keeps 'Symbol: text' but formats cleanly)."""
     spiritual_parts: List[str] = []
     physical_parts: List[str] = []
     action_parts: List[str] = []
@@ -411,9 +408,7 @@ def _compute_seal(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]) -> 
     if not matches:
         return {"status": "Delayed", "type": "Unclear", "risk": "High"}
 
-    scores = [sc for _, sc, _ in matches]
-    avg = sum(scores) / max(len(scores), 1)
-
+    avg = sum(sc for _, sc, _ in matches) / max(len(matches), 1)
     if avg >= 95:
         return {"status": "Live", "type": "Confirmed", "risk": "Low"}
     if avg >= 88:
@@ -436,37 +431,21 @@ def _dedupe_preserve_order(items: List[str]) -> List[str]:
 
 
 def _extract_symbol_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]], max_n: int = 3):
-    """
-    Returns aligned lists: symbols, meanings, effects, actions
-    (Only pulls from the sheet; does not invent.)
-    """
     symbols: List[str] = []
     meanings: List[str] = []
     effects: List[str] = []
     actions: List[str] = []
 
     for row, _sc, _hit in matches[:max_n]:
-        symbol = _get_symbol_cell(row)
-        sm = _get_spiritual_meaning_cell(row)
-        pe = _get_effects_cell(row)
-        ac = _get_what_to_do_cell(row)
-
-        if symbol:
-            symbols.append(symbol)
-            meanings.append(sm)
-            effects.append(pe)
-            actions.append(ac)
+        symbols.append(_get_symbol_cell(row))
+        meanings.append(_get_spiritual_meaning_cell(row))
+        effects.append(_get_effects_cell(row))
+        actions.append(_get_what_to_do_cell(row))
 
     return symbols, meanings, effects, actions
 
 
 def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]) -> str:
-    """
-    Doctrine-safe narrative:
-    - Built ONLY from matched symbols and their sheet fields.
-    - No guessing from raw dream text.
-    - Cleans grammar/punctuation without changing meaning.
-    """
     if not matches or not NARRATIVE_ENABLED:
         return ""
 
@@ -487,9 +466,7 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
     for sym, eff in zip(symbols, effects):
         eff_clean = _strip_trailing_punct(eff)
         if sym and eff_clean:
-            effect_sentences.append(
-                _ensure_terminal_punct(f"{_title_case_symbol(sym)} can show up as {eff_clean} in the natural realm")
-            )
+            effect_sentences.append(_ensure_terminal_punct(f"{_title_case_symbol(sym)} can show up as {eff_clean} in the natural realm"))
 
     action_lines = _dedupe_preserve_order([_strip_trailing_punct(a) for a in actions if a])
     action_text = ""
@@ -505,21 +482,233 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
         "This is a warning with mercy, not a sentence."
     )
 
-    parts: List[str] = []
-    parts.append(_ensure_terminal_punct(opening))
+    parts = [
+        _ensure_terminal_punct(opening),
+        " ".join(symbol_sentences).strip() if symbol_sentences else "",
+        " ".join(effect_sentences).strip() if effect_sentences else "",
+        action_text.strip() if action_text else "",
+        _ensure_terminal_punct(closing),
+    ]
+    return "\n\n".join([_clean_sentence(p).strip() for p in parts if p and p.strip()]).strip()
 
-    if symbol_sentences:
-        parts.append(" ".join(symbol_sentences).strip())
 
-    if effect_sentences:
-        parts.append(" ".join(effect_sentences).strip())
+# ----------------------------
+# Admin auth + HTML
+# ----------------------------
+def _get_admin_key_from_request() -> str:
+    # Accept either query string ?key=... OR header X-Admin-Key
+    q = (request.args.get("key") or "").strip()
+    h = (request.headers.get("X-Admin-Key") or "").strip()
+    return q or h
 
-    if action_text:
-        parts.append(action_text.strip())
 
-    parts.append(_ensure_terminal_punct(closing))
+def _require_admin() -> Optional[Response]:
+    if not ADMIN_KEY:
+        # Safer to fail closed if key isn't configured
+        return make_response("Admin is not configured (missing JTS_ADMIN_KEY).", 403)
 
-    return "\n\n".join([_clean_sentence(p).strip() for p in parts if p.strip()]).strip()
+    provided = _get_admin_key_from_request()
+    if not provided or provided != ADMIN_KEY:
+        return make_response("Forbidden", 403)
+    return None
+
+
+ADMIN_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JTS Admin Panel</title>
+  <style>
+    :root{--bg:#0b0b0e;--panel:#121218;--ink:#e9e9ef;--muted:#b7b7c2;--gold:#d4af37;--gold2:#b8921e;--edge:#2b2730;}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:22px;}
+    .wrap{max-width:860px;margin:0 auto;}
+    .card{background:linear-gradient(180deg, rgba(212,175,55,.05), transparent 160px), var(--panel);
+      border:1px solid rgba(212,175,55,.18);border-radius:18px; padding:18px 16px; box-shadow:0 10px 30px rgba(0,0,0,.45);}
+    h1{margin:0 0 8px;font-size:18px}
+    .mini{color:var(--muted);font-size:13px;margin-bottom:14px}
+    label{display:block;margin-top:10px;margin-bottom:6px;color:var(--muted);font-size:13px}
+    input, textarea, select{
+      width:100%; background:#0e0e14; color:var(--ink);
+      border:1px solid rgba(212,175,55,.2); border-radius:12px;
+      padding:10px 12px; outline:none;
+    }
+    textarea{min-height:74px; resize:vertical}
+    .btn{
+      margin-top:14px; width:100%;
+      border:none; border-radius:999px; padding:12px 16px; font-weight:700; cursor:pointer;
+      background:linear-gradient(180deg, var(--gold), var(--gold2)); color:#0b0b0e;
+    }
+    pre{white-space:pre-wrap;background:rgba(0,0,0,.35);padding:12px;border-radius:12px;border:1px solid rgba(212,175,55,.16);margin-top:12px}
+    a{color:var(--gold)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>JTS Admin Panel</h1>
+    <div class="mini">Keep this link private. Health: <a href="/health" target="_blank">/health</a></div>
+
+    <label>Mode</label>
+    <select id="mode">
+      <option value="upsert">upsert (update if exists)</option>
+      <option value="add">add (always append)</option>
+    </select>
+
+    <label>Input (symbol phrase)</label>
+    <input id="input" placeholder="e.g., teeth falling out" />
+
+    <label>Spiritual Meaning</label>
+    <textarea id="spiritual"></textarea>
+
+    <label>Physical Effects</label>
+    <textarea id="effects"></textarea>
+
+    <label>What to Do (Action)</label>
+    <textarea id="action"></textarea>
+
+    <label>Keywords (comma-separated)</label>
+    <textarea id="keywords" placeholder="e.g., teeth, falling, mouth"></textarea>
+
+    <button class="btn" id="save">Save Symbol</button>
+
+    <pre id="out">{}</pre>
+  </div>
+</div>
+
+<script>
+  const out = document.getElementById('out');
+  const saveBtn = document.getElementById('save');
+
+  function getKeyFromUrl(){
+    const u = new URL(window.location.href);
+    return u.searchParams.get('key') || '';
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    out.textContent = 'Saving...';
+    const payload = {
+      mode: document.getElementById('mode').value,
+      input: document.getElementById('input').value.trim(),
+      spiritual_meaning: document.getElementById('spiritual').value.trim(),
+      physical_effects: document.getElementById('effects').value.trim(),
+      action: document.getElementById('action').value.trim(),
+      keywords: document.getElementById('keywords').value.trim(),
+    };
+    const key = getKeyFromUrl();
+    const res = await fetch('/admin/upsert?key=' + encodeURIComponent(key), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({error:'Bad JSON'}));
+    out.textContent = JSON.stringify(data, null, 2);
+  });
+</script>
+</body>
+</html>
+"""
+
+
+def _build_col_map(header_row: List[str]) -> Dict[str, int]:
+    """
+    Returns normalized header -> 1-based column index for sheet updates.
+    """
+    col_map: Dict[str, int] = {}
+    for idx, h in enumerate(header_row, start=1):
+        col_map[_normalize_header(h)] = idx
+    return col_map
+
+
+def _find_existing_row_index(ws, input_value: str, input_col: int) -> Optional[int]:
+    """
+    Finds an existing row by comparing normalized input text.
+    Returns 1-based row index, or None.
+    """
+    target = _normalize_text(input_value)
+    if not target:
+        return None
+
+    # Read the entire input column
+    col_vals = ws.col_values(input_col)  # includes header at row 1
+    for i, v in enumerate(col_vals[1:], start=2):  # start=2 because row 1 is header
+        if _normalize_text(v) == target:
+            return i
+    return None
+
+
+def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
+    ws = _get_ws()
+    header_row = ws.row_values(1)
+    if not header_row:
+        raise RuntimeError("Sheet has no header row.")
+
+    col_map = _build_col_map(header_row)
+
+    # Accept your known schema names
+    input_col = col_map.get("input") or col_map.get("symbol")
+    spiritual_col = col_map.get("spiritual meaning") or col_map.get("spiritual_meaning") or col_map.get("spiritual")
+    effects_col = col_map.get("physical effects") or col_map.get("physical_effects") or col_map.get("effects in the physical realm")
+    action_col = col_map.get("action") or col_map.get("what to do") or col_map.get("what_to_do")
+    keywords_col = col_map.get("keywords")
+
+    if not input_col:
+        raise RuntimeError("Missing 'input' column in header row.")
+    # Other columns can be optional, but you probably want them
+    # We'll still allow save even if one is missing.
+
+    mode = (payload.get("mode") or "upsert").strip().lower()
+    input_value = (payload.get("input") or "").strip()
+    if not input_value:
+        return {"ok": False, "error": "Missing input"}
+
+    spiritual = (payload.get("spiritual_meaning") or payload.get("spiritual") or "").strip()
+    effects = (payload.get("physical_effects") or payload.get("effects") or "").strip()
+    action = (payload.get("action") or "").strip()
+    keywords = (payload.get("keywords") or "").strip()
+
+    existing_row = None
+    if mode != "add":
+        existing_row = _find_existing_row_index(ws, input_value, input_col)
+
+    if existing_row:
+        row_index = existing_row
+        op = "updated"
+    else:
+        # Append row at bottom (ensure we provide enough columns)
+        row_index = len(ws.get_all_values()) + 1
+        op = "added"
+
+    # Write cells (only write columns that exist)
+    updates = []
+    updates.append((row_index, input_col, input_value))
+    if spiritual_col:
+        updates.append((row_index, spiritual_col, spiritual))
+    if effects_col:
+        updates.append((row_index, effects_col, effects))
+    if action_col:
+        updates.append((row_index, action_col, action))
+    if keywords_col:
+        updates.append((row_index, keywords_col, keywords))
+
+    # Batch update
+    cell_list = []
+    for r, c, v in updates:
+        cell_list.append(gspread.Cell(r, c, v))
+    ws.update_cells(cell_list, value_input_option="RAW")
+
+    # Bust cache so /interpret sees it fast
+    _invalidate_cache()
+
+    return {
+        "ok": True,
+        "action": op,
+        "input": input_value,
+        "written_row": row_index,
+        "spreadsheet_id": SPREADSHEET_ID,
+        "worksheet_name": WORKSHEET_NAME,
+    }
 
 
 # ----------------------------
@@ -537,10 +726,10 @@ def health():
         "debug_match": DEBUG_MATCH,
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
+        "admin_configured": bool(ADMIN_KEY),
     })
 
 
-# Render-friendly health check alias
 @app.route("/healthz", methods=["GET"])
 def healthz():
     return health()
@@ -553,7 +742,6 @@ def interpret():
 
     data = request.get_json(silent=True) or {}
     dream = (data.get("dream") or data.get("text") or "").strip()
-
     if not dream:
         return jsonify({"error": "Missing 'dream' or 'text'"}), 400
 
@@ -587,15 +775,8 @@ def interpret():
         })
 
     interpretation = _combine_fields(matches)
-
-    top_symbols = [
-        _get_symbol_cell(row)
-        for row, _sc, _hit in matches
-        if _get_symbol_cell(row)
-    ]
-
+    top_symbols = [_get_symbol_cell(row) for row, _sc, _hit in matches if _get_symbol_cell(row)]
     share_phrase = f"My dream had symbols like: {', '.join(top_symbols[:3])}. I decoded it on Jamaican True Stories."
-
     full_interpretation = build_full_interpretation_from_doctrine(matches)
 
     return jsonify({
@@ -603,8 +784,8 @@ def interpret():
         "is_paid": False,
         "free_uses_left": 3,
         "seal": seal,
-        "interpretation": interpretation,  # Quick Decode (formatted)
-        "full_interpretation": full_interpretation,  # Full Interpretation (polished)
+        "interpretation": interpretation,
+        "full_interpretation": full_interpretation,
         "receipt": {
             "id": receipt_id,
             "top_symbols": top_symbols,
@@ -619,43 +800,56 @@ def track():
         return _preflight_ok()
 
     payload = request.get_json(silent=True) or {}
-
-    # Frontend sends event_type; older versions may send event
     event_name = payload.get("event") or payload.get("event_type") or "unknown"
-
-    return jsonify({
-        "ok": True,
-        "event": event_name,
-        "free_uses_left": payload.get("free_uses_left", 3),
-    })
+    return jsonify({"ok": True, "event": event_name, "free_uses_left": payload.get("free_uses_left", 3)})
 
 
 # ----------------------------
-# Debug Routes (safe)
+# Admin routes (RESTORED)
+# ----------------------------
+@app.route("/admin", methods=["GET"])
+def admin():
+    auth_fail = _require_admin()
+    if auth_fail:
+        return auth_fail
+    return Response(ADMIN_HTML, mimetype="text/html")
+
+
+@app.route("/admin/upsert", methods=["POST", "OPTIONS"])
+def admin_upsert():
+    if request.method == "OPTIONS":
+        return _preflight_ok()
+
+    auth_fail = _require_admin()
+    if auth_fail:
+        return jsonify({"ok": False, "error": "Forbidden"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = _admin_upsert_to_sheet(payload)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ----------------------------
+# Debug routes (guarded)
 # ----------------------------
 @app.route("/debug/config", methods=["GET"])
 def debug_config():
-    """
-    Shows the exact spreadsheet + worksheet the server is using.
-    Turn on with DEBUG_MATCH=1 (so it isn't publicly exposed).
-    """
     if not DEBUG_MATCH:
         return jsonify({"error": "Debug disabled"}), 403
-
     return jsonify({
         "spreadsheet_id": SPREADSHEET_ID,
         "worksheet_name": WORKSHEET_NAME,
         "cache_ttl_seconds": CACHE_TTL_SECONDS,
         "allowed_origins": allowed_origins,
+        "admin_configured": bool(ADMIN_KEY),
     })
 
 
 @app.route("/debug/sheet", methods=["GET"])
 def debug_sheet():
-    """
-    Proves what headers the app sees and what it reads from a sample row.
-    Turn on with DEBUG_MATCH=1.
-    """
     if not DEBUG_MATCH:
         return jsonify({"error": "Debug disabled"}), 403
 
@@ -677,4 +871,4 @@ def debug_sheet():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)                                                                                                                                         
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)

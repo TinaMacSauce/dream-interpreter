@@ -1,4 +1,4 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.4 — FULL UPDATED)
+# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.5 — FINAL, COOKIE-FIX + HYBRID GATE)
 # Adds:
 # - ✅ Hybrid free-tries gate (cookie + IP shadow)
 # - ✅ 3 free tries (anonymous) then force /upgrade (signup + subscribe)
@@ -17,6 +17,10 @@
 # - Uses PRICE_WEEKLY / PRICE_MONTHLY (not STRIPE_PRICE_WEEKLY/MONTHLY)
 # - Uses STRIPE_SECRET_KEY (already in your env)
 # - ✅ Requires STRIPE_WEBHOOK_SECRET (you must add in Render)
+#
+# ✅ CRITICAL FIX FOR "NO FREE TRIES" WHEN FRONTEND IS ON SHOPIFY:
+# - Free-tries cookie must be cross-site: SameSite=None + Secure=True
+# - (And your Shopify fetch must use credentials: "include")
 #
 # Notes:
 # - Hybrid gate uses:
@@ -134,6 +138,14 @@ PRICE_WEEKLY = os.getenv("PRICE_WEEKLY", "").strip()
 PRICE_MONTHLY = os.getenv("PRICE_MONTHLY", "").strip()
 
 DEFAULT_STRIPE_PRICE_ID = PRICE_WEEKLY or PRICE_MONTHLY
+
+
+# ----------------------------
+# Cookie settings (CRITICAL for Shopify -> interpreter cross-site)
+# ----------------------------
+COOKIE_SAMESITE = "None"   # ✅ CHANGED (was "Lax")
+COOKIE_SECURE = True       # required when SameSite=None
+COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 
 
 # ----------------------------
@@ -1040,7 +1052,8 @@ UPGRADE_HTML_FALLBACK = """<!DOCTYPE html>
     const res = await fetch(url, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      credentials: 'include'
     });
     const data = await res.json().catch(() => ({}));
     return {res, data};
@@ -1095,6 +1108,7 @@ def health():
         "subscribers_file": str(SUBSCRIBERS_PATH),
         "price_weekly_set": bool(PRICE_WEEKLY),
         "price_monthly_set": bool(PRICE_MONTHLY),
+        "cookie_samesite": COOKIE_SAMESITE,
     })
 
 
@@ -1245,7 +1259,8 @@ def payment_success():
         </body></html>""",
         mimetype="text/html"
     )
-    resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite="Lax", secure=True)
+    # ✅ CHANGED: SameSite=None so browser clears the same cookie it set cross-site
+    resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
     return resp
 
 
@@ -1393,9 +1408,9 @@ def interpret():
         resp.set_cookie(
             COOKIE_NAME,
             str(cookie_used + 1),
-            max_age=60 * 60 * 24 * 365,
-            samesite="Lax",
-            secure=True,
+            max_age=COOKIE_MAX_AGE,
+            samesite=COOKIE_SAMESITE,  # ✅ CHANGED: None
+            secure=COOKIE_SECURE,       # ✅ required
         )
 
     return resp
@@ -1465,6 +1480,7 @@ def debug_config():
         "counts_file": str(USAGE_COUNTS_PATH),
         "users_file": str(USERS_PATH),
         "subscribers_file": str(SUBSCRIBERS_PATH),
+        "cookie_samesite": COOKIE_SAMESITE,
     })
 
 

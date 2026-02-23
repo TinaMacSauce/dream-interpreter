@@ -128,31 +128,6 @@
     /* IMPORTANT: This makes \n show as clean line breaks */
     .prelines{ white-space: pre-line; }
 
-    .paywall-box{
-      margin-top:6px;
-      padding:12px;
-      border-radius:12px;
-      border:1px dashed rgba(212,175,55,.4);
-      background:rgba(0,0,0,.55);
-      font-size:.9rem;
-    }
-    .paywall-actions{
-      margin-top:10px;
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-    }
-    .btn-outline{
-      border-radius:999px;
-      padding:8px 14px;
-      font-size:.85rem;
-      border:1px solid rgba(212,175,55,.7);
-      background:transparent;
-      color:var(--ink);
-      text-decoration:none;
-      cursor:pointer;
-    }
-
     /* Full Interpretation UI */
     .toggle-btn{
       margin-top:12px;
@@ -233,10 +208,10 @@
       </div>
     </section>
 
-    <!-- ✅ UPDATED FOOTER: added build stamp -->
+    <!-- Build stamp -->
     <div class="footer">
       Health: <a href="/health" target="_blank">/health</a>
-      <span style="margin-left:10px; opacity:.6;">Build 2.9.5</span>
+      <span style="margin-left:10px; opacity:.6;">Build 2.9.6 (Hybrid Gate)</span>
     </div>
   </main>
 
@@ -260,7 +235,6 @@
 
     async function track(event_type, metadata = {}) {
       try {
-        // ✅ Backend expects `event`, not `event_type`
         const payload = { user_id: getAnonymousId(), event: event_type, metadata };
         await fetch("/track", {
           method: "POST",
@@ -374,45 +348,18 @@
         const raw = await res.text();
         try { data = JSON.parse(raw); } catch { data = { error: raw || "Unknown error" }; }
 
+        // ✅ HYBRID GATE: redirect on free-limit (HTTP 402)
+        if (res.status === 402 && (data.redirect || data.blocked)) {
+          track("paywall_viewed", { reason: data.reason || "free_limit_reached" });
+          window.location.href = data.redirect || "/upgrade";
+          return;
+        }
+
         if (!res.ok) {
-          throw new Error(data.error || `Request failed (${res.status})`);
+          throw new Error(data.error || data.message || `Request failed (${res.status})`);
         }
 
         out.style.display = "block";
-
-        if (data.paywall) {
-          track("paywall_viewed", {
-            has_weekly: Boolean(data.checkout_weekly),
-            has_monthly: Boolean(data.checkout_monthly)
-          });
-
-          const weekly = data.checkout_weekly;
-          const monthly = data.checkout_monthly;
-
-          let html = `
-            <div class="paywall-box">
-              <div>${escapeHtml(data.message || "Free limit reached. Please subscribe to continue.")}</div>
-              <div class="paywall-actions">
-          `;
-          if (weekly) html += `<a class="btn-outline" href="${weekly}" data-track-upgrade="weekly">Unlock Weekly Access</a>`;
-          if (monthly) html += `<a class="btn-outline" href="${monthly}" data-track-upgrade="monthly">Unlock Monthly Access</a>`;
-          html += `</div></div>`;
-
-          interp.innerHTML = html;
-          methodEl.textContent = "Free limit reached";
-          usesWrap.style.display = "inline";
-          usesEl.textContent = "0";
-          resetFullInterpretationUI();
-
-          interp.querySelectorAll("[data-track-upgrade]").forEach(a => {
-            a.addEventListener("click", () => {
-              const plan = a.getAttribute("data-track-upgrade");
-              track("upgrade_clicked", { plan });
-            });
-          });
-
-          return;
-        }
 
         track("interpretation_generated", {
           pro: Boolean(data.pro) || Boolean(data.is_paid) || data.access === "paid",

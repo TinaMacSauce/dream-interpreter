@@ -1,4 +1,4 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.4)
+# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.4 — FULL UPDATED)
 # Adds:
 # - ✅ Hybrid free-tries gate (cookie + IP shadow)
 # - ✅ 3 free tries (anonymous) then force /upgrade (signup + subscribe)
@@ -10,12 +10,20 @@
 # - ✅ /debug/config, /debug/sheet (guarded by DEBUG_MATCH=1)
 # - ✅ /admin + /admin/upsert (writes to Google Sheet, cache invalidation)
 #
+# IMPORTANT UPDATES (matches your Render env vars):
+# - Uses FREE_QUOTA (not FREE_TRIES)
+# - Uses COUNTS_FILE (not USAGE_COUNTS_FILE)
+# - Uses SUBSCRIBERS_FILE (not USERS_FILE) ONLY for premium list if you prefer
+# - Uses PRICE_WEEKLY / PRICE_MONTHLY (not STRIPE_PRICE_WEEKLY/MONTHLY)
+# - Uses STRIPE_SECRET_KEY (already in your env)
+# - ✅ Requires STRIPE_WEBHOOK_SECRET (you must add in Render)
+#
 # Notes:
 # - Hybrid gate uses:
 #   - cookie: jts_free_tries_used (primary)
-#   - usage_counts.json -> ip_shadow (backstop)
+#   - COUNTS_FILE JSON -> ip_shadow (backstop)
 # - After payment success: clears free-tries cookie
-# - Users stored in users.json (simple, works on Render with persistent disk; otherwise consider DB)
+# - Login accounts stored in users.json (NEW file you must add to repo: {})
 
 import os
 import json
@@ -35,13 +43,12 @@ from flask_cors import CORS
 import gspread
 from google.oauth2.service_account import Credentials
 
-# Stripe is optional until you wire env vars
+# Stripe optional until env vars are set
 try:
     import stripe
 except Exception:
     stripe = None
 
-# Password hashing (no extra dependency)
 from werkzeug.security import generate_password_hash, check_password_hash
 
 
@@ -69,13 +76,16 @@ CORS(
     methods=["GET", "POST", "OPTIONS"],
 )
 
+# Existing env vars you already have
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
-# Admin key (you can name it either way)
+# Admin key (your env screenshot shows ADMIN_KEY / ADMIN_TOKEN etc.
+# Keep compatibility with your older naming.
 ADMIN_KEY = (
     os.getenv("JTS_ADMIN_KEY", "").strip()
     or os.getenv("ADMIN_KEY", "").strip()
+    or os.getenv("ADMIN_TOKEN", "").strip()
     or os.getenv("JTS_ADMIN", "").strip()
 )
 
@@ -85,55 +95,45 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-CACHE_TTL_SECONDS = int(os.getenv("SHEET_CACHE_TTL", "120"))
+# Cache (your env shows CACHE_TTL_SECONDS)
+CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", os.getenv("SHEET_CACHE_TTL", "120")))
 _CACHE: Dict[str, Any] = {"loaded_at": 0.0, "rows": [], "headers": []}
 
 DEBUG_MATCH = os.getenv("DEBUG_MATCH", "").strip().lower() in {"1", "true", "yes", "on"}
 
 # Narrative style knobs (optional)
 NARRATIVE_ENABLED = os.getenv("NARRATIVE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
-NARRATIVE_MAX_SYMBOLS = int(os.getenv("NARRATIVE_MAX_SYMBOLS", "3"))  # keep short & consistent
+NARRATIVE_MAX_SYMBOLS = int(os.getenv("NARRATIVE_MAX_SYMBOLS", "3"))
+
 
 # ----------------------------
-# Hybrid Gate Settings
+# Hybrid Gate Settings (MATCH YOUR ENV VARS)
 # ----------------------------
-FREE_TRIES = int(os.getenv("FREE_TRIES", "3"))
+FREE_TRIES = int(os.getenv("FREE_QUOTA", os.getenv("FREE_TRIES", "3")))
 COOKIE_NAME = os.getenv("FREE_TRIES_COOKIE", "jts_free_tries_used")
 SHADOW_WINDOW_HOURS = int(os.getenv("SHADOW_WINDOW_HOURS", "72"))
-USAGE_COUNTS_PATH = Path(os.getenv("USAGE_COUNTS_FILE", "usage_counts.json"))
+
+# Your env shows COUNTS_FILE and SUBSCRIBERS_FILE
+COUNTS_FILE = os.getenv("COUNTS_FILE", "usage_counts.json")
+SUBSCRIBERS_FILE = os.getenv("SUBSCRIBERS_FILE", "subscribers.json")
+
+USAGE_COUNTS_PATH = Path(COUNTS_FILE)
+SUBSCRIBERS_PATH = Path(SUBSCRIBERS_FILE)
+
+# Login accounts file (NEW)
 USERS_PATH = Path(os.getenv("USERS_FILE", "users.json"))
 
+
 # ----------------------------
-# Stripe Settings (subscription)
+# Stripe Settings (MATCH YOUR ENV VARS)
 # ----------------------------
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()  # YOU MUST ADD THIS IN RENDER
 
-# Prefer env; fallback to a local file in repo if you store IDs that way
-# Example files you may have: PRICE_MONTHLY=price_xxx
-STRIPE_PRICE_WEEKLY = os.getenv("STRIPE_PRICE_WEEKLY", "").strip()
-STRIPE_PRICE_MONTHLY = os.getenv("STRIPE_PRICE_MONTHLY", "").strip()
+PRICE_WEEKLY = os.getenv("PRICE_WEEKLY", "").strip()
+PRICE_MONTHLY = os.getenv("PRICE_MONTHLY", "").strip()
 
-def _try_read_price_id_from_file(prefix: str) -> str:
-    # looks for file names like PRICE_MONTHLY=price_123...
-    # in repo root (same directory)
-    try:
-        here = Path(__file__).resolve().parent
-        for p in here.iterdir():
-            if p.is_file() and p.name.startswith(prefix + "="):
-                # file name format: PREFIX=price_XXXX
-                return p.name.split("=", 1)[1].strip()
-    except Exception:
-        pass
-    return ""
-
-if not STRIPE_PRICE_MONTHLY:
-    STRIPE_PRICE_MONTHLY = _try_read_price_id_from_file("PRICE_MONTHLY")
-if not STRIPE_PRICE_WEEKLY:
-    STRIPE_PRICE_WEEKLY = _try_read_price_id_from_file("PRICE_WEEKLY")
-
-# Default to weekly if available, else monthly
-DEFAULT_STRIPE_PRICE_ID = STRIPE_PRICE_WEEKLY or STRIPE_PRICE_MONTHLY
+DEFAULT_STRIPE_PRICE_ID = PRICE_WEEKLY or PRICE_MONTHLY
 
 
 # ----------------------------
@@ -228,21 +228,25 @@ def _write_json_file_atomic(path: Path, data: Any):
         tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         tmp.replace(path)
     except Exception as e:
-        # fail silently for now; production should log
-        _log("JSON write failed:", path, str(e))
+        _log("JSON write failed:", str(path), str(e))
 
 
 def _ensure_files_exist():
-    if not USERS_PATH.exists():
-        _write_json_file_atomic(USERS_PATH, {})
+    # For counts
     if not USAGE_COUNTS_PATH.exists():
         _write_json_file_atomic(USAGE_COUNTS_PATH, {"ip_shadow": {}})
+    # For subscribers (optional; you might already have it)
+    if not SUBSCRIBERS_PATH.exists():
+        _write_json_file_atomic(SUBSCRIBERS_PATH, {})
+    # For users (login accounts)
+    if not USERS_PATH.exists():
+        _write_json_file_atomic(USERS_PATH, {})
 
 _ensure_files_exist()
 
 
 # ----------------------------
-# Hybrid Gate: cookie + IP shadow
+# Hybrid Gate: cookie + IP shadow (COUNTS_FILE)
 # ----------------------------
 def _get_client_ip() -> str:
     xff = request.headers.get("X-Forwarded-For", "")
@@ -279,13 +283,11 @@ def _shadow_get(ip: str) -> Dict[str, Any]:
     now = datetime.utcnow()
     window = timedelta(hours=SHADOW_WINDOW_HOURS)
 
-    # Initialize timestamps if missing
     if not rec.get("first_seen"):
         rec["first_seen"] = now.isoformat() + "Z"
     if not rec.get("last_seen"):
         rec["last_seen"] = now.isoformat() + "Z"
 
-    # Reset if outside window
     try:
         first = datetime.fromisoformat(rec["first_seen"].replace("Z", ""))
         if now - first > window:
@@ -297,7 +299,6 @@ def _shadow_get(ip: str) -> Dict[str, Any]:
         rec["first_seen"] = now.isoformat() + "Z"
         rec["last_seen"] = now.isoformat() + "Z"
 
-    # Persist cleaned record
     shadow[ip] = rec
     _save_usage_counts(data)
     return rec
@@ -319,7 +320,6 @@ def _shadow_increment(ip: str) -> int:
     now = datetime.utcnow()
     window = timedelta(hours=SHADOW_WINDOW_HOURS)
 
-    # Reset if stale
     try:
         if rec.get("first_seen"):
             first = datetime.fromisoformat(rec["first_seen"].replace("Z", ""))
@@ -342,12 +342,11 @@ def _shadow_increment(ip: str) -> int:
 
 
 def _free_tries_remaining_after_this(effective_used_before: int) -> int:
-    # if effective_used_before = 0, consuming this try leaves FREE_TRIES-1
     return max(0, FREE_TRIES - (effective_used_before + 1))
 
 
 # ----------------------------
-# Login accounts (file-based users.json)
+# Login accounts (users.json)
 # ----------------------------
 def _load_users() -> Dict[str, Any]:
     data = _read_json_file(USERS_PATH, {})
@@ -391,8 +390,32 @@ def _is_premium() -> bool:
     return bool(u and u.get("is_premium") is True)
 
 
-def _require_login_redirect():
-    return redirect(url_for("upgrade"))
+# ----------------------------
+# Subscribers file helpers (optional: for legacy tracking)
+# ----------------------------
+def _load_subscribers() -> Dict[str, Any]:
+    data = _read_json_file(SUBSCRIBERS_PATH, {})
+    if not isinstance(data, dict):
+        return {}
+    return data
+
+
+def _save_subscribers(data: Dict[str, Any]):
+    _write_json_file_atomic(SUBSCRIBERS_PATH, data)
+
+
+def _mark_subscriber(email: str, is_active: bool, stripe_customer_id: str = ""):
+    if not email:
+        return
+    email_n = email.strip().lower()
+    subs = _load_subscribers()
+    subs[email_n] = {
+        "email": email_n,
+        "is_active": bool(is_active),
+        "stripe_customer_id": stripe_customer_id,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+    _save_subscribers(subs)
 
 
 # ----------------------------
@@ -751,7 +774,7 @@ def _get_admin_key_from_request() -> str:
 
 def _require_admin() -> Optional[Response]:
     if not ADMIN_KEY:
-        return make_response("Admin is not configured (missing JTS_ADMIN_KEY).", 403)
+        return make_response("Admin is not configured (missing ADMIN_KEY / JTS_ADMIN_KEY).", 403)
 
     provided = _get_admin_key_from_request()
     if not provided or provided != ADMIN_KEY:
@@ -869,7 +892,7 @@ def _find_existing_row_index(ws, input_value: str, input_col: int) -> Optional[i
     if not target:
         return None
 
-    col_vals = ws.col_values(input_col)  # includes header at row 1
+    col_vals = ws.col_values(input_col)
     for i, v in enumerate(col_vals[1:], start=2):
         if _normalize_text(v) == target:
             return i
@@ -914,8 +937,7 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
         row_index = len(ws.get_all_values()) + 1
         op = "added"
 
-    updates = []
-    updates.append((row_index, input_col, input_value))
+    updates = [(row_index, input_col, input_value)]
     if spiritual_col:
         updates.append((row_index, spiritual_col, spiritual))
     if effects_col:
@@ -925,9 +947,7 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
     if keywords_col:
         updates.append((row_index, keywords_col, keywords))
 
-    cell_list = []
-    for r, c, v in updates:
-        cell_list.append(gspread.Cell(r, c, v))
+    cell_list = [gspread.Cell(r, c, v) for r, c, v in updates]
     ws.update_cells(cell_list, value_input_option="RAW")
 
     _invalidate_cache()
@@ -983,7 +1003,7 @@ UPGRADE_HTML_FALLBACK = """<!DOCTYPE html>
       <div class="pill">Free limit reached</div>
       <h1>Unlock Full Cultural Dream Access</h1>
       <div class="sub">
-        You’ve used your 3 free tries. Create an account and subscribe to continue decoding dreams with full access.
+        You’ve used your free tries. Create an account and subscribe to continue decoding dreams with full access.
       </div>
       <ul>
         <li>Unlimited interpretations</li>
@@ -1032,7 +1052,6 @@ UPGRADE_HTML_FALLBACK = """<!DOCTYPE html>
     const password = document.getElementById('password').value;
     const {res, data} = await postJSON('/auth/signup', {email, password});
     if (!res.ok) { err.textContent = data.error || 'Signup failed'; return; }
-    // after signup -> go to subscribe
     window.location.href = '/subscribe';
   });
 
@@ -1066,10 +1085,16 @@ def health():
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
         "admin_configured": bool(ADMIN_KEY),
-        "free_tries": FREE_TRIES,
+        "free_quota": FREE_TRIES,
         "shadow_window_hours": SHADOW_WINDOW_HOURS,
         "stripe_configured": bool(STRIPE_SECRET_KEY and DEFAULT_STRIPE_PRICE_ID and stripe),
+        "webhook_configured": bool(STRIPE_WEBHOOK_SECRET),
         "login_enabled": True,
+        "counts_file": str(USAGE_COUNTS_PATH),
+        "users_file": str(USERS_PATH),
+        "subscribers_file": str(SUBSCRIBERS_PATH),
+        "price_weekly_set": bool(PRICE_WEEKLY),
+        "price_monthly_set": bool(PRICE_MONTHLY),
     })
 
 
@@ -1102,6 +1127,7 @@ def auth_signup():
         "is_premium": False,
         "stripe_customer_id": "",
         "created_at": datetime.utcnow().isoformat() + "Z",
+        "updated_at": datetime.utcnow().isoformat() + "Z",
     }
     _set_user(email, record)
 
@@ -1136,7 +1162,6 @@ def auth_logout():
 
 @app.route("/upgrade", methods=["GET"])
 def upgrade():
-    # Prefer template if you add it
     try:
         return render_template("upgrade.html")
     except Exception:
@@ -1145,13 +1170,12 @@ def upgrade():
 
 @app.route("/subscribe", methods=["GET"])
 def subscribe():
-    # must be logged in to subscribe
     if not _is_logged_in():
         return redirect(url_for("upgrade"))
-    # If already premium, send them back
     if _is_premium():
         return redirect(url_for("payment_success"))
-    # simple page that triggers checkout
+
+    # simple checkout launcher page
     return Response(
         """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Subscribe</title>
@@ -1168,7 +1192,7 @@ def subscribe():
           <form action="/create-checkout-session" method="POST">
             <button class="btn" type="submit">Continue to Checkout</button>
           </form>
-          <div class="muted">If nothing happens, Stripe may not be configured yet.</div>
+          <div class="muted">If nothing happens: check STRIPE_SECRET_KEY, PRICE_WEEKLY/PRICE_MONTHLY, and STRIPE_WEBHOOK_SECRET.</div>
         </div>
         </body></html>""",
         mimetype="text/html"
@@ -1181,12 +1205,13 @@ def create_checkout_session():
         return redirect(url_for("upgrade"))
 
     if not stripe or not STRIPE_SECRET_KEY or not DEFAULT_STRIPE_PRICE_ID:
-        return make_response("Stripe is not configured. Set STRIPE_SECRET_KEY and STRIPE_PRICE_WEEKLY (or monthly).", 500)
+        return make_response(
+            "Stripe not configured. Ensure STRIPE_SECRET_KEY and PRICE_WEEKLY (or PRICE_MONTHLY) are set.",
+            500,
+        )
 
     stripe.api_key = STRIPE_SECRET_KEY
-
     email = _current_user_email()
-    u = _get_user(email) or {}
 
     try:
         checkout = stripe.checkout.Session.create(
@@ -1203,9 +1228,7 @@ def create_checkout_session():
 
 @app.route("/payment-success", methods=["GET"])
 def payment_success():
-    # User returns here after Stripe checkout
-    # Webhook marks them premium; sometimes it takes a second.
-    # We'll show a friendly page and redirect.
+    # Clear free tries cookie now that they paid (cookie reset)
     resp = Response(
         """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Access Active</title>
@@ -1222,7 +1245,6 @@ def payment_success():
         </body></html>""",
         mimetype="text/html"
     )
-    # Clear free tries cookie now that they paid
     resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite="Lax", secure=True)
     return resp
 
@@ -1242,27 +1264,34 @@ def stripe_webhook():
     except Exception:
         return ("bad signature", 400)
 
-    # Upgrade on checkout complete
     if event["type"] == "checkout.session.completed":
         session_obj = event["data"]["object"]
         email = (session_obj.get("customer_email") or "").strip().lower()
+        customer_id = session_obj.get("customer") or ""
+
         if email:
             u = _get_user(email)
             if u:
                 u["is_premium"] = True
-                u["stripe_customer_id"] = session_obj.get("customer") or u.get("stripe_customer_id", "")
+                u["stripe_customer_id"] = customer_id or u.get("stripe_customer_id", "")
+                u["updated_at"] = datetime.utcnow().isoformat() + "Z"
                 _set_user(email, u)
 
-    # Downgrade on subscription canceled
+            # also mark in subscribers.json for compatibility
+            _mark_subscriber(email, True, customer_id)
+
     if event["type"] == "customer.subscription.deleted":
         sub = event["data"]["object"]
         customer_id = sub.get("customer")
+
         if customer_id:
             users = _load_users()
             for email, rec in users.items():
                 if rec.get("stripe_customer_id") == customer_id:
                     rec["is_premium"] = False
+                    rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
                     users[email] = rec
+                    _mark_subscriber(email, False, customer_id)
             _save_users(users)
 
     return ("ok", 200)
@@ -1279,8 +1308,7 @@ def interpret():
         return jsonify({"error": "Missing 'dream' or 'text'"}), 400
 
     # ----------------------------
-    # HYBRID GATE
-    # Premium users bypass completely
+    # HYBRID GATE (anonymous users)
     # ----------------------------
     if not _is_premium():
         ip = _get_client_ip()
@@ -1289,15 +1317,14 @@ def interpret():
         effective_used = max(cookie_used, ip_used)
 
         if effective_used >= FREE_TRIES:
-            # Force upgrade (signup + subscribe)
             return jsonify({
                 "blocked": True,
                 "reason": "free_limit_reached",
-                "message": "You’ve used your 3 free tries. Create an account and subscribe to continue.",
+                "message": f"You’ve used your {FREE_TRIES} free tries. Create an account and subscribe to continue.",
                 "redirect": url_for("upgrade"),
                 "free_uses_left": 0,
                 "access": "blocked",
-                "is_paid": False
+                "is_paid": False,
             }), 402
 
     try:
@@ -1306,37 +1333,37 @@ def interpret():
         return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
 
     matches = _match_symbols_strict(dream, rows, top_k=3)
-
     receipt_id = _make_receipt_id()
     seal = _compute_seal(matches)
 
-    # If not premium, consume a free try AFTER a valid request (even if no matches)
-    free_uses_left = None
-    resp = None
+    # consume a try for non-premium users
+    free_uses_left = 0
     if not _is_premium():
         ip = _get_client_ip()
         cookie_used = _get_cookie_tries_used()
         ip_used = _shadow_count(ip)
         effective_used = max(cookie_used, ip_used)
 
-        # increment both
         _shadow_increment(ip)
-        new_cookie = cookie_used + 1
         free_uses_left = _free_tries_remaining_after_this(effective_used)
 
     if not matches:
         payload = {
             "access": "free" if not _is_premium() else "paid",
             "is_paid": bool(_is_premium()),
-            "free_uses_left": free_uses_left if free_uses_left is not None else 0,
+            "free_uses_left": free_uses_left,
             "seal": seal,
-            "receipt": {"id": receipt_id, "top_symbols": [], "share_phrase": "I decoded my dream on Jamaican True Stories."},
+            "receipt": {
+                "id": receipt_id,
+                "top_symbols": [],
+                "share_phrase": "I decoded my dream on Jamaican True Stories.",
+            },
             "interpretation": {
                 "spiritual_meaning": "No matching symbols were found for the exact words in this dream.",
                 "effects_in_physical_realm": "Tip: use clear symbol words (people, animals, places, objects) that exist in your Symbols sheet.",
-                "what_to_do": "Add 1–2 more key symbols (objects, people, animals, places) and try again."
+                "what_to_do": "Add 1–2 more key symbols (objects, people, animals, places) and try again.",
             },
-            "full_interpretation": ""
+            "full_interpretation": "",
         }
         resp = make_response(jsonify(payload))
     else:
@@ -1348,28 +1375,27 @@ def interpret():
         payload = {
             "access": "free" if not _is_premium() else "paid",
             "is_paid": bool(_is_premium()),
-            "free_uses_left": free_uses_left if free_uses_left is not None else 0,
+            "free_uses_left": free_uses_left,
             "seal": seal,
             "interpretation": interpretation,
             "full_interpretation": full_interpretation,
             "receipt": {
                 "id": receipt_id,
                 "top_symbols": top_symbols,
-                "share_phrase": share_phrase
+                "share_phrase": share_phrase,
             },
         }
         resp = make_response(jsonify(payload))
 
-    # Set cookie for non-premium users
+    # update cookie for non-premium users
     if not _is_premium():
         cookie_used = _get_cookie_tries_used()
-        # we already incremented in logic above; but cookie isn't set yet; set to cookie_used+1
         resp.set_cookie(
             COOKIE_NAME,
             str(cookie_used + 1),
-            max_age=60*60*24*365,
+            max_age=60 * 60 * 24 * 365,
             samesite="Lax",
-            secure=True
+            secure=True,
         )
 
     return resp
@@ -1391,7 +1417,7 @@ def track():
 
 
 # ----------------------------
-# Admin routes (RESTORED)
+# Admin routes
 # ----------------------------
 @app.route("/admin", methods=["GET"])
 def admin():
@@ -1431,12 +1457,14 @@ def debug_config():
         "cache_ttl_seconds": CACHE_TTL_SECONDS,
         "allowed_origins": allowed_origins,
         "admin_configured": bool(ADMIN_KEY),
-        "free_tries": FREE_TRIES,
+        "free_quota": FREE_TRIES,
         "shadow_window_hours": SHADOW_WINDOW_HOURS,
         "stripe_has_key": bool(STRIPE_SECRET_KEY),
         "stripe_has_price": bool(DEFAULT_STRIPE_PRICE_ID),
+        "webhook_configured": bool(STRIPE_WEBHOOK_SECRET),
+        "counts_file": str(USAGE_COUNTS_PATH),
         "users_file": str(USERS_PATH),
-        "usage_counts_file": str(USAGE_COUNTS_PATH),
+        "subscribers_file": str(SUBSCRIBERS_PATH),
     })
 
 

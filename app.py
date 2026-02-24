@@ -1,36 +1,25 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.6 — FINAL, COOKIE-FIX + RETURN URL + UX COPY)
-# Adds:
-# - ✅ Hybrid free-tries gate (cookie + IP shadow)
-# - ✅ 3 free tries (anonymous) then force /upgrade (signup + subscribe)
-# - ✅ Login accounts (file-based users.json)
-# - ✅ Stripe subscription Checkout + webhook upgrade + auto redirect
-# - ✅ RETURN_URL + "/" route so interpreter root never 404s
-# - ✅ /payment-success now sends users back to RETURN_URL (not "/")
-# - ✅ /subscribe page UX copy (no dev notes)
-# Keeps:
-# - ✅ /interpret, /track
-# - ✅ /health, /healthz
-# - ✅ /debug/config, /debug/sheet (guarded by DEBUG_MATCH=1)
-# - ✅ /admin + /admin/upsert (writes to Google Sheet, cache invalidation)
+# app.py — Jamaican True Stories Dream Interpreter (Option A: Stripe-only access, HYBRID FREE GATE)
+# What this version does:
+# - ✅ Keeps: Hybrid free-tries gate (cookie + IP shadow)
+# - ✅ Keeps: /interpret, /track, /health, /healthz, /debug/config, /debug/sheet (guarded), /admin + /admin/upsert
+# - ✅ Keeps: Stripe Checkout + webhook tracking
+# - ✅ Removes: ALL account/password logic (no /auth/signup, /auth/login, no users.json)
+# - ✅ Adds: Stripe-only unlock via email:
+#     - /upgrade page: user enters email
+#     - "Unlock Access" -> POST /check-access -> checks Stripe active subscription -> sets premium session
+#     - "Continue to Checkout" -> creates checkout session for that email
 #
-# IMPORTANT UPDATES (matches your Render env vars):
-# - Uses FREE_QUOTA (not FREE_TRIES)
-# - Uses COUNTS_FILE (not USAGE_COUNTS_FILE)
-# - Uses SUBSCRIBERS_FILE
-# - Uses PRICE_WEEKLY / PRICE_MONTHLY
-# - Uses STRIPE_SECRET_KEY
-# - Requires STRIPE_WEBHOOK_SECRET
-#
-# ✅ CRITICAL FIX FOR "NO FREE TRIES" WHEN FRONTEND IS ON SHOPIFY:
-# - Free-tries cookie must be cross-site: SameSite=None + Secure=True
-# - Shopify fetch must use credentials: "include"
-#
-# ✅ CRITICAL FIX FOR "WHITE 404 AFTER PAYMENT":
-# - interpreter "/" now redirects to RETURN_URL
-# - /payment-success redirects to RETURN_URL instead of "/"
-#
-# Env vars to set in Render:
+# Env vars (Render):
 # - RETURN_URL=https://jamaicantruestories.com/pages/dream-interpreter
+# - ALLOWED_ORIGINS=...
+# - SPREADSHEET_ID, WORKSHEET_NAME
+# - GOOGLE_SERVICE_ACCOUNT_JSON (or GOOGLE_SERVICE_ACCOUNT_FILE)
+# - FREE_QUOTA, FREE_TRIES_COOKIE, SHADOW_WINDOW_HOURS
+# - COUNTS_FILE, SUBSCRIBERS_FILE
+# - STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+# - PRICE_WEEKLY / PRICE_MONTHLY
+# - ADMIN_KEY (or JTS_ADMIN_KEY / ADMIN_TOKEN / JTS_ADMIN)
+# - DEBUG_MATCH=1 (optional)
 
 import os
 import json
@@ -50,13 +39,10 @@ from flask_cors import CORS
 import gspread
 from google.oauth2.service_account import Credentials
 
-# Stripe optional until env vars are set
 try:
     import stripe
 except Exception:
     stripe = None
-
-from werkzeug.security import generate_password_hash, check_password_hash
 
 
 # ----------------------------
@@ -64,8 +50,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # ----------------------------
 app = Flask(__name__)
 
-# Required for login sessions
+# Sessions must work cross-site (Shopify -> interpreter)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "").strip() or secrets.token_hex(32)
+app.config["SESSION_COOKIE_SAMESITE"] = "None"
+app.config["SESSION_COOKIE_SECURE"] = True
 
 DEFAULT_ALLOWED = [
     "https://jamaicantruestories.com",
@@ -83,14 +71,11 @@ CORS(
     methods=["GET", "POST", "OPTIONS"],
 )
 
-# Existing env vars you already have
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
-# Where to send users after Stripe payment success (prevents "/ 404")
 RETURN_URL = os.getenv("RETURN_URL", "https://jamaicantruestories.com/pages/dream-interpreter").strip()
 
-# Admin key (compat with older naming)
 ADMIN_KEY = (
     os.getenv("JTS_ADMIN_KEY", "").strip()
     or os.getenv("ADMIN_KEY", "").strip()
@@ -98,58 +83,50 @@ ADMIN_KEY = (
     or os.getenv("JTS_ADMIN", "").strip()
 )
 
-# ✅ WRITE scopes needed for Admin to edit the sheet
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
 
-# Cache (your env shows CACHE_TTL_SECONDS)
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", os.getenv("SHEET_CACHE_TTL", "120")))
 _CACHE: Dict[str, Any] = {"loaded_at": 0.0, "rows": [], "headers": []}
 
 DEBUG_MATCH = os.getenv("DEBUG_MATCH", "").strip().lower() in {"1", "true", "yes", "on"}
 
-# Narrative style knobs (optional)
 NARRATIVE_ENABLED = os.getenv("NARRATIVE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
 NARRATIVE_MAX_SYMBOLS = int(os.getenv("NARRATIVE_MAX_SYMBOLS", "3"))
 
 
 # ----------------------------
-# Hybrid Gate Settings (MATCH YOUR ENV VARS)
+# Hybrid Gate Settings
 # ----------------------------
 FREE_TRIES = int(os.getenv("FREE_QUOTA", os.getenv("FREE_TRIES", "3")))
 COOKIE_NAME = os.getenv("FREE_TRIES_COOKIE", "jts_free_tries_used")
 SHADOW_WINDOW_HOURS = int(os.getenv("SHADOW_WINDOW_HOURS", "72"))
 
-# Your env shows COUNTS_FILE and SUBSCRIBERS_FILE
 COUNTS_FILE = os.getenv("COUNTS_FILE", "usage_counts.json")
 SUBSCRIBERS_FILE = os.getenv("SUBSCRIBERS_FILE", "subscribers.json")
 
 USAGE_COUNTS_PATH = Path(COUNTS_FILE)
 SUBSCRIBERS_PATH = Path(SUBSCRIBERS_FILE)
 
-# Login accounts file
-USERS_PATH = Path(os.getenv("USERS_FILE", "users.json"))
-
 
 # ----------------------------
-# Stripe Settings (MATCH YOUR ENV VARS)
+# Stripe Settings
 # ----------------------------
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
 
 PRICE_WEEKLY = os.getenv("PRICE_WEEKLY", "").strip()
 PRICE_MONTHLY = os.getenv("PRICE_MONTHLY", "").strip()
-
 DEFAULT_STRIPE_PRICE_ID = PRICE_WEEKLY or PRICE_MONTHLY
 
 
 # ----------------------------
-# Cookie settings (CRITICAL for Shopify -> interpreter cross-site)
+# Cookie settings (critical for Shopify cross-site)
 # ----------------------------
-COOKIE_SAMESITE = "None"   # allow cross-site cookie
-COOKIE_SECURE = True       # required when SameSite=None
+COOKIE_SAMESITE = "None"
+COOKIE_SECURE = True
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 
 
@@ -253,14 +230,13 @@ def _ensure_files_exist():
         _write_json_file_atomic(USAGE_COUNTS_PATH, {"ip_shadow": {}})
     if not SUBSCRIBERS_PATH.exists():
         _write_json_file_atomic(SUBSCRIBERS_PATH, {})
-    if not USERS_PATH.exists():
-        _write_json_file_atomic(USERS_PATH, {})
+
 
 _ensure_files_exist()
 
 
 # ----------------------------
-# Hybrid Gate: cookie + IP shadow (COUNTS_FILE)
+# Hybrid Gate: cookie + IP shadow
 # ----------------------------
 def _get_client_ip() -> str:
     xff = request.headers.get("X-Forwarded-For", "")
@@ -360,52 +336,7 @@ def _free_tries_remaining_after_this(effective_used_before: int) -> int:
 
 
 # ----------------------------
-# Login accounts (users.json)
-# ----------------------------
-def _load_users() -> Dict[str, Any]:
-    data = _read_json_file(USERS_PATH, {})
-    if not isinstance(data, dict):
-        return {}
-    return data
-
-
-def _save_users(users: Dict[str, Any]):
-    _write_json_file_atomic(USERS_PATH, users)
-
-
-def _current_user_email() -> Optional[str]:
-    return session.get("user_email")
-
-
-def _get_user(email: str) -> Optional[Dict[str, Any]]:
-    email_n = (email or "").strip().lower()
-    if not email_n:
-        return None
-    users = _load_users()
-    return users.get(email_n)
-
-
-def _set_user(email: str, record: Dict[str, Any]):
-    email_n = (email or "").strip().lower()
-    users = _load_users()
-    users[email_n] = record
-    _save_users(users)
-
-
-def _is_logged_in() -> bool:
-    return bool(_current_user_email())
-
-
-def _is_premium() -> bool:
-    email = _current_user_email()
-    if not email:
-        return False
-    u = _get_user(email)
-    return bool(u and u.get("is_premium") is True)
-
-
-# ----------------------------
-# Subscribers file helpers (optional: for legacy tracking)
+# Subscribers file helpers
 # ----------------------------
 def _load_subscribers() -> Dict[str, Any]:
     data = _read_json_file(SUBSCRIBERS_PATH, {})
@@ -430,6 +361,64 @@ def _mark_subscriber(email: str, is_active: bool, stripe_customer_id: str = ""):
         "updated_at": datetime.utcnow().isoformat() + "Z",
     }
     _save_subscribers(subs)
+
+
+# ----------------------------
+# Stripe-only premium session (Option A)
+# ----------------------------
+def _get_session_email() -> str:
+    return (session.get("subscriber_email") or "").strip().lower()
+
+
+def _is_premium_session() -> bool:
+    return bool(session.get("premium") is True and _get_session_email())
+
+
+def _set_premium_session(email: str):
+    session["subscriber_email"] = (email or "").strip().lower()
+    session["premium"] = True
+    session["premium_set_at"] = datetime.utcnow().isoformat() + "Z"
+
+
+def _clear_premium_session():
+    session.pop("subscriber_email", None)
+    session.pop("premium", None)
+    session.pop("premium_set_at", None)
+
+
+def _stripe_config_ok() -> bool:
+    return bool(stripe and STRIPE_SECRET_KEY and DEFAULT_STRIPE_PRICE_ID)
+
+
+def _stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
+    """
+    Returns: (is_active, customer_id)
+    Active = subscription status in {"active", "trialing"} for any customer matching that email.
+    """
+    email = (email or "").strip().lower()
+    if not email or "@" not in email:
+        return (False, "")
+
+    if not stripe or not STRIPE_SECRET_KEY:
+        return (False, "")
+
+    stripe.api_key = STRIPE_SECRET_KEY
+
+    try:
+        customers = stripe.Customer.list(email=email, limit=10)
+        for c in (customers.data or []):
+            cid = c.get("id") or ""
+            if not cid:
+                continue
+            subs = stripe.Subscription.list(customer=cid, status="all", limit=10)
+            for s in (subs.data or []):
+                status = (s.get("status") or "").lower()
+                if status in {"active", "trialing"}:
+                    return (True, cid)
+        return (False, "")
+    except Exception as e:
+        _log("Stripe check error:", str(e))
+        return (False, "")
 
 
 # ----------------------------
@@ -541,7 +530,7 @@ def _load_sheet_rows(force: bool = False) -> List[Dict]:
 
 
 # ----------------------------
-# Matching logic (strict + guarded keywords)
+# Matching logic
 # ----------------------------
 def _split_keywords(s: str) -> List[str]:
     if not s:
@@ -778,7 +767,7 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
 
 
 # ----------------------------
-# Admin auth + HTML
+# Admin auth + HTML (UNCHANGED)
 # ----------------------------
 def _get_admin_key_from_request() -> str:
     q = (request.args.get("key") or "").strip()
@@ -977,120 +966,130 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ----------------------------
-# Upgrade HTML fallback (use templates/upgrade.html if present)
+# Upgrade HTML (Option A)
 # ----------------------------
-UPGRADE_HTML_FALLBACK = """<!DOCTYPE html>
+def _upgrade_html_option_a() -> str:
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Unlock JTS Dream Interpreter</title>
   <style>
-    :root{--bg:#07070a;--panel:#101017;--ink:#f2f2f7;--muted:#b6b6c3;--gold:#d4af37;--gold2:#b8921e;--edge:rgba(212,175,55,.22);}
-    *{box-sizing:border-box}
-    body{margin:0;background:radial-gradient(900px 600px at 50% -100px, rgba(212,175,55,.14), transparent 55%), var(--bg);
-      color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:26px;}
-    .wrap{max-width:980px;margin:0 auto;display:grid;grid-template-columns:1.05fr .95fr;gap:16px}
-    @media (max-width: 920px){.wrap{grid-template-columns:1fr}}
-    .card{background:linear-gradient(180deg, rgba(212,175,55,.07), transparent 180px), var(--panel);
-      border:1px solid var(--edge);border-radius:18px;padding:18px;box-shadow:0 14px 50px rgba(0,0,0,.6);}
-    h1{margin:0 0 8px;font-size:20px;letter-spacing:.2px}
-    .sub{color:var(--muted);font-size:13px;line-height:1.4;margin-bottom:14px}
-    .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(212,175,55,.10);
-      border:1px solid rgba(212,175,55,.25);color:var(--gold);font-size:12px;margin-bottom:10px}
-    ul{margin:0;padding-left:18px;color:var(--muted);font-size:13px}
-    li{margin:6px 0}
-    label{display:block;margin:10px 0 6px;color:var(--muted);font-size:12px}
-    input{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(212,175,55,.20);background:#0b0b12;color:var(--ink);outline:none}
-    .row{display:grid;grid-template-columns:1fr;gap:10px}
-    .btn{width:100%;border:none;border-radius:999px;padding:12px 14px;font-weight:800;cursor:pointer;
-      background:linear-gradient(180deg,var(--gold),var(--gold2));color:#09090c;margin-top:12px}
-    .btn2{width:100%;border:1px solid rgba(212,175,55,.22);border-radius:999px;padding:12px 14px;font-weight:800;cursor:pointer;
-      background:transparent;color:var(--ink);margin-top:10px}
-    .small{margin-top:10px;color:var(--muted);font-size:12px}
-    .err{margin-top:10px;color:#ffb4b4;font-size:12px;white-space:pre-wrap}
+    :root{{--bg:#07070a;--panel:#101017;--ink:#f2f2f7;--muted:#b6b6c3;--gold:#d4af37;--gold2:#b8921e;--edge:rgba(212,175,55,.22);}}
+    *{{box-sizing:border-box}}
+    body{{margin:0;background:radial-gradient(900px 600px at 50% -100px, rgba(212,175,55,.14), transparent 55%), var(--bg);
+      color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:26px;}}
+    .wrap{{max-width:980px;margin:0 auto;display:grid;grid-template-columns:1.05fr .95fr;gap:16px}}
+    @media (max-width: 920px){{.wrap{{grid-template-columns:1fr}}}}
+    .card{{background:linear-gradient(180deg, rgba(212,175,55,.07), transparent 180px), var(--panel);
+      border:1px solid var(--edge);border-radius:18px;padding:18px;box-shadow:0 14px 50px rgba(0,0,0,.6);}}
+    h1{{margin:0 0 8px;font-size:20px;letter-spacing:.2px}}
+    .sub{{color:var(--muted);font-size:13px;line-height:1.4;margin-bottom:14px}}
+    .pill{{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(212,175,55,.10);
+      border:1px solid rgba(212,175,55,.25);color:var(--gold);font-size:12px;margin-bottom:10px}}
+    ul{{margin:0;padding-left:18px;color:var(--muted);font-size:13px}}
+    li{{margin:6px 0}}
+    label{{display:block;margin:10px 0 6px;color:var(--muted);font-size:12px}}
+    input{{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(212,175,55,.20);background:#0b0b12;color:var(--ink);outline:none}}
+    .btn{{width:100%;border:none;border-radius:999px;padding:12px 14px;font-weight:800;cursor:pointer;
+      background:linear-gradient(180deg,var(--gold),var(--gold2));color:#09090c;margin-top:12px}}
+    .btn2{{width:100%;border:1px solid rgba(212,175,55,.22);border-radius:999px;padding:12px 14px;font-weight:800;cursor:pointer;
+      background:transparent;color:var(--ink);margin-top:10px}}
+    .small{{margin-top:10px;color:var(--muted);font-size:12px}}
+    .err{{margin-top:10px;color:#ffb4b4;font-size:12px;white-space:pre-wrap}}
+    .ok{{margin-top:10px;color:#b9ffb9;font-size:12px;white-space:pre-wrap}}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <div class="pill">Free limit reached</div>
-      <h1>Unlock Full Cultural Dream Access</h1>
+      <div class="pill">Unlock unlimited access</div>
+      <h1>Full Cultural Dream Access</h1>
       <div class="sub">
-        You’ve used your free tries. Create an account and subscribe to continue decoding dreams with full access.
+        Secure checkout powered by Stripe. If you already subscribed, enter the same email and unlock instantly.
       </div>
       <ul>
         <li>Unlimited interpretations</li>
         <li>Advanced Seal of the Dream</li>
         <li>Full spiritual meaning + effects + what to do</li>
-        <li>Save/Export (coming next)</li>
+        <li>Cancel anytime</li>
       </ul>
-      <div class="small">Cancel anytime. Educational & inspirational use only.</div>
+      <div class="small">Educational & spiritual insight only. Not medical, psychological, or legal advice.</div>
     </div>
 
     <div class="card">
-      <h1>Create account</h1>
-      <div class="sub">Create your login, then subscribe to unlock unlimited access.</div>
+      <h1>Enter your email</h1>
+      <div class="sub">Use the email you used at checkout.</div>
 
-      <div class="row">
-        <label>Email</label>
-        <input id="email" type="email" placeholder="you@example.com" />
+      <label>Email</label>
+      <input id="email" type="email" placeholder="you@example.com" />
 
-        <label>Password</label>
-        <input id="password" type="password" placeholder="Create a password" />
+      <button class="btn2" id="unlock">Unlock Access</button>
 
-        <button class="btn" id="signup">Create account</button>
-        <button class="btn2" id="login">I already have an account</button>
+      <form id="checkoutForm" action="/create-checkout-session" method="POST">
+        <input type="hidden" name="email" id="emailHidden" value="" />
+        <button class="btn" type="submit">Continue to Checkout</button>
+      </form>
 
-        <div class="err" id="err"></div>
-      </div>
+      <div class="err" id="err"></div>
+      <div class="ok" id="ok"></div>
     </div>
   </div>
 
 <script>
   const err = document.getElementById('err');
+  const ok = document.getElementById('ok');
+  const emailInput = document.getElementById('email');
+  const emailHidden = document.getElementById('emailHidden');
 
-  async function postJSON(url, payload){
-    const res = await fetch(url, {
+  function getEmail(){{
+    return (emailInput.value || '').trim();
+  }}
+
+  emailInput.addEventListener('input', () => {{
+    emailHidden.value = getEmail();
+  }});
+
+  document.getElementById('unlock').addEventListener('click', async () => {{
+    err.textContent = '';
+    ok.textContent = '';
+    const email = getEmail();
+    if (!email || !email.includes('@')) {{
+      err.textContent = 'Please enter a valid email.';
+      return;
+    }}
+
+    const res = await fetch('/check-access', {{
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload),
+      headers: {{'Content-Type':'application/json'}},
+      body: JSON.stringify({{email}}),
       credentials: 'include'
-    });
-    const data = await res.json().catch(() => ({}));
-    return {res, data};
-  }
+    }});
 
-  document.getElementById('signup').addEventListener('click', async () => {
-    err.textContent = '';
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    const {res, data} = await postJSON('/auth/signup', {email, password});
-    if (!res.ok) { err.textContent = data.error || 'Signup failed'; return; }
-    window.location.href = '/subscribe';
-  });
+    const data = await res.json().catch(() => ({{}}));
+    if (!res.ok) {{
+      err.textContent = data.error || data.message || 'Could not verify access.';
+      return;
+    }}
 
-  document.getElementById('login').addEventListener('click', async () => {
-    err.textContent = '';
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    const {res, data} = await postJSON('/auth/login', {email, password});
-    if (!res.ok) { err.textContent = data.error || 'Login failed'; return; }
-    window.location.href = '/subscribe';
-  });
+    ok.textContent = 'Access confirmed. Sending you back to the interpreter…';
+    setTimeout(() => {{
+      window.location.href = data.return_url || {json.dumps(RETURN_URL)};
+    }}, 700);
+  }});
+
+  emailHidden.value = getEmail();
 </script>
 </body>
-</html>
-"""
+</html>"""
 
 
 # ----------------------------
 # Routes
 # ----------------------------
-
 @app.route("/", methods=["GET"])
 def home():
-    # Prevent interpreter root from 404 — send visitors to your chosen return URL (Shopify page)
     return redirect(RETURN_URL, code=302)
 
 
@@ -1109,16 +1108,16 @@ def health():
         "admin_configured": bool(ADMIN_KEY),
         "free_quota": FREE_TRIES,
         "shadow_window_hours": SHADOW_WINDOW_HOURS,
-        "stripe_configured": bool(STRIPE_SECRET_KEY and DEFAULT_STRIPE_PRICE_ID and stripe),
+        "stripe_configured": bool(_stripe_config_ok()),
         "webhook_configured": bool(STRIPE_WEBHOOK_SECRET),
-        "login_enabled": True,
         "counts_file": str(USAGE_COUNTS_PATH),
-        "users_file": str(USERS_PATH),
         "subscribers_file": str(SUBSCRIBERS_PATH),
         "price_weekly_set": bool(PRICE_WEEKLY),
         "price_monthly_set": bool(PRICE_MONTHLY),
         "cookie_samesite": COOKIE_SAMESITE,
         "return_url": RETURN_URL,
+        "session_premium": _is_premium_session(),
+        "session_email": _get_session_email(),
     })
 
 
@@ -1127,121 +1126,79 @@ def healthz():
     return health()
 
 
-@app.route("/auth/signup", methods=["POST", "OPTIONS"])
-def auth_signup():
-    if request.method == "OPTIONS":
-        return _preflight_ok()
-
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip().lower()
-    password = (data.get("password") or "").strip()
-
-    if not email or "@" not in email:
-        return jsonify({"ok": False, "error": "Please enter a valid email."}), 400
-    if not password or len(password) < 6:
-        return jsonify({"ok": False, "error": "Password must be at least 6 characters."}), 400
-
-    existing = _get_user(email)
-    if existing:
-        return jsonify({"ok": False, "error": "Account already exists. Use login."}), 409
-
-    record = {
-        "email": email,
-        "password_hash": generate_password_hash(password),
-        "is_premium": False,
-        "stripe_customer_id": "",
-        "created_at": datetime.utcnow().isoformat() + "Z",
-        "updated_at": datetime.utcnow().isoformat() + "Z",
-    }
-    _set_user(email, record)
-
-    session["user_email"] = email
-    return jsonify({"ok": True, "email": email})
-
-
-@app.route("/auth/login", methods=["POST", "OPTIONS"])
-def auth_login():
-    if request.method == "OPTIONS":
-        return _preflight_ok()
-
-    data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip().lower()
-    password = (data.get("password") or "").strip()
-
-    u = _get_user(email)
-    if not u:
-        return jsonify({"ok": False, "error": "Account not found. Please sign up."}), 404
-    if not check_password_hash(u.get("password_hash", ""), password):
-        return jsonify({"ok": False, "error": "Incorrect password."}), 401
-
-    session["user_email"] = email
-    return jsonify({"ok": True, "email": email, "is_premium": bool(u.get("is_premium"))})
-
-
-@app.route("/auth/logout", methods=["POST", "GET"])
-def auth_logout():
-    session.pop("user_email", None)
-    return redirect(url_for("upgrade"))
-
-
 @app.route("/upgrade", methods=["GET"])
 def upgrade():
     try:
         return render_template("upgrade.html")
     except Exception:
-        return Response(UPGRADE_HTML_FALLBACK, mimetype="text/html")
+        return Response(_upgrade_html_option_a(), mimetype="text/html")
 
 
 @app.route("/subscribe", methods=["GET"])
 def subscribe():
-    if not _is_logged_in():
-        return redirect(url_for("upgrade"))
-    if _is_premium():
-        return redirect(url_for("payment_success"))
+    # Backwards compat: send to upgrade
+    return redirect(url_for("upgrade"), code=302)
 
-    # ✅ UX COPY UPDATED HERE (replaces technical troubleshooting note)
-    return Response(
-        """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>Subscribe</title>
-        <style>
-          body{margin:0;background:#07070a;color:#f2f2f7;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:26px}
-          .card{max-width:520px;margin:0 auto;background:#101017;border:1px solid rgba(212,175,55,.22);border-radius:18px;padding:18px}
-          .btn{width:100%;border:none;border-radius:999px;padding:12px 14px;font-weight:800;cursor:pointer;
-            background:linear-gradient(180deg,#d4af37,#b8921e);color:#09090c;margin-top:12px}
-          .muted{color:#b6b6c3;font-size:13px;margin-top:8px;line-height:1.45}
-        </style></head><body>
-        <div class="card">
-          <h2 style="margin:0 0 8px">Unlock unlimited access</h2>
-          <div class="muted">Secure checkout powered by Stripe. You’ll be returned to the interpreter automatically.</div>
-          <form action="/create-checkout-session" method="POST">
-            <button class="btn" type="submit">Continue to Checkout</button>
-          </form>
-        </div>
-        </body></html>""",
-        mimetype="text/html"
-    )
+
+@app.route("/logout", methods=["POST", "GET"])
+def logout():
+    _clear_premium_session()
+    return redirect(url_for("upgrade"), code=302)
+
+
+@app.route("/check-access", methods=["POST", "OPTIONS"])
+def check_access():
+    if request.method == "OPTIONS":
+        return _preflight_ok()
+
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip().lower()
+
+    if not email or "@" not in email:
+        return jsonify({"ok": False, "error": "Please enter a valid email."}), 400
+
+    is_active, customer_id = _stripe_active_subscription_for_email(email)
+    if not is_active:
+        return jsonify({
+            "ok": False,
+            "access": "inactive",
+            "message": "No active subscription found for that email. If you subscribed with a different email, use that one."
+        }), 402
+
+    _set_premium_session(email)
+    _mark_subscriber(email, True, customer_id)
+
+    resp = make_response(jsonify({"ok": True, "access": "active", "return_url": RETURN_URL}))
+    resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+    return resp
 
 
 @app.route("/create-checkout-session", methods=["POST"])
 def create_checkout_session():
-    if not _is_logged_in():
-        return redirect(url_for("upgrade"))
-
-    if not stripe or not STRIPE_SECRET_KEY or not DEFAULT_STRIPE_PRICE_ID:
+    if not _stripe_config_ok():
         return make_response(
             "Stripe not configured. Ensure STRIPE_SECRET_KEY and PRICE_WEEKLY (or PRICE_MONTHLY) are set.",
             500,
         )
 
+    email = ""
+    if request.form and request.form.get("email"):
+        email = (request.form.get("email") or "").strip().lower()
+    else:
+        data = request.get_json(silent=True) or {}
+        email = (data.get("email") or "").strip().lower()
+
+    if not email or "@" not in email:
+        return make_response("Missing email. Please enter your email on the upgrade page.", 400)
+
     stripe.api_key = STRIPE_SECRET_KEY
-    email = _current_user_email()
 
     try:
         checkout = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": DEFAULT_STRIPE_PRICE_ID, "quantity": 1}],
             customer_email=email,
-            success_url=url_for("payment_success", _external=True),
+            success_url=url_for("payment_success", _external=True) + f"?email={email}",
             cancel_url=url_for("upgrade", _external=True),
         )
         return redirect(checkout.url)
@@ -1251,7 +1208,15 @@ def create_checkout_session():
 
 @app.route("/payment-success", methods=["GET"])
 def payment_success():
-    # show confirmation, then redirect to RETURN_URL (prevents / 404)
+    email = (request.args.get("email") or "").strip().lower()
+
+    # Best-effort auto-unlock right away; webhook will also mark subscriber
+    if email and "@" in email:
+        is_active, customer_id = _stripe_active_subscription_for_email(email)
+        if is_active:
+            _set_premium_session(email)
+            _mark_subscriber(email, True, customer_id)
+
     resp = Response(
         f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Access Active</title>
@@ -1270,7 +1235,6 @@ def payment_success():
         </body></html>""",
         mimetype="text/html"
     )
-    # Clear free tries cookie now that they paid
     resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
     return resp
 
@@ -1294,30 +1258,22 @@ def stripe_webhook():
         session_obj = event["data"]["object"]
         email = (session_obj.get("customer_email") or "").strip().lower()
         customer_id = session_obj.get("customer") or ""
-
         if email:
-            u = _get_user(email)
-            if u:
-                u["is_premium"] = True
-                u["stripe_customer_id"] = customer_id or u.get("stripe_customer_id", "")
-                u["updated_at"] = datetime.utcnow().isoformat() + "Z"
-                _set_user(email, u)
-
             _mark_subscriber(email, True, customer_id)
 
     if event["type"] == "customer.subscription.deleted":
         sub = event["data"]["object"]
-        customer_id = sub.get("customer")
-
-        if customer_id:
-            users = _load_users()
-            for email, rec in users.items():
-                if rec.get("stripe_customer_id") == customer_id:
-                    rec["is_premium"] = False
-                    rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
-                    users[email] = rec
-                    _mark_subscriber(email, False, customer_id)
-            _save_users(users)
+        customer_id = sub.get("customer") or ""
+        subs = _load_subscribers()
+        changed = False
+        for em, rec in subs.items():
+            if (rec or {}).get("stripe_customer_id") == customer_id and em:
+                rec["is_active"] = False
+                rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
+                subs[em] = rec
+                changed = True
+        if changed:
+            _save_subscribers(subs)
 
     return ("ok", 200)
 
@@ -1332,8 +1288,10 @@ def interpret():
     if not dream:
         return jsonify({"error": "Missing 'dream' or 'text'"}), 400
 
-    # HYBRID GATE (anonymous users)
-    if not _is_premium():
+    is_paid = _is_premium_session()
+
+    # HYBRID GATE for non-paid
+    if not is_paid:
         ip = _get_client_ip()
         cookie_used = _get_cookie_tries_used()
         ip_used = _shadow_count(ip)
@@ -1343,7 +1301,7 @@ def interpret():
             return jsonify({
                 "blocked": True,
                 "reason": "free_limit_reached",
-                "message": f"You’ve used your {FREE_TRIES} free tries. Create an account and subscribe to continue.",
+                "message": f"You’ve used your {FREE_TRIES} free tries. Subscribe to continue.",
                 "redirect": url_for("upgrade"),
                 "free_uses_left": 0,
                 "access": "blocked",
@@ -1359,9 +1317,8 @@ def interpret():
     receipt_id = _make_receipt_id()
     seal = _compute_seal(matches)
 
-    # consume a try for non-premium users
     free_uses_left = 0
-    if not _is_premium():
+    if not is_paid:
         ip = _get_client_ip()
         cookie_used = _get_cookie_tries_used()
         ip_used = _shadow_count(ip)
@@ -1372,8 +1329,8 @@ def interpret():
 
     if not matches:
         payload = {
-            "access": "free" if not _is_premium() else "paid",
-            "is_paid": bool(_is_premium()),
+            "access": "paid" if is_paid else "free",
+            "is_paid": bool(is_paid),
             "free_uses_left": free_uses_left,
             "seal": seal,
             "receipt": {
@@ -1396,8 +1353,8 @@ def interpret():
         full_interpretation = build_full_interpretation_from_doctrine(matches)
 
         payload = {
-            "access": "free" if not _is_premium() else "paid",
-            "is_paid": bool(_is_premium()),
+            "access": "paid" if is_paid else "free",
+            "is_paid": bool(is_paid),
             "free_uses_left": free_uses_left,
             "seal": seal,
             "interpretation": interpretation,
@@ -1410,8 +1367,7 @@ def interpret():
         }
         resp = make_response(jsonify(payload))
 
-    # update cookie for non-premium users
-    if not _is_premium():
+    if not is_paid:
         cookie_used = _get_cookie_tries_used()
         resp.set_cookie(
             COOKIE_NAME,
@@ -1434,8 +1390,8 @@ def track():
     return jsonify({
         "ok": True,
         "event": event_name,
-        "is_logged_in": _is_logged_in(),
-        "is_premium": _is_premium(),
+        "session_email": _get_session_email(),
+        "session_premium": _is_premium_session(),
     })
 
 
@@ -1486,10 +1442,11 @@ def debug_config():
         "stripe_has_price": bool(DEFAULT_STRIPE_PRICE_ID),
         "webhook_configured": bool(STRIPE_WEBHOOK_SECRET),
         "counts_file": str(USAGE_COUNTS_PATH),
-        "users_file": str(USERS_PATH),
         "subscribers_file": str(SUBSCRIBERS_PATH),
         "cookie_samesite": COOKIE_SAMESITE,
         "return_url": RETURN_URL,
+        "session_premium": _is_premium_session(),
+        "session_email": _get_session_email(),
     })
 
 

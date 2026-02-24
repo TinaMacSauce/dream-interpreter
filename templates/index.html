@@ -239,7 +239,9 @@
         await fetch("/track", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          // ✅ REQUIRED: allow cookies/session across Shopify -> backend
+          credentials: "include"
         });
       } catch (e) {
         console.warn("Tracking failed:", e);
@@ -341,7 +343,9 @@
         const res = await fetch("/interpret", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: dream })
+          body: JSON.stringify({ text: dream }),
+          // ✅ REQUIRED: allow cookies/session across Shopify -> backend
+          credentials: "include"
         });
 
         let data = {};

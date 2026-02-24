@@ -18,9 +18,11 @@
       --gold2:#b8921e;
       --edge:rgba(212,175,55,.22);
       --danger:#f87171;
+      --success:#9ae6b4;
     }
 
     *{box-sizing:border-box}
+
     body{
       margin:0;
       background:
@@ -67,7 +69,6 @@
       font-family:Cinzel,serif;
       margin:0 0 10px;
       font-size:1.5rem;
-      letter-spacing:.4px;
     }
 
     .sub{
@@ -109,7 +110,7 @@
       padding:13px 16px;
       font-weight:700;
       cursor:pointer;
-      margin-top:16px;
+      margin-top:14px;
       background:linear-gradient(180deg,var(--gold),var(--gold2));
       color:#09090c;
       font-size:.95rem;
@@ -128,134 +129,114 @@
       font-size:.9rem;
     }
 
+    .err{
+      margin-top:12px;
+      color:var(--danger);
+      font-size:.85rem;
+    }
+
+    .ok{
+      margin-top:12px;
+      color:var(--success);
+      font-size:.85rem;
+    }
+
     .small{
       margin-top:14px;
       font-size:.8rem;
       color:var(--muted);
       opacity:.85;
     }
-
-    .err{
-      margin-top:12px;
-      color:var(--danger);
-      font-size:.85rem;
-      white-space:pre-wrap;
-    }
-
-    .divider{
-      height:1px;
-      background:rgba(212,175,55,.15);
-      margin:16px 0;
-    }
-
   </style>
 </head>
 
 <body>
 
-  <div class="wrap">
+<div class="wrap">
 
-    <!-- LEFT: OFFER -->
-    <div class="card">
-      <div class="pill">Free limit reached</div>
-      <h1>Unlock Full Cultural Dream Access</h1>
-      <div class="sub">
-        You’ve used your free interpretations. Upgrade to continue decoding your dreams
-        with full spiritual meaning, effects, and guidance.
-      </div>
-
-      <ul>
-        <li>Unlimited dream interpretations</li>
-        <li>Advanced Seal of the Dream</li>
-        <li>Full doctrine-based narrative explanation</li>
-        <li>Priority processing</li>
-        <li>Cancel anytime</li>
-      </ul>
-
-      <div class="small">
-        This tool provides educational and spiritual insight. It does not replace
-        professional medical, psychological, or legal advice.
-      </div>
+  <!-- LEFT: OFFER -->
+  <div class="card">
+    <div class="pill">Free limit reached</div>
+    <h1>Unlock Full Cultural Dream Access</h1>
+    <div class="sub">
+      Upgrade to continue decoding your dreams with full spiritual meaning,
+      effects, and guidance.
     </div>
 
-    <!-- RIGHT: LOGIN + SUBSCRIBE -->
-    <div class="card">
-      <h1>Create Account</h1>
-      <div class="sub">
-        Create your login, then continue to secure checkout.
-      </div>
+    <ul>
+      <li>Unlimited interpretations</li>
+      <li>Advanced Seal of the Dream</li>
+      <li>Full doctrine-based narrative explanation</li>
+      <li>Cancel anytime</li>
+    </ul>
 
-      <label>Email</label>
-      <input id="email" type="email" placeholder="you@example.com" />
-
-      <label>Password</label>
-      <input id="password" type="password" placeholder="Minimum 6 characters" />
-
-      <button class="btn" id="signup">Create Account</button>
-
-      <button class="btn-outline" id="login">I Already Have an Account</button>
-
-      <div class="divider"></div>
-
-      <button class="btn" id="subscribe" style="display:none;">
-        Continue to Secure Checkout
-      </button>
-
-      <div id="err" class="err"></div>
+    <div class="small">
+      Secure checkout powered by Stripe.
     </div>
-
   </div>
 
+  <!-- RIGHT: EMAIL UNLOCK -->
+  <div class="card">
+    <h1>Enter Your Email</h1>
+    <div class="sub">
+      If you already subscribed, enter the same email to unlock instantly.
+    </div>
+
+    <label>Email</label>
+    <input id="email" type="email" placeholder="you@example.com" />
+
+    <button class="btn-outline" id="unlock">Unlock Access</button>
+
+    <form action="/create-checkout-session" method="POST">
+      <input type="hidden" name="email" id="emailHidden">
+      <button class="btn">Continue to Secure Checkout</button>
+    </form>
+
+    <div id="err" class="err"></div>
+    <div id="ok" class="ok"></div>
+  </div>
+
+</div>
+
 <script>
+  const emailInput = document.getElementById("email");
+  const emailHidden = document.getElementById("emailHidden");
+  const unlockBtn = document.getElementById("unlock");
   const err = document.getElementById("err");
-  const signupBtn = document.getElementById("signup");
-  const loginBtn = document.getElementById("login");
-  const subscribeBtn = document.getElementById("subscribe");
+  const ok = document.getElementById("ok");
 
-  async function postJSON(url, payload){
-    const res = await fetch(url, {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(payload)
+  emailInput.addEventListener("input", () => {
+    emailHidden.value = emailInput.value.trim();
+  });
+
+  unlockBtn.addEventListener("click", async () => {
+    err.textContent = "";
+    ok.textContent = "";
+
+    const email = emailInput.value.trim();
+    if (!email || !email.includes("@")) {
+      err.textContent = "Please enter a valid email.";
+      return;
+    }
+
+    const res = await fetch("/check-access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+      credentials: "include"
     });
+
     const data = await res.json().catch(()=>({}));
-    return {res, data};
-  }
 
-  signupBtn.addEventListener("click", async ()=>{
-    err.textContent = "";
-    const email = document.getElementById("email").value.trim();
-    const password = document.getElementById("password").value;
-
-    const {res, data} = await postJSON("/auth/signup", {email, password});
-    if(!res.ok){
-      err.textContent = data.error || "Signup failed.";
+    if (!res.ok) {
+      err.textContent = data.message || "No active subscription found.";
       return;
     }
 
-    subscribeBtn.style.display = "block";
-    signupBtn.style.display = "none";
-    loginBtn.style.display = "none";
-  });
-
-  loginBtn.addEventListener("click", async ()=>{
-    err.textContent = "";
-    const email = document.getElementById("email").value.trim();
-    const password = document.getElementById("password").value;
-
-    const {res, data} = await postJSON("/auth/login", {email, password});
-    if(!res.ok){
-      err.textContent = data.error || "Login failed.";
-      return;
-    }
-
-    subscribeBtn.style.display = "block";
-    signupBtn.style.display = "none";
-    loginBtn.style.display = "none";
-  });
-
-  subscribeBtn.addEventListener("click", ()=>{
-    window.location.href = "/subscribe";
+    ok.textContent = "Access confirmed. Redirecting…";
+    setTimeout(() => {
+      window.location.href = data.return_url || "/";
+    }, 800);
   });
 </script>
 

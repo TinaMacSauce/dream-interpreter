@@ -1,9 +1,12 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.5 — FINAL, COOKIE-FIX + HYBRID GATE)
+# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.6 — FINAL, COOKIE-FIX + RETURN URL)
 # Adds:
 # - ✅ Hybrid free-tries gate (cookie + IP shadow)
 # - ✅ 3 free tries (anonymous) then force /upgrade (signup + subscribe)
 # - ✅ Login accounts (file-based users.json)
 # - ✅ Stripe subscription Checkout + webhook upgrade + auto redirect
+# - ✅ RETURN_URL + "/" route so interpreter root never 404s
+# - ✅ /payment-success now sends users back to RETURN_URL (not "/")
+# - ✅ /subscribe page is customer-friendly (no dev notes)
 # Keeps:
 # - ✅ /interpret, /track
 # - ✅ /health, /healthz
@@ -13,21 +16,21 @@
 # IMPORTANT UPDATES (matches your Render env vars):
 # - Uses FREE_QUOTA (not FREE_TRIES)
 # - Uses COUNTS_FILE (not USAGE_COUNTS_FILE)
-# - Uses SUBSCRIBERS_FILE (not USERS_FILE) ONLY for premium list if you prefer
-# - Uses PRICE_WEEKLY / PRICE_MONTHLY (not STRIPE_PRICE_WEEKLY/MONTHLY)
-# - Uses STRIPE_SECRET_KEY (already in your env)
-# - ✅ Requires STRIPE_WEBHOOK_SECRET (you must add in Render)
+# - Uses SUBSCRIBERS_FILE
+# - Uses PRICE_WEEKLY / PRICE_MONTHLY
+# - Uses STRIPE_SECRET_KEY
+# - Requires STRIPE_WEBHOOK_SECRET
 #
 # ✅ CRITICAL FIX FOR "NO FREE TRIES" WHEN FRONTEND IS ON SHOPIFY:
 # - Free-tries cookie must be cross-site: SameSite=None + Secure=True
-# - (And your Shopify fetch must use credentials: "include")
+# - Shopify fetch must use credentials: "include"
 #
-# Notes:
-# - Hybrid gate uses:
-#   - cookie: jts_free_tries_used (primary)
-#   - COUNTS_FILE JSON -> ip_shadow (backstop)
-# - After payment success: clears free-tries cookie
-# - Login accounts stored in users.json (NEW file you must add to repo: {})
+# ✅ CRITICAL FIX FOR "WHITE 404 AFTER PAYMENT":
+# - interpreter "/" now redirects to RETURN_URL
+# - /payment-success redirects to RETURN_URL instead of "/"
+#
+# You should set this env var in Render:
+# - RETURN_URL=https://jamaicantruestories.com/pages/<your-dream-page>
 
 import os
 import json
@@ -84,8 +87,10 @@ CORS(
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
-# Admin key (your env screenshot shows ADMIN_KEY / ADMIN_TOKEN etc.
-# Keep compatibility with your older naming.
+# Where to send users after Stripe payment success (prevents "/ 404")
+RETURN_URL = os.getenv("RETURN_URL", "https://jamaicantruestories.com").strip()
+
+# Admin key (compat with older naming)
 ADMIN_KEY = (
     os.getenv("JTS_ADMIN_KEY", "").strip()
     or os.getenv("ADMIN_KEY", "").strip()
@@ -124,7 +129,7 @@ SUBSCRIBERS_FILE = os.getenv("SUBSCRIBERS_FILE", "subscribers.json")
 USAGE_COUNTS_PATH = Path(COUNTS_FILE)
 SUBSCRIBERS_PATH = Path(SUBSCRIBERS_FILE)
 
-# Login accounts file (NEW)
+# Login accounts file
 USERS_PATH = Path(os.getenv("USERS_FILE", "users.json"))
 
 
@@ -132,7 +137,7 @@ USERS_PATH = Path(os.getenv("USERS_FILE", "users.json"))
 # Stripe Settings (MATCH YOUR ENV VARS)
 # ----------------------------
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()  # YOU MUST ADD THIS IN RENDER
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
 
 PRICE_WEEKLY = os.getenv("PRICE_WEEKLY", "").strip()
 PRICE_MONTHLY = os.getenv("PRICE_MONTHLY", "").strip()
@@ -143,7 +148,7 @@ DEFAULT_STRIPE_PRICE_ID = PRICE_WEEKLY or PRICE_MONTHLY
 # ----------------------------
 # Cookie settings (CRITICAL for Shopify -> interpreter cross-site)
 # ----------------------------
-COOKIE_SAMESITE = "None"   # ✅ CHANGED (was "Lax")
+COOKIE_SAMESITE = "None"   # allow cross-site cookie
 COOKIE_SECURE = True       # required when SameSite=None
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 
@@ -244,13 +249,10 @@ def _write_json_file_atomic(path: Path, data: Any):
 
 
 def _ensure_files_exist():
-    # For counts
     if not USAGE_COUNTS_PATH.exists():
         _write_json_file_atomic(USAGE_COUNTS_PATH, {"ip_shadow": {}})
-    # For subscribers (optional; you might already have it)
     if not SUBSCRIBERS_PATH.exists():
         _write_json_file_atomic(SUBSCRIBERS_PATH, {})
-    # For users (login accounts)
     if not USERS_PATH.exists():
         _write_json_file_atomic(USERS_PATH, {})
 
@@ -1085,6 +1087,13 @@ UPGRADE_HTML_FALLBACK = """<!DOCTYPE html>
 # ----------------------------
 # Routes
 # ----------------------------
+
+@app.route("/", methods=["GET"])
+def home():
+    # Prevent interpreter root from 404 — send visitors to your chosen return URL (Shopify page)
+    return redirect(RETURN_URL, code=302)
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({
@@ -1109,6 +1118,7 @@ def health():
         "price_weekly_set": bool(PRICE_WEEKLY),
         "price_monthly_set": bool(PRICE_MONTHLY),
         "cookie_samesite": COOKIE_SAMESITE,
+        "return_url": RETURN_URL,
     })
 
 
@@ -1189,7 +1199,7 @@ def subscribe():
     if _is_premium():
         return redirect(url_for("payment_success"))
 
-    # simple checkout launcher page
+    # customer-friendly checkout page (no dev notes)
     return Response(
         """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Subscribe</title>
@@ -1198,15 +1208,14 @@ def subscribe():
           .card{max-width:520px;margin:0 auto;background:#101017;border:1px solid rgba(212,175,55,.22);border-radius:18px;padding:18px}
           .btn{width:100%;border:none;border-radius:999px;padding:12px 14px;font-weight:800;cursor:pointer;
             background:linear-gradient(180deg,#d4af37,#b8921e);color:#09090c;margin-top:12px}
-          .muted{color:#b6b6c3;font-size:13px;margin-top:8px}
+          .muted{color:#b6b6c3;font-size:13px;margin-top:8px;line-height:1.45}
         </style></head><body>
         <div class="card">
           <h2 style="margin:0 0 8px">Unlock unlimited access</h2>
-          <div class="muted">You will be redirected to secure Stripe checkout.</div>
+          <div class="muted">Secure checkout powered by Stripe. You’ll be returned to the interpreter automatically.</div>
           <form action="/create-checkout-session" method="POST">
             <button class="btn" type="submit">Continue to Checkout</button>
           </form>
-          <div class="muted">If nothing happens: check STRIPE_SECRET_KEY, PRICE_WEEKLY/PRICE_MONTHLY, and STRIPE_WEBHOOK_SECRET.</div>
         </div>
         </body></html>""",
         mimetype="text/html"
@@ -1242,24 +1251,26 @@ def create_checkout_session():
 
 @app.route("/payment-success", methods=["GET"])
 def payment_success():
-    # Clear free tries cookie now that they paid (cookie reset)
+    # show confirmation, then redirect to RETURN_URL (prevents / 404)
     resp = Response(
-        """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Access Active</title>
         <style>
-          body{margin:0;background:#07070a;color:#f2f2f7;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:26px}
-          .card{max-width:520px;margin:0 auto;background:#101017;border:1px solid rgba(212,175,55,.22);border-radius:18px;padding:18px}
-          .muted{color:#b6b6c3;font-size:13px;margin-top:8px}
+          body{{margin:0;background:#07070a;color:#f2f2f7;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:26px}}
+          .card{{max-width:520px;margin:0 auto;background:#101017;border:1px solid rgba(212,175,55,.22);border-radius:18px;padding:18px}}
+          .muted{{color:#b6b6c3;font-size:13px;margin-top:8px}}
         </style></head><body>
         <div class="card">
           <h2 style="margin:0 0 8px">Access Activated</h2>
-          <div class="muted">Sending you back into the interpreter…</div>
+          <div class="muted">Sending you back to the interpreter…</div>
         </div>
-        <script>setTimeout(()=>{window.location.href='/'}, 1200);</script>
+        <script>
+          setTimeout(()=>{{ window.location.href={json.dumps(RETURN_URL)}; }}, 1200);
+        </script>
         </body></html>""",
         mimetype="text/html"
     )
-    # ✅ CHANGED: SameSite=None so browser clears the same cookie it set cross-site
+    # Clear free tries cookie now that they paid
     resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
     return resp
 
@@ -1292,7 +1303,6 @@ def stripe_webhook():
                 u["updated_at"] = datetime.utcnow().isoformat() + "Z"
                 _set_user(email, u)
 
-            # also mark in subscribers.json for compatibility
             _mark_subscriber(email, True, customer_id)
 
     if event["type"] == "customer.subscription.deleted":
@@ -1322,9 +1332,7 @@ def interpret():
     if not dream:
         return jsonify({"error": "Missing 'dream' or 'text'"}), 400
 
-    # ----------------------------
     # HYBRID GATE (anonymous users)
-    # ----------------------------
     if not _is_premium():
         ip = _get_client_ip()
         cookie_used = _get_cookie_tries_used()
@@ -1409,8 +1417,8 @@ def interpret():
             COOKIE_NAME,
             str(cookie_used + 1),
             max_age=COOKIE_MAX_AGE,
-            samesite=COOKIE_SAMESITE,  # ✅ CHANGED: None
-            secure=COOKIE_SECURE,       # ✅ required
+            samesite=COOKIE_SAMESITE,
+            secure=COOKIE_SECURE,
         )
 
     return resp
@@ -1481,6 +1489,7 @@ def debug_config():
         "users_file": str(USERS_PATH),
         "subscribers_file": str(SUBSCRIBERS_PATH),
         "cookie_samesite": COOKIE_SAMESITE,
+        "return_url": RETURN_URL,
     })
 
 

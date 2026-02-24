@@ -1,4 +1,4 @@
-# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.6 — FINAL, COOKIE-FIX + RETURN URL)
+# app.py — Jamaican True Stories Dream Interpreter (Phase 2.9.6 — FINAL, COOKIE-FIX + RETURN URL + UX COPY)
 # Adds:
 # - ✅ Hybrid free-tries gate (cookie + IP shadow)
 # - ✅ 3 free tries (anonymous) then force /upgrade (signup + subscribe)
@@ -6,7 +6,7 @@
 # - ✅ Stripe subscription Checkout + webhook upgrade + auto redirect
 # - ✅ RETURN_URL + "/" route so interpreter root never 404s
 # - ✅ /payment-success now sends users back to RETURN_URL (not "/")
-# - ✅ /subscribe page is customer-friendly (no dev notes)
+# - ✅ /subscribe page UX copy (no dev notes)
 # Keeps:
 # - ✅ /interpret, /track
 # - ✅ /health, /healthz
@@ -29,8 +29,8 @@
 # - interpreter "/" now redirects to RETURN_URL
 # - /payment-success redirects to RETURN_URL instead of "/"
 #
-# You should set this env var in Render:
-# - RETURN_URL=https://jamaicantruestories.com/pages/<your-dream-page>
+# Env vars to set in Render:
+# - RETURN_URL=https://jamaicantruestories.com/pages/dream-interpreter
 
 import os
 import json
@@ -88,7 +88,7 @@ SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
 # Where to send users after Stripe payment success (prevents "/ 404")
-RETURN_URL = os.getenv("RETURN_URL", "https://jamaicantruestories.com").strip()
+RETURN_URL = os.getenv("RETURN_URL", "https://jamaicantruestories.com/pages/dream-interpreter").strip()
 
 # Admin key (compat with older naming)
 ADMIN_KEY = (
@@ -1199,7 +1199,7 @@ def subscribe():
     if _is_premium():
         return redirect(url_for("payment_success"))
 
-    # customer-friendly checkout page (no dev notes)
+    # ✅ UX COPY UPDATED HERE (replaces technical troubleshooting note)
     return Response(
         """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Subscribe</title>

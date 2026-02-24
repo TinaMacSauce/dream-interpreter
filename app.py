@@ -1,4 +1,4 @@
-# app.py — Jamaican True Stories Dream Interpreter (Option A: Stripe-only access, HYBRID FREE GATE)
+# app.py — Jamaican True Stories Dream Interpreter (Option A: Stripe-only access, HYBRID FREE GATE) — UPDATED
 # What this version does:
 # - ✅ Keeps: Hybrid free-tries gate (cookie + IP shadow)
 # - ✅ Keeps: /interpret, /track, /health, /healthz, /debug/config, /debug/sheet (guarded), /admin + /admin/upsert
@@ -8,6 +8,9 @@
 #     - /upgrade page: user enters email
 #     - "Unlock Access" -> POST /check-access -> checks Stripe active subscription -> sets premium session
 #     - "Continue to Checkout" -> creates checkout session for that email
+#
+# ✅ NEW FIX (prevents random matches like “cow”):
+# - Keyword matches are ONLY allowed if keyword length >= 3 characters
 #
 # Env vars (Render):
 # - RETURN_URL=https://jamaicantruestories.com/pages/dream-interpreter
@@ -230,7 +233,6 @@ def _ensure_files_exist():
         _write_json_file_atomic(USAGE_COUNTS_PATH, {"ip_shadow": {}})
     if not SUBSCRIBERS_PATH.exists():
         _write_json_file_atomic(SUBSCRIBERS_PATH, {})
-
 
 _ensure_files_exist()
 
@@ -577,6 +579,7 @@ def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[st
     symbol_words = symbol.split()
     keywords = _split_keywords(_get_keywords_cell(row))
 
+    # Exact symbol matches
     if len(symbol_words) == 1:
         if _compile_boundary_regex(symbol).search(dream_norm):
             return 100, {"type": "symbol", "token": symbol}
@@ -586,9 +589,10 @@ def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[st
             score = 100 - _symbol_length_penalty(symbol_raw)
             return int(score), {"type": "symbol_phrase", "token": symbol}
 
+    # ✅ Keyword matches (single-word symbols only) — now guarded to avoid tiny collisions
     if len(symbol_words) == 1:
         for kw in keywords:
-            if kw and _compile_boundary_regex(kw).search(dream_norm):
+            if kw and len(kw) >= 3 and _compile_boundary_regex(kw).search(dream_norm):
                 return 96, {"type": "keyword", "token": kw}
 
     return 0, None
@@ -767,7 +771,7 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
 
 
 # ----------------------------
-# Admin auth + HTML (UNCHANGED)
+# Admin auth + HTML
 # ----------------------------
 def _get_admin_key_from_request() -> str:
     q = (request.args.get("key") or "").strip()
@@ -1043,41 +1047,41 @@ def _upgrade_html_option_a() -> str:
   const emailInput = document.getElementById('email');
   const emailHidden = document.getElementById('emailHidden');
 
-  function getEmail(){{
+  function getEmail(){
     return (emailInput.value || '').trim();
-  }}
+  }
 
-  emailInput.addEventListener('input', () => {{
+  emailInput.addEventListener('input', () => {
     emailHidden.value = getEmail();
-  }});
+  });
 
-  document.getElementById('unlock').addEventListener('click', async () => {{
+  document.getElementById('unlock').addEventListener('click', async () => {
     err.textContent = '';
     ok.textContent = '';
     const email = getEmail();
-    if (!email || !email.includes('@')) {{
+    if (!email || !email.includes('@')) {
       err.textContent = 'Please enter a valid email.';
       return;
-    }}
+    }
 
-    const res = await fetch('/check-access', {{
+    const res = await fetch('/check-access', {
       method: 'POST',
-      headers: {{'Content-Type':'application/json'}},
-      body: JSON.stringify({{email}}),
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({email}),
       credentials: 'include'
-    }});
+    });
 
-    const data = await res.json().catch(() => ({{}}));
-    if (!res.ok) {{
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
       err.textContent = data.error || data.message || 'Could not verify access.';
       return;
-    }}
+    }
 
     ok.textContent = 'Access confirmed. Sending you back to the interpreter…';
-    setTimeout(() => {{
-      window.location.href = data.return_url || {json.dumps(RETURN_URL)};
-    }}, 700);
-  }});
+    setTimeout(() => {
+      window.location.href = data.return_url || """ + {json.dumps(RETURN_URL)} + """;
+    }, 700);
+  });
 
   emailHidden.value = getEmail();
 </script>
@@ -1136,7 +1140,6 @@ def upgrade():
 
 @app.route("/subscribe", methods=["GET"])
 def subscribe():
-    # Backwards compat: send to upgrade
     return redirect(url_for("upgrade"), code=302)
 
 

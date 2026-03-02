@@ -6,238 +6,432 @@
   <title>Unlock JTS Dream Interpreter</title>
 
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 
   <style>
     :root{
-      --bg:#07070a;
-      --panel:#101017;
-      --ink:#f2f2f7;
-      --muted:#b6b6c3;
+      --bg0:#020203;
+      --bg1:#050509;
       --gold:#d4af37;
-      --gold2:#b8921e;
-      --edge:rgba(212,175,55,.22);
-      --danger:#f87171;
+      --gold2:#f3e28a;
+      --ink:#f5e7c6;
+      --muted:rgba(245,231,198,0.82);
+      --panel:rgba(0,0,0,0.88);
+      --edge:rgba(212,175,55,0.35);
+      --shadow:rgba(0,0,0,0.92);
+      --danger:#ffb3b3;
       --success:#9ae6b4;
     }
 
-    *{box-sizing:border-box}
+    html { -webkit-text-size-adjust: 100%; }
+    *{ box-sizing:border-box; }
 
     body{
       margin:0;
-      background:
-        radial-gradient(900px 600px at 50% -100px, rgba(212,175,55,.12), transparent 55%),
-        var(--bg);
-      color:var(--ink);
-      font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
-      padding:32px;
+      min-height:100svh;
       display:flex;
       justify-content:center;
+      align-items:center;
+      padding:24px 16px 40px;
+      color:var(--ink);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: radial-gradient(circle at top, #1c1724 0, #050509 55%, #020203 100%);
+      position:relative;
+      overflow:hidden;
     }
 
-    .wrap{
-      width:min(1000px,100%);
-      display:grid;
-      grid-template-columns:1.1fr .9fr;
-      gap:22px;
+    body::before{
+      content:"";
+      position:absolute;
+      inset:-40%;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(244,232,180,.23) 0, transparent 55%),
+        radial-gradient(circle at 88% 100%, rgba(114,95,180,.35) 0, transparent 60%);
+      opacity:.9;
+      pointer-events:none;
     }
 
-    @media (max-width:900px){
-      .wrap{grid-template-columns:1fr}
+    .jts-shell{
+      position:relative;
+      z-index:1;
+      width:min(1040px, 100%);
+      border-radius:22px;
+      border:1px solid rgba(212,175,55,0.5);
+      box-shadow: 0 0 30px rgba(212,175,55,0.20) inset, 0 24px 50px rgba(0,0,0,0.92);
+      background:
+        linear-gradient(180deg, rgba(255,215,128,0.06), transparent),
+        radial-gradient(circle at top, #1a1410 0, #050509 55%);
+      padding: clamp(16px, 4vw, 28px);
     }
 
-    .card{
-      background:linear-gradient(180deg, rgba(212,175,55,.07), transparent 180px), var(--panel);
+    .jts-card{
+      background:var(--panel);
       border:1px solid var(--edge);
-      border-radius:20px;
-      padding:22px;
-      box-shadow:0 16px 50px rgba(0,0,0,.6);
+      border-radius:18px;
+      box-shadow:0 20px 45px var(--shadow);
+      padding: clamp(14px, 2.8vw, 20px);
     }
 
-    .pill{
+    .jts-grid{
+      display:grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 18px;
+    }
+
+    @media (max-width: 920px){
+      .jts-grid{ grid-template-columns:1fr; }
+    }
+
+    .jts-pill{
       display:inline-block;
       padding:6px 12px;
       border-radius:999px;
-      background:rgba(212,175,55,.10);
-      border:1px solid rgba(212,175,55,.25);
-      color:var(--gold);
-      font-size:12px;
-      margin-bottom:10px;
+      border:1px solid rgba(212,175,55,0.45);
+      background:rgba(212,175,55,0.10);
+      color:var(--gold2);
+      font-size:0.72rem;
+      letter-spacing:0.12em;
+      text-transform:uppercase;
+      opacity:0.92;
     }
 
-    h1{
-      font-family:Cinzel,serif;
-      margin:0 0 10px;
-      font-size:1.5rem;
+    .jts-h1{
+      margin:10px 0 8px;
+      text-align:center;
+      font-family: Cinzel, serif;
+      font-size: clamp(1.25rem, 2.4vw, 1.85rem);
+      line-height:1.15;
+      letter-spacing:0.05em;
+      text-transform:uppercase;
+      color:var(--gold2);
     }
 
-    .sub{
-      color:var(--muted);
-      font-size:.95rem;
-      margin-bottom:18px;
-      line-height:1.5;
+    .jts-lede{
+      margin: 0 auto 12px;
+      max-width: 56ch;
+      text-align:center;
+      font-size: 0.96rem;
+      line-height:1.65;
+      color: var(--muted);
+      opacity:0.95;
+    }
+
+    .jts-section-title{
+      margin:0 0 8px;
+      font-weight:900;
+      font-size:0.9rem;
+      letter-spacing:0.10em;
+      text-transform:uppercase;
+      color:var(--gold2);
+      opacity:0.95;
+    }
+
+    .jts-box{
+      border-radius:14px;
+      border:1px solid rgba(212,175,55,0.25);
+      background:rgba(0,0,0,0.55);
+      padding: 12px;
     }
 
     ul{
+      margin:10px 0 0;
       padding-left:18px;
-      color:var(--muted);
-      font-size:.9rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.6;
     }
+    li{ margin: 6px 0; }
 
-    li{margin:6px 0}
+    .jts-note{
+      margin-top:12px;
+      font-size:0.82rem;
+      color: var(--muted);
+      opacity:0.88;
+      line-height:1.55;
+      text-align:center;
+    }
 
     label{
       display:block;
-      margin:12px 0 6px;
-      font-size:.85rem;
-      color:var(--muted);
+      margin:10px 0 6px;
+      font-size:0.85rem;
+      color: var(--muted);
+      opacity:0.9;
     }
 
     input{
       width:100%;
       padding:12px 14px;
       border-radius:14px;
-      border:1px solid rgba(212,175,55,.25);
-      background:#0b0b12;
-      color:var(--ink);
+      border:1px solid rgba(212,175,55,0.35);
+      background:#050505;
+      color: #f9f9f9;
       outline:none;
+      font-size: 0.98rem;
+      line-height:1.3;
+      box-shadow: inset 0 0 12px rgba(0,0,0,0.65);
+    }
+
+    .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top: 10px;
     }
 
     .btn{
       width:100%;
-      border:none;
+      border:0;
       border-radius:999px;
       padding:13px 16px;
-      font-weight:700;
+      font-weight:900;
       cursor:pointer;
-      margin-top:14px;
-      background:linear-gradient(180deg,var(--gold),var(--gold2));
-      color:#09090c;
-      font-size:.95rem;
+      background:linear-gradient(90deg, var(--gold), var(--gold2));
+      color:#111;
+      font-size:0.95rem;
+      text-transform:uppercase;
+      letter-spacing:0.05em;
+      box-shadow:0 10px 25px rgba(0,0,0,0.72);
+      transition: transform .08s ease, filter .12s ease;
     }
+    .btn:active{ transform:scale(0.99); }
+    .btn:hover{ filter:brightness(1.05); }
 
     .btn-outline{
       width:100%;
       border-radius:999px;
       padding:12px 16px;
-      font-weight:600;
+      font-weight:900;
       cursor:pointer;
-      margin-top:10px;
-      border:1px solid rgba(212,175,55,.6);
-      background:transparent;
-      color:var(--ink);
-      font-size:.9rem;
+      border:1px solid rgba(212,175,55,0.7);
+      background: rgba(0,0,0,0.55);
+      color: var(--gold2);
+      font-size:0.92rem;
+      text-transform:uppercase;
+      letter-spacing:0.06em;
+      transition: transform .08s ease, filter .12s ease;
+    }
+    .btn-outline:active{ transform:scale(0.99); }
+    .btn-outline:hover{ filter:brightness(1.06); }
+
+    .mini-link{
+      display:inline-block;
+      margin-top: 10px;
+      text-align:center;
+      width:100%;
+      color: rgba(243,226,138,0.92);
+      text-decoration: underline;
+      font-size: 0.86rem;
+      opacity:0.9;
     }
 
     .err{
       margin-top:12px;
-      color:var(--danger);
-      font-size:.85rem;
+      color: var(--danger);
+      font-size:0.86rem;
+      line-height:1.5;
     }
 
     .ok{
       margin-top:12px;
-      color:var(--success);
-      font-size:.85rem;
+      color: var(--success);
+      font-size:0.86rem;
+      line-height:1.5;
     }
 
-    .small{
-      margin-top:14px;
-      font-size:.8rem;
-      color:var(--muted);
-      opacity:.85;
+    .micro{
+      margin-top:12px;
+      font-size:0.78rem;
+      color: var(--muted);
+      opacity:0.86;
+      line-height:1.55;
+    }
+
+    button:focus-visible, a:focus-visible, input:focus-visible{
+      outline: 2px solid rgba(243,226,138,0.85);
+      outline-offset: 2px;
+      border-radius: 10px;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      *{ scroll-behavior:auto !important; }
+      .btn, .btn-outline{ transition:none !important; }
+    }
+
+    @media (max-width: 520px){
+      .jts-shell{ border-radius:18px; }
+      .jts-card{ border-radius:16px; }
+      .jts-lede{ font-size:0.94rem; }
+      .jts-note{ font-size:0.80rem; }
+      ul{ font-size:0.90rem; }
     }
   </style>
 </head>
 
 <body>
 
-<div class="wrap">
+  <div class="jts-shell">
+    <div class="jts-card">
 
-  <!-- LEFT: OFFER -->
-  <div class="card">
-    <div class="pill">Free limit reached</div>
-    <h1>Unlock Full Cultural Dream Access</h1>
-    <div class="sub">
-      Upgrade to continue decoding your dreams with full spiritual meaning,
-      effects, and guidance.
-    </div>
+      <div style="text-align:center;">
+        <span class="jts-pill">Free limit reached</span>
+      </div>
 
-    <ul>
-      <li>Unlimited interpretations</li>
-      <li>Advanced Seal of the Dream</li>
-      <li>Full doctrine-based narrative explanation</li>
-      <li>Cancel anytime</li>
-    </ul>
+      <h1 class="jts-h1">Unlock PRO Dream Access</h1>
 
-    <div class="small">
-      Secure checkout powered by Stripe.
+      <p class="jts-lede">
+        You’ve used your free decodes. If you want the deeper version — unlock PRO and continue with
+        full meaning, real-life effects, and clear next steps.
+      </p>
+
+      <div class="jts-grid">
+
+        <!-- LEFT: OFFER / VALUE -->
+        <div class="jts-box">
+          <div class="jts-section-title">What PRO unlocks</div>
+
+          <ul>
+            <li><strong>Unlimited</strong> interpretations</li>
+            <li><strong>Advanced Seal of the Dream</strong> analysis</li>
+            <li><strong>Full layered explanation</strong> (doctrine-based, readable)</li>
+            <li><strong>Stronger guidance</strong> on what to do next</li>
+          </ul>
+
+          <p class="jts-note">
+            Secure checkout powered by Stripe. Cancel anytime.
+          </p>
+
+          <p class="micro" style="text-align:center;">
+            Cultural + educational only. Not therapy or medical advice.
+          </p>
+        </div>
+
+        <!-- RIGHT: UNLOCK + CHECKOUT -->
+        <div class="jts-box">
+          <div class="jts-section-title">Already subscribed?</div>
+
+          <p style="margin:0 0 10px;color:var(--muted);font-size:0.92rem;line-height:1.6;">
+            Enter the same email you used to subscribe. If it’s active, access unlocks instantly.
+          </p>
+
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="you@example.com" autocomplete="email" inputmode="email" />
+
+          <div class="row">
+            <button class="btn-outline" id="unlock" type="button">Unlock With Email</button>
+          </div>
+
+          <div class="jts-divider" style="height:1px;background:linear-gradient(90deg,transparent,rgba(212,175,55,0.25),transparent);margin:14px 0;"></div>
+
+          <div class="jts-section-title">New here?</div>
+
+          <p style="margin:0 0 10px;color:var(--muted);font-size:0.92rem;line-height:1.6;">
+            Continue to secure checkout. After payment, you’ll be able to unlock access with this email.
+          </p>
+
+          <form action="/create-checkout-session" method="POST" id="checkoutForm">
+            <input type="hidden" name="email" id="emailHidden">
+            <button class="btn" type="submit">Continue to Secure Checkout</button>
+          </form>
+
+          <a class="mini-link" href="/" id="backLink">Return to the interpreter</a>
+
+          <div id="err" class="err" role="alert" aria-live="polite"></div>
+          <div id="ok" class="ok" role="status" aria-live="polite"></div>
+
+          <div class="micro">
+            Tip: If you paid already but used a different email, try that email here.
+          </div>
+        </div>
+
+      </div>
+
     </div>
   </div>
-
-  <!-- RIGHT: EMAIL UNLOCK -->
-  <div class="card">
-    <h1>Enter Your Email</h1>
-    <div class="sub">
-      If you already subscribed, enter the same email to unlock instantly.
-    </div>
-
-    <label>Email</label>
-    <input id="email" type="email" placeholder="you@example.com" />
-
-    <button class="btn-outline" id="unlock">Unlock Access</button>
-
-    <form action="/create-checkout-session" method="POST">
-      <input type="hidden" name="email" id="emailHidden">
-      <button class="btn">Continue to Secure Checkout</button>
-    </form>
-
-    <div id="err" class="err"></div>
-    <div id="ok" class="ok"></div>
-  </div>
-
-</div>
 
 <script>
-  const emailInput = document.getElementById("email");
+(function(){
+  const emailInput  = document.getElementById("email");
   const emailHidden = document.getElementById("emailHidden");
-  const unlockBtn = document.getElementById("unlock");
-  const err = document.getElementById("err");
-  const ok = document.getElementById("ok");
+  const unlockBtn   = document.getElementById("unlock");
+  const err         = document.getElementById("err");
+  const ok          = document.getElementById("ok");
+  const backLink    = document.getElementById("backLink");
+
+  function setMsg(type, text){
+    if (type === "err") { err.textContent = text || ""; ok.textContent = ""; }
+    else { ok.textContent = text || ""; err.textContent = ""; }
+  }
+
+  function syncEmail(){
+    emailHidden.value = (emailInput.value || "").trim();
+  }
+
+  function validEmail(email){
+    // Simple, safe validation (avoid overly strict regex)
+    return !!email && email.includes("@") && email.includes(".");
+  }
+
+  // Preserve return intent if provided as ?return=
+  try{
+    const u = new URL(window.location.href);
+    const r = u.searchParams.get("return");
+    if (r) backLink.href = r;
+  } catch(e){}
 
   emailInput.addEventListener("input", () => {
-    emailHidden.value = emailInput.value.trim();
+    syncEmail();
+    setMsg("err", "");
   });
 
   unlockBtn.addEventListener("click", async () => {
-    err.textContent = "";
-    ok.textContent = "";
+    setMsg("err", "");
+    setMsg("ok", "");
 
-    const email = emailInput.value.trim();
-    if (!email || !email.includes("@")) {
-      err.textContent = "Please enter a valid email.";
+    const email = (emailInput.value || "").trim();
+    if (!validEmail(email)) {
+      setMsg("err", "Please enter a valid email.");
+      emailInput.focus();
       return;
     }
 
-    const res = await fetch("/check-access", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-      credentials: "include"
-    });
+    unlockBtn.disabled = true;
+    unlockBtn.textContent = "Checking…";
 
-    const data = await res.json().catch(()=>({}));
+    try{
+      const res = await fetch("/check-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+        credentials: "include"
+      });
 
-    if (!res.ok) {
-      err.textContent = data.message || "No active subscription found.";
-      return;
+      const data = await res.json().catch(()=>({}));
+
+      if (!res.ok) {
+        setMsg("err", data.message || "No active subscription found for that email.");
+        return;
+      }
+
+      setMsg("ok", "Access confirmed. Redirecting…");
+      setTimeout(() => {
+        window.location.href = data.return_url || backLink.href || "/";
+      }, 700);
+
+    } catch(e){
+      setMsg("err", "Something went wrong checking access. Please try again.");
+    } finally{
+      unlockBtn.disabled = false;
+      unlockBtn.textContent = "Unlock With Email";
     }
-
-    ok.textContent = "Access confirmed. Redirecting…";
-    setTimeout(() => {
-      window.location.href = data.return_url || "/";
-    }, 800);
   });
+
+  // Make sure hidden email is set on first load too
+  syncEmail();
+})();
 </script>
 
 </body>

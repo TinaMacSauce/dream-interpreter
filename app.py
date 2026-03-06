@@ -1,14 +1,18 @@
 # app.py — Jamaican True Stories Dream Interpreter
 # Option A: Stripe-only access, HYBRID FREE GATE
 #
-# What this version does:
-# - Keeps: Hybrid free-tries gate (cookie + IP shadow)
-# - Keeps: /interpret, /track, /health, /healthz, /debug/config, /debug/sheet (guarded), /admin + /admin/upsert
-# - Keeps: Stripe Checkout + webhook tracking
-# - Removes: ALL account/password logic (no /auth/signup, /auth/login, no users.json)
-# - Adds: Stripe-only unlock via email
-# - Adds: Longest-phrase-first dream symbol matching with overlap blocking
-#   so compound phrases like "baby mouse" can win before standalone words like "baby"
+# Hybrid brain version:
+# - Google Sheet stores:
+#   - symbol definitions
+#   - keywords
+#   - custom meanings
+#   - special exceptions
+# - Code stores:
+#   - symbol category logic
+#   - behavior logic
+#   - size logic
+#   - location logic
+#   - priority / combining logic
 #
 # Env vars (Render):
 # - RETURN_URL=https://jamaicantruestories.com/pages/dream-interpreter
@@ -51,7 +55,6 @@ except Exception:
 # ----------------------------
 app = Flask(__name__)
 
-# Sessions must work cross-site (Shopify -> interpreter)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "").strip() or secrets.token_hex(32)
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.config["SESSION_COOKIE_SECURE"] = True
@@ -128,7 +131,7 @@ DEFAULT_STRIPE_PRICE_ID = PRICE_WEEKLY or PRICE_MONTHLY
 # ----------------------------
 COOKIE_SAMESITE = "None"
 COOKIE_SECURE = True
-COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
+COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
 
 # ----------------------------
@@ -200,6 +203,25 @@ def _invalidate_cache():
     _CACHE["loaded_at"] = 0.0
     _CACHE["rows"] = []
     _CACHE["headers"] = []
+
+
+def _sentence_join(parts: List[str]) -> str:
+    parts = [_strip_trailing_punct(x) for x in parts if x and _strip_trailing_punct(x)]
+    if not parts:
+        return ""
+    return _ensure_terminal_punct(" ".join(parts))
+
+
+def _dedupe_preserve_order(items: List[str]) -> List[str]:
+    seen = set()
+    out = []
+    for x in items:
+        x = _clean_sentence(x)
+        if not x or x in seen:
+            continue
+        seen.add(x)
+        out.append(x)
+    return out
 
 
 # ----------------------------
@@ -603,14 +625,12 @@ def _score_row_strict(
     keywords = _split_keywords(_get_keywords_cell(row))
     candidates: List[Tuple[str, str, int]] = []
 
-    # Exact symbol first
     if symbol:
         if len(_tokenize_words(symbol)) > 1:
             candidates.append(("symbol_phrase", symbol, 100 - _symbol_length_penalty(symbol_raw)))
         else:
             candidates.append(("symbol", symbol, 100))
 
-    # Then keywords
     for kw in keywords:
         if not kw:
             continue
@@ -619,7 +639,6 @@ def _score_row_strict(
         else:
             candidates.append(("keyword", kw, 90))
 
-    # Longest / most specific first
     candidates.sort(key=lambda x: (-len(x[1]), -x[2]))
 
     for match_type, token, score in candidates:
@@ -714,35 +733,445 @@ def _match_symbols_strict(
 
 
 # ----------------------------
+# Rule engine / interpreter brain
+# ----------------------------
+# Keep doctrine / combining logic in code.
+# Keep symbol meanings / custom exceptions in the sheet.
+
+_SYMBOL_CATEGORY_MAP: Dict[str, str] = {
+    # Domestic / close people
+    "dog": "domestic",
+    "cat": "domestic",
+    "cow": "domestic",
+    "goat": "domestic",
+    "sheep": "domestic",
+    "pig": "domestic",
+    "horse": "domestic",
+    "donkey": "domestic",
+    "chicken": "domestic",
+    "duck": "domestic",
+    "rabbit": "domestic",
+    "rooster": "domestic",
+    "puppy": "domestic",
+    "kitten": "domestic",
+
+    # Rodents
+    "mouse": "rodent",
+    "mice": "rodent",
+    "rat": "rodent",
+    "rats": "rodent",
+    "hamster": "rodent",
+    "squirrel": "rodent",
+    "beaver": "rodent",
+
+    # Reptiles
+    "snake": "reptile",
+    "snakes": "reptile",
+    "lizard": "reptile",
+    "lizards": "reptile",
+    "crocodile": "reptile",
+    "alligator": "reptile",
+    "turtle": "reptile",
+    "chameleon": "reptile",
+    "iguana": "reptile",
+
+    # Amphibians
+    "frog": "amphibian",
+    "frogs": "amphibian",
+    "toad": "amphibian",
+    "toads": "amphibian",
+    "salamander": "amphibian",
+    "newt": "amphibian",
+
+    # Insects / creepy crawlers
+    "spider": "insect",
+    "spiders": "insect",
+    "ant": "insect",
+    "ants": "insect",
+    "bee": "insect",
+    "bees": "insect",
+    "wasp": "insect",
+    "wasps": "insect",
+    "mosquito": "insect",
+    "mosquitoes": "insect",
+    "butterfly": "insect",
+    "butterflies": "insect",
+    "fly": "insect",
+    "flies": "insect",
+    "beetle": "insect",
+    "beetles": "insect",
+    "cockroach": "insect",
+    "cockroaches": "insect",
+    "centipede": "insect",
+    "centipedes": "insect",
+    "cricket": "insect",
+    "grasshopper": "insect",
+
+    # Wild predators
+    "lion": "predator",
+    "tiger": "predator",
+    "leopard": "predator",
+    "cheetah": "predator",
+    "bear": "predator",
+    "wolf": "predator",
+    "wolves": "predator",
+    "hyena": "predator",
+    "fox": "predator",
+    "panther": "predator",
+
+    # Primates
+    "monkey": "primate",
+    "monkeys": "primate",
+    "gorilla": "primate",
+    "chimpanzee": "primate",
+    "baboon": "primate",
+
+    # Birds
+    "bird": "bird",
+    "birds": "bird",
+    "owl": "bird",
+    "eagle": "bird",
+    "hawk": "bird",
+    "crow": "bird",
+    "raven": "bird",
+    "pigeon": "bird",
+    "dove": "bird",
+    "parrot": "bird",
+    "vulture": "bird",
+    "peacock": "bird",
+
+    # Sea creatures
+    "fish": "sea",
+    "fishes": "sea",
+    "shark": "sea",
+    "whale": "sea",
+    "dolphin": "sea",
+    "octopus": "sea",
+    "squid": "sea",
+    "crab": "sea",
+    "lobster": "sea",
+    "shrimp": "sea",
+    "eel": "sea",
+}
+
+_CATEGORY_MEANING: Dict[str, str] = {
+    "domestic": "This symbol often points to relatives, close people, or familiar influences in your life.",
+    "rodent": "This symbol often points to small hidden enemies, gossip, or quiet interference.",
+    "reptile": "This symbol often points to spiritual enemies, deception, or hidden threats.",
+    "amphibian": "This symbol often points to unstable or spiritually uncomfortable influences.",
+    "insect": "This symbol often points to persistent irritation, repeated pressure, traps, or small attacks.",
+    "predator": "This symbol often points to strong enemies, major opposition, or serious pressure.",
+    "primate": "This symbol often points to witchcraft activity, trickery, or mischievous spiritual interference.",
+    "bird": "This symbol often points to monitoring, observation, spiritual messages, or awareness.",
+    "sea": "This symbol often points to blessings, hidden emotional matters, provision, or deep spiritual themes.",
+}
+
+# Ordered longest-first-ish by explicit phrases
+_BEHAVIOR_RULES: List[Dict[str, Any]] = [
+    {"name": "running_away", "keywords": ["running away", "ran away", "fleeing", "fled", "escaped"], "meaning": "retreat", "severity": 0},
+    {"name": "watching", "keywords": ["watching me", "watching", "staring at me", "staring", "looking at me", "looking"], "meaning": "monitoring", "severity": 1},
+    {"name": "attacking", "keywords": ["attacking me", "attacking", "attack"], "meaning": "strong attack", "severity": 3},
+    {"name": "chasing", "keywords": ["chasing me", "chasing", "following me", "following", "coming after me"], "meaning": "pursuit", "severity": 2},
+    {"name": "biting", "keywords": ["biting me", "bit me", "biting", "bite", "stinging me", "stinging", "stung me", "scratching me", "scratching"], "meaning": "harm", "severity": 3},
+    {"name": "hiding", "keywords": ["hiding", "hidden", "hiding from me"], "meaning": "hidden issue", "severity": 1},
+    {"name": "dead", "keywords": ["dead", "killed", "died"], "meaning": "defeated issue", "severity": -1},
+    {"name": "peaceful", "keywords": ["peaceful", "calm", "friendly", "gentle", "just there", "sitting quietly"], "meaning": "awareness", "severity": 0},
+]
+
+_SIZE_RULES: List[Dict[str, Any]] = [
+    {"name": "giant", "keywords": ["giant", "huge", "massive", "enormous", "oversized"], "meaning": "very strong", "severity": 3},
+    {"name": "big", "keywords": ["big", "large"], "meaning": "strong", "severity": 2},
+    {"name": "small", "keywords": ["small", "little", "tiny", "baby"], "meaning": "minor or early-stage", "severity": 1},
+]
+
+_LOCATION_RULES: List[Dict[str, Any]] = [
+    {"name": "house", "keywords": ["in my house", "in the house", "inside my house", "inside the house", "house"], "meaning": "connected to your personal life, home, or household"},
+    {"name": "under_bed", "keywords": ["under my bed", "under the bed"], "meaning": "connected to hidden or private matters"},
+    {"name": "water", "keywords": ["in water", "under water", "in the river", "in the sea", "in the ocean", "in the pond"], "meaning": "connected to emotional, hidden, or deep spiritual matters"},
+    {"name": "bush", "keywords": ["in bush", "in the bush", "bush"], "meaning": "connected to hidden, secret, or out-of-sight activity"},
+    {"name": "yard", "keywords": ["in the yard", "yard"], "meaning": "connected to your environment, household space, or what is around you"},
+    {"name": "church", "keywords": ["in church", "church"], "meaning": "connected to spiritual life, worship, or spiritual alignment"},
+    {"name": "work", "keywords": ["at work", "workplace", "on the job"], "meaning": "connected to work, calling, or public responsibilities"},
+]
+
+_SYMBOL_SPECIAL_BASE: Dict[str, str] = {
+    "dog": "Dogs often represent relatives, family members, or people close to you.",
+    "fish": "Fish often represent blessings, provision, new life, or pregnancy.",
+    "monkey": "Monkeys often represent witchcraft activity, trickery, or mischievous spiritual interference.",
+    "snake": "Snakes often represent spiritual enemies, deception, or hidden threats.",
+    "mouse": "Mice often represent small hidden enemies, gossip, or quiet interference.",
+    "rat": "Rats often represent betrayal, deceit, or stronger hidden enemies.",
+    "owl": "Owls often represent hidden monitoring, nighttime observation, or secret activity.",
+    "bird": "Birds often represent monitoring, messages, or spiritual awareness.",
+    "spider": "Spiders often represent traps, manipulation, or hidden schemes.",
+}
+
+
+def _contains_phrase(text_norm: str, phrase: str) -> bool:
+    if not text_norm or not phrase:
+        return False
+    return bool(_compile_boundary_regex(phrase).search(text_norm))
+
+
+def _detect_behaviors(dream: str) -> List[Dict[str, Any]]:
+    dream_norm = _normalize_text(dream)
+    hits: List[Dict[str, Any]] = []
+    used = set()
+
+    for rule in _BEHAVIOR_RULES:
+        for kw in sorted(rule["keywords"], key=len, reverse=True):
+            if kw in used:
+                continue
+            if _contains_phrase(dream_norm, kw):
+                hits.append(rule)
+                used.add(kw)
+                break
+
+    # If no explicit behavior, default to peaceful awareness only if no attack indicators
+    if not hits:
+        hits.append({"name": "peaceful", "meaning": "awareness", "severity": 0})
+    return hits
+
+
+def _detect_sizes(dream: str) -> List[Dict[str, Any]]:
+    dream_norm = _normalize_text(dream)
+    hits: List[Dict[str, Any]] = []
+    used_names = set()
+
+    for rule in _SIZE_RULES:
+        for kw in sorted(rule["keywords"], key=len, reverse=True):
+            if _contains_phrase(dream_norm, kw):
+                if rule["name"] not in used_names:
+                    hits.append(rule)
+                    used_names.add(rule["name"])
+                break
+    return hits
+
+
+def _detect_locations(dream: str) -> List[Dict[str, Any]]:
+    dream_norm = _normalize_text(dream)
+    hits: List[Dict[str, Any]] = []
+    used_names = set()
+
+    for rule in _LOCATION_RULES:
+        for kw in sorted(rule["keywords"], key=len, reverse=True):
+            if _contains_phrase(dream_norm, kw):
+                if rule["name"] not in used_names:
+                    hits.append(rule)
+                    used_names.add(rule["name"])
+                break
+    return hits
+
+
+def _classify_symbol_category(symbol: str) -> str:
+    sym_norm = _normalize_text(symbol)
+    if not sym_norm:
+        return "unknown"
+
+    # exact first
+    if sym_norm in _SYMBOL_CATEGORY_MAP:
+        return _SYMBOL_CATEGORY_MAP[sym_norm]
+
+    words = sym_norm.split()
+    for w in words:
+        if w in _SYMBOL_CATEGORY_MAP:
+            return _SYMBOL_CATEGORY_MAP[w]
+
+    return "unknown"
+
+
+def _get_symbol_special_base(symbol: str) -> str:
+    sym_norm = _normalize_text(symbol)
+    if sym_norm in _SYMBOL_SPECIAL_BASE:
+        return _SYMBOL_SPECIAL_BASE[sym_norm]
+    words = sym_norm.split()
+    for w in words:
+        if w in _SYMBOL_SPECIAL_BASE:
+            return _SYMBOL_SPECIAL_BASE[w]
+    return ""
+
+
+def _strength_from_sizes(size_hits: List[Dict[str, Any]]) -> str:
+    if any(x["name"] == "giant" for x in size_hits):
+        return "very strong"
+    if any(x["name"] == "big" for x in size_hits):
+        return "strong"
+    if any(x["name"] == "small" for x in size_hits):
+        return "minor or early-stage"
+    return "moderate"
+
+
+def _describe_symbol_logic(
+    symbol: str,
+    category: str,
+    behaviors: List[Dict[str, Any]],
+    sizes: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+) -> Dict[str, str]:
+    special = _get_symbol_special_base(symbol)
+    category_line = _CATEGORY_MEANING.get(category, "This symbol may point to a meaningful influence or condition in your life.")
+
+    # Choose top behavior by severity / importance
+    behavior_names = [b["name"] for b in behaviors]
+    strength = _strength_from_sizes(sizes)
+
+    behavior_line = ""
+    physical_line = ""
+    action_line = ""
+
+    if "dead" in behavior_names:
+        behavior_line = "Because it appeared dead, the dream may be showing that this issue or enemy is losing power."
+        physical_line = "This can reflect relief, weakening pressure, or the end of a troubling pattern."
+        action_line = "Give thanks, stay grounded, and continue to pray until the matter is fully settled."
+    elif "attacking" in behavior_names or "biting" in behavior_names:
+        behavior_line = f"Because it was aggressive, the dream may be warning of harm, opposition, or active pressure. The overall strength appears {strength}."
+        physical_line = "This can show up as stress, conflict, fear, or increased pressure in daily life."
+        action_line = "Do not panic. Cancel the dream upon waking, pray for protection, stay aligned with God, and avoid giving fear authority."
+    elif "chasing" in behavior_names:
+        behavior_line = f"Because it was chasing, the dream may be showing pursuit, pressure, or an issue trying to gain ground. The overall strength appears {strength}."
+        physical_line = "This may reflect ongoing stress, pressure, or a matter that keeps following you in life."
+        action_line = "Stay alert, pray for protection, and address the issue before it grows."
+    elif "watching" in behavior_names:
+        behavior_line = f"Because it was watching, the dream may be showing monitoring or observation. The overall strength appears {strength}."
+        physical_line = "This can reflect suspicion, heightened awareness, or concern that attention is being placed on your life."
+        action_line = "Remain spiritually grounded, ask God for discernment, and do not let fear control your thinking."
+    elif "hiding" in behavior_names:
+        behavior_line = f"Because it was hiding or hidden, the dream may be showing something operating quietly behind the scenes. The overall strength appears {strength}."
+        physical_line = "This can reflect subtle pressure, hidden motives, or quiet problems developing over time."
+        action_line = "Pray for clarity and ask God to reveal anything hidden that concerns your life."
+    elif "running_away" in behavior_names:
+        behavior_line = "Because it was running away, the dream may be showing retreat, fading pressure, or an enemy losing ground."
+        physical_line = "This can reflect relief, release, or a stressful matter weakening."
+        action_line = "Stay prayerful, remain aligned, and do not reopen what God is closing."
+    else:
+        behavior_line = f"Because it appeared peaceful or simply present, the dream may be making you aware of this influence rather than showing an active attack. The overall strength appears {strength}."
+        physical_line = "This can reflect awareness, sensitivity, or a developing situation coming to your attention."
+        action_line = "Stay calm, watch carefully, and pray for wisdom about what is developing."
+
+    location_bits = []
+    for loc in locations:
+        location_bits.append(loc["meaning"])
+    location_line = ""
+    if location_bits:
+        location_line = _ensure_terminal_punct("This seems " + "; ".join(location_bits))
+
+    spiritual_parts = []
+    if special:
+        spiritual_parts.append(_ensure_terminal_punct(special))
+    spiritual_parts.append(_ensure_terminal_punct(category_line))
+    spiritual_parts.append(_ensure_terminal_punct(behavior_line))
+    if location_line:
+        spiritual_parts.append(location_line)
+
+    return {
+        "spiritual": "\n".join([x for x in spiritual_parts if x]).strip(),
+        "physical": _ensure_terminal_punct(physical_line),
+        "action": _ensure_terminal_punct(action_line),
+    }
+
+
+def _build_logic_brain(
+    dream: str,
+    matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]
+) -> Dict[str, Any]:
+    behaviors = _detect_behaviors(dream)
+    sizes = _detect_sizes(dream)
+    locations = _detect_locations(dream)
+
+    symbol_logic: List[Dict[str, Any]] = []
+    for row, sc, hit in matches:
+        sym = _get_symbol_cell(row)
+        cat = _classify_symbol_category(sym)
+        desc = _describe_symbol_logic(sym, cat, behaviors, sizes, locations)
+        symbol_logic.append({
+            "symbol": sym,
+            "category": cat,
+            "score": sc,
+            "match": hit,
+            "logic_spiritual": desc["spiritual"],
+            "logic_physical": desc["physical"],
+            "logic_action": desc["action"],
+        })
+
+    return {
+        "behaviors": behaviors,
+        "sizes": sizes,
+        "locations": locations,
+        "symbols": symbol_logic,
+    }
+
+
+def _logic_summary_line(brain: Dict[str, Any]) -> str:
+    if not brain:
+        return ""
+    behavior_names = [b["name"] for b in brain.get("behaviors", [])]
+    size_names = [s["name"] for s in brain.get("sizes", [])]
+    location_names = [l["name"] for l in brain.get("locations", [])]
+
+    parts = []
+    if behavior_names:
+        parts.append(f"behavior detected: {', '.join(behavior_names)}")
+    if size_names:
+        parts.append(f"size detected: {', '.join(size_names)}")
+    if location_names:
+        parts.append(f"location detected: {', '.join(location_names)}")
+
+    if not parts:
+        return ""
+    return _ensure_terminal_punct("Logic layer — " + "; ".join(parts))
+
+
+# ----------------------------
 # Output building
 # ----------------------------
-def _combine_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
+def _combine_fields(
+    matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]],
+    brain: Optional[Dict[str, Any]] = None
+) -> Dict[str, str]:
     spiritual_parts: List[str] = []
     physical_parts: List[str] = []
     action_parts: List[str] = []
 
+    if brain:
+        logic_line = _logic_summary_line(brain)
+        if logic_line:
+            spiritual_parts.append(logic_line)
+
+    logic_by_symbol = {}
+    if brain:
+        logic_by_symbol = { _normalize_text(x["symbol"]): x for x in brain.get("symbols", []) }
+
     for row, _sc, _hit in matches:
         symbol = _get_symbol_cell(row)
+        sym_key = _normalize_text(symbol)
         sm = _get_spiritual_meaning_cell(row)
         pe = _get_effects_cell(row)
         ac = _get_what_to_do_cell(row)
 
-        line = _format_label_value(symbol, sm)
-        if line:
-            spiritual_parts.append(line)
+        base_line = _format_label_value(symbol, sm)
+        logic_obj = logic_by_symbol.get(sym_key)
 
-        line = _format_label_value(symbol, pe)
-        if line:
-            physical_parts.append(line)
+        if base_line:
+            spiritual_parts.append(base_line)
+        if logic_obj and logic_obj.get("logic_spiritual"):
+            spiritual_parts.append(_format_label_value(symbol, logic_obj["logic_spiritual"]))
 
-        line = _format_label_value(symbol, ac)
-        if line:
-            action_parts.append(line)
+        base_line = _format_label_value(symbol, pe)
+        if base_line:
+            physical_parts.append(base_line)
+        if logic_obj and logic_obj.get("logic_physical"):
+            physical_parts.append(_format_label_value(symbol, logic_obj["logic_physical"]))
+
+        base_line = _format_label_value(symbol, ac)
+        if base_line:
+            action_parts.append(base_line)
+        if logic_obj and logic_obj.get("logic_action"):
+            action_parts.append(_format_label_value(symbol, logic_obj["logic_action"]))
 
     return {
-        "spiritual_meaning": "\n".join(spiritual_parts).strip(),
-        "effects_in_physical_realm": "\n".join(physical_parts).strip(),
-        "what_to_do": "\n".join(action_parts).strip(),
+        "spiritual_meaning": "\n".join(_dedupe_preserve_order(spiritual_parts)).strip(),
+        "effects_in_physical_realm": "\n".join(_dedupe_preserve_order(physical_parts)).strip(),
+        "what_to_do": "\n".join(_dedupe_preserve_order(action_parts)).strip(),
     }
 
 
@@ -762,20 +1191,6 @@ def _compute_seal(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> 
     return {"status": "Delayed", "type": "Processing", "risk": "High"}
 
 
-def _dedupe_preserve_order(items: List[str]) -> List[str]:
-    seen = set()
-    out = []
-    for x in items:
-        x = _clean_sentence(x)
-        if not x:
-            continue
-        if x in seen:
-            continue
-        seen.add(x)
-        out.append(x)
-    return out
-
-
 def _extract_symbol_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]], max_n: int = 3):
     symbols: List[str] = []
     meanings: List[str] = []
@@ -791,37 +1206,75 @@ def _extract_symbol_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, Any
     return symbols, meanings, effects, actions
 
 
-def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> str:
+def build_full_interpretation_from_doctrine(
+    matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]],
+    brain: Optional[Dict[str, Any]] = None
+) -> str:
     if not matches or not NARRATIVE_ENABLED:
         return ""
 
     symbols, meanings, effects, actions = _extract_symbol_fields(matches, max_n=NARRATIVE_MAX_SYMBOLS)
+    logic_by_symbol = {}
+    if brain:
+        logic_by_symbol = {_normalize_text(x["symbol"]): x for x in brain.get("symbols", [])}
 
-    opening = (
-        "This dream is revealing a spiritual condition, not predicting physical harm. "
+    opening_parts = [
+        "This dream is revealing a spiritual condition, not predicting physical harm.",
         "Dreams speak in symbols, and meaning is shown through what appears and what happens."
-    )
+    ]
+    logic_line = _logic_summary_line(brain or {})
+    if logic_line:
+        opening_parts.append(_strip_trailing_punct(logic_line))
+    opening = _ensure_terminal_punct(" ".join(opening_parts))
 
     symbol_sentences: List[str] = []
     for sym, mean in zip(symbols, meanings):
         mean_clean = _strip_trailing_punct(mean)
-        if sym and mean_clean:
-            symbol_sentences.append(_ensure_terminal_punct(f"{_title_case_symbol(sym)} points to {mean_clean}"))
+        logic_obj = logic_by_symbol.get(_normalize_text(sym), {})
+        logic_text = _strip_trailing_punct(logic_obj.get("logic_spiritual", ""))
+
+        parts = []
+        if mean_clean:
+            parts.append(f"{_title_case_symbol(sym)} points to {mean_clean}")
+        if logic_text:
+            parts.append(logic_text)
+
+        if parts:
+            symbol_sentences.append(_ensure_terminal_punct(" ".join(parts)))
 
     effect_sentences: List[str] = []
     for sym, eff in zip(symbols, effects):
         eff_clean = _strip_trailing_punct(eff)
-        if sym and eff_clean:
-            effect_sentences.append(_ensure_terminal_punct(f"{_title_case_symbol(sym)} can show up as {eff_clean} in the natural realm"))
+        logic_obj = logic_by_symbol.get(_normalize_text(sym), {})
+        logic_phys = _strip_trailing_punct(logic_obj.get("logic_physical", ""))
 
-    action_lines = _dedupe_preserve_order([_strip_trailing_punct(a) for a in actions if a])
+        parts = []
+        if eff_clean:
+            parts.append(f"{_title_case_symbol(sym)} can show up as {eff_clean} in the natural realm")
+        if logic_phys:
+            parts.append(logic_phys)
+
+        if parts:
+            effect_sentences.append(_ensure_terminal_punct(" ".join(parts)))
+
+    action_chunks: List[str] = []
+    for sym, ac in zip(symbols, actions):
+        ac_clean = _strip_trailing_punct(ac)
+        logic_obj = logic_by_symbol.get(_normalize_text(sym), {})
+        logic_action = _strip_trailing_punct(logic_obj.get("logic_action", ""))
+
+        if ac_clean:
+            action_chunks.append(ac_clean)
+        if logic_action:
+            action_chunks.append(logic_action)
+
+    action_chunks = _dedupe_preserve_order(action_chunks)
     action_text = ""
-    if action_lines:
-        if len(action_lines) == 1:
-            action_text = _ensure_terminal_punct(f"What to do: {action_lines[0]}")
+    if action_chunks:
+        if len(action_chunks) == 1:
+            action_text = _ensure_terminal_punct(f"What to do: {action_chunks[0]}")
         else:
-            joined = ". Then, ".join([_strip_trailing_punct(a) for a in action_lines])
-            action_text = _ensure_terminal_punct(f"What to do: {joined}")
+            action_text = _ensure_terminal_punct(f"What to do: {' Then, '.join([_strip_trailing_punct(x) for x in action_chunks])}")
 
     closing = (
         "Dreams expose what needs attention so you can respond. "
@@ -829,7 +1282,7 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
     )
 
     parts = [
-        _ensure_terminal_punct(opening),
+        opening,
         " ".join(symbol_sentences).strip() if symbol_sentences else "",
         " ".join(effect_sentences).strip() if effect_sentences else "",
         action_text.strip() if action_text else "",
@@ -1174,6 +1627,7 @@ def health():
         "has_spreadsheet_id": bool(SPREADSHEET_ID),
         "allowed_origins": allowed_origins,
         "match_mode": "strict_word_boundary_with_longest_phrase_priority_and_overlap_guard",
+        "brain_layers": ["symbol_category_logic", "behavior_logic", "size_logic", "location_logic"],
         "debug_match": DEBUG_MATCH,
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
@@ -1383,6 +1837,7 @@ def interpret():
         return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
 
     matches = _match_symbols_strict(dream, rows, top_k=3)
+    brain = _build_logic_brain(dream, matches)
     receipt_id = _make_receipt_id()
     seal = _compute_seal(matches)
 
@@ -1402,6 +1857,11 @@ def interpret():
             "is_paid": bool(is_paid),
             "free_uses_left": free_uses_left,
             "seal": seal,
+            "brain": {
+                "behaviors": [b["name"] for b in brain.get("behaviors", [])],
+                "sizes": [s["name"] for s in brain.get("sizes", [])],
+                "locations": [l["name"] for l in brain.get("locations", [])],
+            },
             "receipt": {
                 "id": receipt_id,
                 "top_symbols": [],
@@ -1416,16 +1876,24 @@ def interpret():
         }
         resp = make_response(jsonify(payload))
     else:
-        interpretation = _combine_fields(matches)
+        interpretation = _combine_fields(matches, brain=brain)
         top_symbols = [_get_symbol_cell(row) for row, _sc, _hit in matches if _get_symbol_cell(row)]
         share_phrase = f"My dream had symbols like: {', '.join(top_symbols[:3])}. I decoded it on Jamaican True Stories."
-        full_interpretation = build_full_interpretation_from_doctrine(matches)
+        full_interpretation = build_full_interpretation_from_doctrine(matches, brain=brain)
 
         payload = {
             "access": "paid" if is_paid else "free",
             "is_paid": bool(is_paid),
             "free_uses_left": free_uses_left,
             "seal": seal,
+            "brain": {
+                "behaviors": [b["name"] for b in brain.get("behaviors", [])],
+                "sizes": [s["name"] for s in brain.get("sizes", [])],
+                "locations": [l["name"] for l in brain.get("locations", [])],
+                "symbol_categories": [
+                    {"symbol": x["symbol"], "category": x["category"]} for x in brain.get("symbols", [])
+                ],
+            },
             "interpretation": interpretation,
             "full_interpretation": full_interpretation,
             "receipt": {
@@ -1516,6 +1984,7 @@ def debug_config():
         "return_url": RETURN_URL,
         "session_premium": _is_premium_session(),
         "session_email": _get_session_email(),
+        "brain_layers": ["symbol_category_logic", "behavior_logic", "size_logic", "location_logic"],
     })
 
 

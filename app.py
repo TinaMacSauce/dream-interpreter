@@ -1,13 +1,14 @@
-# app.py — Jamaican True Stories Dream Interpreter (Option A: Stripe-only access, HYBRID FREE GATE)
+# app.py — Jamaican True Stories Dream Interpreter
+# Option A: Stripe-only access, HYBRID FREE GATE
+#
 # What this version does:
-# - ✅ Keeps: Hybrid free-tries gate (cookie + IP shadow)
-# - ✅ Keeps: /interpret, /track, /health, /healthz, /debug/config, /debug/sheet (guarded), /admin + /admin/upsert
-# - ✅ Keeps: Stripe Checkout + webhook tracking
-# - ✅ Removes: ALL account/password logic (no /auth/signup, /auth/login, no users.json)
-# - ✅ Adds: Stripe-only unlock via email:
-#     - /upgrade page: user enters email
-#     - "Unlock Access" -> POST /check-access -> checks Stripe active subscription -> sets premium session
-#     - "Continue to Checkout" -> creates checkout session for that email
+# - Keeps: Hybrid free-tries gate (cookie + IP shadow)
+# - Keeps: /interpret, /track, /health, /healthz, /debug/config, /debug/sheet (guarded), /admin + /admin/upsert
+# - Keeps: Stripe Checkout + webhook tracking
+# - Removes: ALL account/password logic (no /auth/signup, /auth/login, no users.json)
+# - Adds: Stripe-only unlock via email
+# - Adds: Longest-phrase-first dream symbol matching with overlap blocking
+#   so compound phrases like "baby mouse" can win before standalone words like "baby"
 #
 # Env vars (Render):
 # - RETURN_URL=https://jamaicantruestories.com/pages/dream-interpreter
@@ -123,7 +124,7 @@ DEFAULT_STRIPE_PRICE_ID = PRICE_WEEKLY or PRICE_MONTHLY
 
 
 # ----------------------------
-# Cookie settings (critical for Shopify cross-site)
+# Cookie settings
 # ----------------------------
 COOKIE_SAMESITE = "None"
 COOKIE_SECURE = True
@@ -364,7 +365,7 @@ def _mark_subscriber(email: str, is_active: bool, stripe_customer_id: str = ""):
 
 
 # ----------------------------
-# Stripe-only premium session (Option A)
+# Stripe-only premium session
 # ----------------------------
 def _get_session_email() -> str:
     return (session.get("subscriber_email") or "").strip().lower()
@@ -391,10 +392,6 @@ def _stripe_config_ok() -> bool:
 
 
 def _stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
-    """
-    Returns: (is_active, customer_id)
-    Active = subscription status in {"active", "trialing"} for any customer matching that email.
-    """
     email = (email or "").strip().lower()
     if not email or "@" not in email:
         return (False, "")
@@ -422,7 +419,7 @@ def _stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
 
 
 # ----------------------------
-# Sheet field getters (robust)
+# Sheet field getters
 # ----------------------------
 def _get_symbol_cell(row: Dict) -> str:
     return (
@@ -551,6 +548,31 @@ def _compile_boundary_regex(token: str) -> re.Pattern:
     return re.compile(rf"(?<!\w){re.escape(token_n)}(?!\w)")
 
 
+def _tokenize_words(s: str) -> List[str]:
+    s = _normalize_text(s)
+    return [w for w in s.split() if w]
+
+
+def _find_phrase_spans(text: str, phrase: str) -> List[Tuple[int, int]]:
+    text_n = _normalize_text(text)
+    phrase_n = _normalize_text(phrase)
+    if not text_n or not phrase_n:
+        return []
+    rx = re.compile(rf"(?<!\w){re.escape(phrase_n)}(?!\w)")
+    return [m.span() for m in rx.finditer(text_n)]
+
+
+def _spans_overlap(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
+    return not (a[1] <= b[0] or b[1] <= a[0])
+
+
+def _is_span_blocked(span: Tuple[int, int], used_spans: List[Tuple[int, int]]) -> bool:
+    for u in used_spans:
+        if _spans_overlap(span, u):
+            return True
+    return False
+
+
 def _symbol_length_penalty(symbol: str) -> int:
     words = [w for w in _normalize_text(symbol).split() if w]
     n = len(words)
@@ -565,7 +587,11 @@ def _symbol_length_penalty(symbol: str) -> int:
     return 18
 
 
-def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[str, str]]]:
+def _score_row_strict(
+    dream_norm: str,
+    row: Dict,
+    used_spans: Optional[List[Tuple[int, int]]] = None
+) -> Tuple[int, Optional[Dict[str, Any]]]:
     symbol_raw = _get_symbol_cell(row)
     if not symbol_raw:
         return 0, None
@@ -574,29 +600,53 @@ def _score_row_strict(dream_norm: str, row: Dict) -> Tuple[int, Optional[Dict[st
     if not symbol:
         return 0, None
 
-    symbol_words = symbol.split()
     keywords = _split_keywords(_get_keywords_cell(row))
+    candidates: List[Tuple[str, str, int]] = []
 
-    if len(symbol_words) == 1:
-        if _compile_boundary_regex(symbol).search(dream_norm):
-            return 100, {"type": "symbol", "token": symbol}
-    else:
-        phrase_rx = re.compile(rf"(?<!\w){re.escape(symbol)}(?!\w)")
-        if phrase_rx.search(dream_norm):
-            score = 100 - _symbol_length_penalty(symbol_raw)
-            return int(score), {"type": "symbol_phrase", "token": symbol}
+    # Exact symbol first
+    if symbol:
+        if len(_tokenize_words(symbol)) > 1:
+            candidates.append(("symbol_phrase", symbol, 100 - _symbol_length_penalty(symbol_raw)))
+        else:
+            candidates.append(("symbol", symbol, 100))
 
-    if len(symbol_words) == 1:
-        for kw in keywords:
-            if kw and _compile_boundary_regex(kw).search(dream_norm):
-                return 96, {"type": "keyword", "token": kw}
+    # Then keywords
+    for kw in keywords:
+        if not kw:
+            continue
+        if len(_tokenize_words(kw)) > 1:
+            candidates.append(("keyword_phrase", kw, 94))
+        else:
+            candidates.append(("keyword", kw, 90))
+
+    # Longest / most specific first
+    candidates.sort(key=lambda x: (-len(x[1]), -x[2]))
+
+    for match_type, token, score in candidates:
+        spans = _find_phrase_spans(dream_norm, token)
+        if not spans:
+            continue
+
+        chosen_span = None
+        for sp in spans:
+            if not used_spans or not _is_span_blocked(sp, used_spans):
+                chosen_span = sp
+                break
+
+        if chosen_span:
+            return score, {
+                "type": match_type,
+                "token": token,
+                "span": chosen_span,
+                "token_len": len(token),
+            }
 
     return 0, None
 
 
 def _match_symbols_strict(
     dream: str, rows: List[Dict], top_k: int = 3
-) -> List[Tuple[Dict, int, Optional[Dict[str, str]]]]:
+) -> List[Tuple[Dict, int, Optional[Dict[str, Any]]]]:
     dream_norm = _normalize_text(dream)
     if not dream_norm:
         return []
@@ -605,28 +655,49 @@ def _match_symbols_strict(
     _log("DREAM_RAW:", repr(dream))
     _log("DREAM_NORM:", repr(dream_norm))
 
-    scored: List[Tuple[Dict, int, Optional[Dict[str, str]]]] = []
+    candidates: List[Tuple[Dict, int, Optional[Dict[str, Any]]]] = []
     for row in rows:
-        sc, hit = _score_row_strict(dream_norm, row)
-        if sc > 0:
-            scored.append((row, sc, hit))
+        symbol_raw = _get_symbol_cell(row)
+        if not symbol_raw:
+            continue
 
-    def _sort_key(item: Tuple[Dict, int, Optional[Dict[str, str]]]):
-        row, sc, _hit = item
+        sc, hit = _score_row_strict(dream_norm, row, used_spans=[])
+        if sc > 0 and hit:
+            candidates.append((row, sc, hit))
+
+    def _sort_key(item: Tuple[Dict, int, Optional[Dict[str, Any]]]):
+        row, sc, hit = item
         sym = _get_symbol_cell(row)
-        return (-sc, len(_normalize_text(sym)))
+        token_len = int((hit or {}).get("token_len", 0))
+        sym_len = len(_normalize_text(sym))
+        return (-token_len, -sc, -sym_len)
 
-    scored.sort(key=_sort_key)
+    candidates.sort(key=_sort_key)
 
-    seen = set()
-    out: List[Tuple[Dict, int, Optional[Dict[str, str]]]] = []
-    for row, sc, hit in scored:
+    used_spans: List[Tuple[int, int]] = []
+    seen_symbols = set()
+    out: List[Tuple[Dict, int, Optional[Dict[str, Any]]]] = []
+
+    for row, sc, hit in candidates:
+        if not hit:
+            continue
+
+        span = hit.get("span")
+        if not span:
+            continue
+
         sym = _get_symbol_cell(row)
         sym_key = _normalize_text(sym)
-        if not sym_key or sym_key in seen:
+        if not sym_key or sym_key in seen_symbols:
             continue
-        seen.add(sym_key)
+
+        if _is_span_blocked(span, used_spans):
+            continue
+
+        used_spans.append(span)
+        seen_symbols.add(sym_key)
         out.append((row, sc, hit))
+
         if len(out) >= top_k:
             break
 
@@ -637,6 +708,7 @@ def _match_symbols_strict(
     else:
         _log("MATCHES: (none)")
 
+    _log("USED_SPANS:", used_spans)
     _log("--- END DEBUG_MATCH ---\n")
     return out
 
@@ -644,7 +716,7 @@ def _match_symbols_strict(
 # ----------------------------
 # Output building
 # ----------------------------
-def _combine_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]) -> Dict[str, str]:
+def _combine_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
     spiritual_parts: List[str] = []
     physical_parts: List[str] = []
     action_parts: List[str] = []
@@ -678,7 +750,7 @@ def _make_receipt_id() -> str:
     return f"JTS-{secrets.token_hex(4).upper()}"
 
 
-def _compute_seal(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]) -> Dict[str, str]:
+def _compute_seal(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
     if not matches:
         return {"status": "Delayed", "type": "Unclear", "risk": "High"}
 
@@ -704,7 +776,7 @@ def _dedupe_preserve_order(items: List[str]) -> List[str]:
     return out
 
 
-def _extract_symbol_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]], max_n: int = 3):
+def _extract_symbol_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]], max_n: int = 3):
     symbols: List[str] = []
     meanings: List[str] = []
     effects: List[str] = []
@@ -719,7 +791,7 @@ def _extract_symbol_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, str
     return symbols, meanings, effects, actions
 
 
-def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optional[Dict[str, str]]]]) -> str:
+def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> str:
     if not matches or not NARRATIVE_ENABLED:
         return ""
 
@@ -767,7 +839,7 @@ def build_full_interpretation_from_doctrine(matches: List[Tuple[Dict, int, Optio
 
 
 # ----------------------------
-# Admin auth + HTML (UNCHANGED)
+# Admin auth + HTML
 # ----------------------------
 def _get_admin_key_from_request() -> str:
     q = (request.args.get("key") or "").strip()
@@ -966,7 +1038,7 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ----------------------------
-# Upgrade HTML (Option A)
+# Upgrade HTML
 # ----------------------------
 def _upgrade_html_option_a() -> str:
     return f"""<!DOCTYPE html>
@@ -1101,7 +1173,7 @@ def health():
         "sheet": WORKSHEET_NAME,
         "has_spreadsheet_id": bool(SPREADSHEET_ID),
         "allowed_origins": allowed_origins,
-        "match_mode": "strict_word_boundary_only_with_compound_guard",
+        "match_mode": "strict_word_boundary_with_longest_phrase_priority_and_overlap_guard",
         "debug_match": DEBUG_MATCH,
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
@@ -1136,7 +1208,6 @@ def upgrade():
 
 @app.route("/subscribe", methods=["GET"])
 def subscribe():
-    # Backwards compat: send to upgrade
     return redirect(url_for("upgrade"), code=302)
 
 
@@ -1210,7 +1281,6 @@ def create_checkout_session():
 def payment_success():
     email = (request.args.get("email") or "").strip().lower()
 
-    # Best-effort auto-unlock right away; webhook will also mark subscriber
     if email and "@" in email:
         is_active, customer_id = _stripe_active_subscription_for_email(email)
         if is_active:
@@ -1290,7 +1360,6 @@ def interpret():
 
     is_paid = _is_premium_session()
 
-    # HYBRID GATE for non-paid
     if not is_paid:
         ip = _get_client_ip()
         cookie_used = _get_cookie_tries_used()
@@ -1340,8 +1409,8 @@ def interpret():
             },
             "interpretation": {
                 "spiritual_meaning": "No matching symbols were found for the exact words in this dream.",
-                "effects_in_physical_realm": "Tip: use clear symbol words (people, animals, places, objects) that exist in your Symbols sheet.",
-                "what_to_do": "Add 1–2 more key symbols (objects, people, animals, places) and try again.",
+                "effects_in_physical_realm": "Tip: use clear symbol words or phrases that exist in your Symbols sheet.",
+                "what_to_do": "Add 1–2 more key symbols or phrases and try again.",
             },
             "full_interpretation": "",
         }
@@ -1424,7 +1493,7 @@ def admin_upsert():
 
 
 # ----------------------------
-# Debug routes (guarded)
+# Debug routes
 # ----------------------------
 @app.route("/debug/config", methods=["GET"])
 def debug_config():

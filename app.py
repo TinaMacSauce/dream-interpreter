@@ -100,6 +100,8 @@ DEBUG_MATCH = os.getenv("DEBUG_MATCH", "").strip().lower() in {"1", "true", "yes
 NARRATIVE_ENABLED = os.getenv("NARRATIVE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
 NARRATIVE_MAX_SYMBOLS = int(os.getenv("NARRATIVE_MAX_SYMBOLS", "3"))
 
+KEYWORD_GUARD_ENABLED = True
+
 
 # ----------------------------
 # Hybrid Gate Settings
@@ -153,6 +155,57 @@ def _normalize_text(s: str) -> str:
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     return s
+
+
+STOP_WORDS = {
+    "a", "an", "and", "are", "as", "at",
+    "be", "but", "by",
+    "for", "from",
+    "i", "if", "in", "into", "is", "it",
+    "me", "my",
+    "of", "on", "or",
+    "so",
+    "the", "they", "this", "that", "these", "those", "to",
+    "was", "we", "were", "with",
+    "you", "your"
+}
+
+
+def _is_useless_keyword(token: str) -> bool:
+    token = _normalize_text(token)
+    if not token:
+        return True
+
+    # Ignore pure numbers like "1", "3", "2024"
+    if token.isdigit():
+        return True
+
+    words = token.split()
+    if not words:
+        return True
+
+    # Single-word junk protection
+    if len(words) == 1:
+        w = words[0]
+
+        # Ignore stop-words
+        if w in STOP_WORDS:
+            return True
+
+        # Ignore very short single words like "i", "to", "an"
+        if len(w) < 3:
+            return True
+
+    return False
+
+
+def _sanitize_keywords_for_storage(keywords_raw: str) -> str:
+    """
+    Cleans keywords before saving them from the admin panel.
+    Removes junk triggers, dedupes, and returns a normalized comma-separated string.
+    """
+    cleaned = _split_keywords(keywords_raw)
+    return ", ".join(cleaned)
 
 
 def _log(*args):
@@ -571,12 +624,25 @@ def _load_sheet_rows(force: bool = False) -> List[Dict]:
 def _split_keywords(s: str) -> List[str]:
     if not s:
         return []
+
     parts = re.split(r"[,\|;]+", s)
     out = []
+    seen = set()
+
     for p in parts:
         p = _normalize_text(p)
-        if p:
-            out.append(p)
+        if not p:
+            continue
+
+        if _is_useless_keyword(p):
+            continue
+
+        if p in seen:
+            continue
+
+        seen.add(p)
+        out.append(p)
+
     return out
 
 
@@ -1457,6 +1523,9 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
     action = (payload.get("action") or "").strip()
     keywords = (payload.get("keywords") or "").strip()
 
+    # Long-term safety: sanitize admin-entered keywords before saving
+    keywords = _sanitize_keywords_for_storage(keywords)
+
     existing_row = None
     if mode != "add":
         existing_row = _find_existing_row_index(ws, input_value, input_col)
@@ -1634,6 +1703,7 @@ def health():
         "debug_match": DEBUG_MATCH,
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
+        "keyword_guard_enabled": KEYWORD_GUARD_ENABLED,
         "admin_configured": bool(ADMIN_KEY),
         "free_quota": FREE_TRIES,
         "shadow_window_hours": SHADOW_WINDOW_HOURS,
@@ -1814,7 +1884,7 @@ def interpret():
     dream = (data.get("dream") or data.get("text") or "").strip()
 
     # ----------------------------
-    # NEW DEBUG LOGS
+    # DEBUG LOGS
     # ----------------------------
     _log("RAW JSON RECEIVED:", _safe_debug_payload_preview(data))
     _log("RAW DREAM RECEIVED:", repr(dream))
@@ -2005,6 +2075,7 @@ def debug_config():
         "return_url": RETURN_URL,
         "session_premium": _is_premium_session(),
         "session_email": _get_session_email(),
+        "keyword_guard_enabled": KEYWORD_GUARD_ENABLED,
         "brain_layers": ["symbol_category_logic", "behavior_logic", "size_logic", "location_logic"],
     })
 
@@ -2028,6 +2099,7 @@ def debug_sheet():
         "sample_effects": _get_effects_cell(sample),
         "sample_what_to_do": _get_what_to_do_cell(sample),
         "sample_keywords": _get_keywords_cell(sample),
+        "sample_keywords_split": _split_keywords(_get_keywords_cell(sample)),
     })
 
 

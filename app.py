@@ -224,6 +224,23 @@ def _dedupe_preserve_order(items: List[str]) -> List[str]:
     return out
 
 
+def _safe_debug_payload_preview(data: Dict[str, Any], max_len: int = 500) -> Dict[str, Any]:
+    """
+    Returns a trimmed copy of request JSON for debug logs.
+    Keeps logs readable and avoids giant cursed walls of text.
+    """
+    try:
+        preview = {}
+        for k, v in (data or {}).items():
+            if isinstance(v, str):
+                preview[k] = v[:max_len] + ("..." if len(v) > max_len else "")
+            else:
+                preview[k] = v
+        return preview
+    except Exception:
+        return {"_debug_preview_error": True}
+
+
 # ----------------------------
 # File utilities (atomic JSON)
 # ----------------------------
@@ -735,11 +752,7 @@ def _match_symbols_strict(
 # ----------------------------
 # Rule engine / interpreter brain
 # ----------------------------
-# Keep doctrine / combining logic in code.
-# Keep symbol meanings / custom exceptions in the sheet.
-
 _SYMBOL_CATEGORY_MAP: Dict[str, str] = {
-    # Domestic / close people
     "dog": "domestic",
     "cat": "domestic",
     "cow": "domestic",
@@ -755,7 +768,6 @@ _SYMBOL_CATEGORY_MAP: Dict[str, str] = {
     "puppy": "domestic",
     "kitten": "domestic",
 
-    # Rodents
     "mouse": "rodent",
     "mice": "rodent",
     "rat": "rodent",
@@ -764,7 +776,6 @@ _SYMBOL_CATEGORY_MAP: Dict[str, str] = {
     "squirrel": "rodent",
     "beaver": "rodent",
 
-    # Reptiles
     "snake": "reptile",
     "snakes": "reptile",
     "lizard": "reptile",
@@ -775,7 +786,6 @@ _SYMBOL_CATEGORY_MAP: Dict[str, str] = {
     "chameleon": "reptile",
     "iguana": "reptile",
 
-    # Amphibians
     "frog": "amphibian",
     "frogs": "amphibian",
     "toad": "amphibian",
@@ -783,7 +793,6 @@ _SYMBOL_CATEGORY_MAP: Dict[str, str] = {
     "salamander": "amphibian",
     "newt": "amphibian",
 
-    # Insects / creepy crawlers
     "spider": "insect",
     "spiders": "insect",
     "ant": "insect",
@@ -807,7 +816,6 @@ _SYMBOL_CATEGORY_MAP: Dict[str, str] = {
     "cricket": "insect",
     "grasshopper": "insect",
 
-    # Wild predators
     "lion": "predator",
     "tiger": "predator",
     "leopard": "predator",
@@ -819,14 +827,12 @@ _SYMBOL_CATEGORY_MAP: Dict[str, str] = {
     "fox": "predator",
     "panther": "predator",
 
-    # Primates
     "monkey": "primate",
     "monkeys": "primate",
     "gorilla": "primate",
     "chimpanzee": "primate",
     "baboon": "primate",
 
-    # Birds
     "bird": "bird",
     "birds": "bird",
     "owl": "bird",
@@ -840,7 +846,6 @@ _SYMBOL_CATEGORY_MAP: Dict[str, str] = {
     "vulture": "bird",
     "peacock": "bird",
 
-    # Sea creatures
     "fish": "sea",
     "fishes": "sea",
     "shark": "sea",
@@ -866,7 +871,6 @@ _CATEGORY_MEANING: Dict[str, str] = {
     "sea": "This symbol often points to blessings, hidden emotional matters, provision, or deep spiritual themes.",
 }
 
-# Ordered longest-first-ish by explicit phrases
 _BEHAVIOR_RULES: List[Dict[str, Any]] = [
     {"name": "running_away", "keywords": ["running away", "ran away", "fleeing", "fled", "escaped"], "meaning": "retreat", "severity": 0},
     {"name": "watching", "keywords": ["watching me", "watching", "staring at me", "staring", "looking at me", "looking"], "meaning": "monitoring", "severity": 1},
@@ -927,7 +931,6 @@ def _detect_behaviors(dream: str) -> List[Dict[str, Any]]:
                 used.add(kw)
                 break
 
-    # If no explicit behavior, default to peaceful awareness only if no attack indicators
     if not hits:
         hits.append({"name": "peaceful", "meaning": "awareness", "severity": 0})
     return hits
@@ -968,7 +971,6 @@ def _classify_symbol_category(symbol: str) -> str:
     if not sym_norm:
         return "unknown"
 
-    # exact first
     if sym_norm in _SYMBOL_CATEGORY_MAP:
         return _SYMBOL_CATEGORY_MAP[sym_norm]
 
@@ -1011,7 +1013,6 @@ def _describe_symbol_logic(
     special = _get_symbol_special_base(symbol)
     category_line = _CATEGORY_MEANING.get(category, "This symbol may point to a meaningful influence or condition in your life.")
 
-    # Choose top behavior by severity / importance
     behavior_names = [b["name"] for b in behaviors]
     strength = _strength_from_sizes(sizes)
 
@@ -1139,7 +1140,7 @@ def _combine_fields(
 
     logic_by_symbol = {}
     if brain:
-        logic_by_symbol = { _normalize_text(x["symbol"]): x for x in brain.get("symbols", []) }
+        logic_by_symbol = {_normalize_text(x["symbol"]): x for x in brain.get("symbols", [])}
 
     for row, _sc, _hit in matches:
         symbol = _get_symbol_cell(row)
@@ -1274,7 +1275,9 @@ def build_full_interpretation_from_doctrine(
         if len(action_chunks) == 1:
             action_text = _ensure_terminal_punct(f"What to do: {action_chunks[0]}")
         else:
-            action_text = _ensure_terminal_punct(f"What to do: {' Then, '.join([_strip_trailing_punct(x) for x in action_chunks])}")
+            action_text = _ensure_terminal_punct(
+                f"What to do: {' Then, '.join([_strip_trailing_punct(x) for x in action_chunks])}"
+            )
 
     closing = (
         "Dreams expose what needs attention so you can respond. "
@@ -1809,6 +1812,16 @@ def interpret():
 
     data = request.get_json(silent=True) or {}
     dream = (data.get("dream") or data.get("text") or "").strip()
+
+    # ----------------------------
+    # NEW DEBUG LOGS
+    # ----------------------------
+    _log("RAW JSON RECEIVED:", _safe_debug_payload_preview(data))
+    _log("RAW DREAM RECEIVED:", repr(dream))
+    _log("REQUEST CONTENT-TYPE:", request.headers.get("Content-Type", ""))
+    _log("REQUEST ORIGIN:", request.headers.get("Origin", ""))
+    _log("REQUEST REFERER:", request.headers.get("Referer", ""))
+
     if not dream:
         return jsonify({"error": "Missing 'dream' or 'text'"}), 400
 
@@ -1874,6 +1887,10 @@ def interpret():
             },
             "full_interpretation": "",
         }
+
+        _log("TOP SYMBOLS RETURNED:", [])
+        _log("INTERPRET RESPONSE MODE:", "no_matches")
+
         resp = make_response(jsonify(payload))
     else:
         interpretation = _combine_fields(matches, brain=brain)
@@ -1902,6 +1919,10 @@ def interpret():
                 "share_phrase": share_phrase,
             },
         }
+
+        _log("TOP SYMBOLS RETURNED:", top_symbols)
+        _log("INTERPRET RESPONSE MODE:", "matched")
+
         resp = make_response(jsonify(payload))
 
     if not is_paid:

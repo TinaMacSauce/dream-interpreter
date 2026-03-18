@@ -1,32 +1,39 @@
 # app.py — Jamaican True Stories Dream Interpreter
-# Doctrine Engine Version + $1 Dream Pack
+# Production version
 #
-# Supports:
-# - Stripe-only premium access
-# - Hybrid free gate (cookie + IP shadow)
-# - $1 dream pack (3 uses, expiring)
+# Features:
+# - Stripe subscription access
+# - $1 dream pack access
+# - Free tier with cookie + IP shadow gate
+# - Doctrine engine (multi-sheet)
 # - Legacy single-sheet fallback
-# - Doctrine Engine multi-sheet mode:
-#     BaseSymbols
-#     BehaviorRules
-#     SizeStateRules
-#     LocationRules
-#     OverrideRules
-#     OutputTemplates
+# - Admin upsert tool
+# - Debug endpoints
 #
-# Primary env vars:
+# Required env vars:
+# - FLASK_SECRET_KEY
 # - RETURN_URL
 # - ALLOWED_ORIGINS
 # - SPREADSHEET_ID
 # - GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE
-# - FREE_QUOTA / FREE_TRIES_COOKIE / SHADOW_WINDOW_HOURS
-# - COUNTS_FILE / SUBSCRIBERS_FILE
-# - STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
-# - PRICE_WEEKLY / PRICE_MONTHLY / PRICE_DREAM_PACK
-# - DREAM_PACK_USES / DREAM_PACK_HOURS
-# - ADMIN_KEY or JTS_ADMIN_KEY / ADMIN_TOKEN / JTS_ADMIN
-# - DEBUG_MATCH=1 (optional)
-# - DOCTRINE_MODE=1 (default on)
+# - STRIPE_SECRET_KEY
+# - STRIPE_WEBHOOK_SECRET
+# - PRICE_WEEKLY and/or PRICE_MONTHLY
+# - PRICE_DREAM_PACK
+# - ADMIN_KEY (or JTS_ADMIN_KEY / ADMIN_TOKEN / JTS_ADMIN)
+#
+# Optional env vars:
+# - WORKSHEET_NAME=Sheet1
+# - FREE_QUOTA=3
+# - FREE_TRIES_COOKIE=jts_free_tries_used
+# - SHADOW_WINDOW_HOURS=72
+# - DREAM_PACK_USES=3
+# - DREAM_PACK_HOURS=72
+# - CACHE_TTL_SECONDS=120
+# - DEBUG_MATCH=1
+# - DOCTRINE_MODE=1
+# - NARRATIVE_ENABLED=1
+# - NARRATIVE_MAX_SYMBOLS=3
 
 import os
 import json
@@ -38,8 +45,15 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import (
-    Flask, request, jsonify, make_response, Response,
-    redirect, url_for, session, render_template
+    Flask,
+    request,
+    jsonify,
+    make_response,
+    Response,
+    redirect,
+    url_for,
+    session,
+    render_template,
 )
 from flask_cors import CORS
 
@@ -60,6 +74,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "").strip() or secrets.token_hex(32)
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.config["SESSION_COOKIE_SECURE"] = True
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # 64 KB request cap
 
 DEFAULT_ALLOWED = [
     "https://jamaicantruestories.com",
@@ -73,14 +88,12 @@ CORS(
     app,
     resources={r"/*": {"origins": allowed_origins}},
     supports_credentials=True,
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-Admin-Key"],
     methods=["GET", "POST", "OPTIONS"],
 )
 
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
 RETURN_URL = os.getenv("RETURN_URL", "https://jamaicantruestories.com/pages/dream-interpreter").strip()
-
-# Legacy fallback
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
 ADMIN_KEY = (
@@ -103,6 +116,9 @@ NARRATIVE_MAX_SYMBOLS = int(os.getenv("NARRATIVE_MAX_SYMBOLS", "3"))
 
 DOCTRINE_MODE = os.getenv("DOCTRINE_MODE", "1").strip().lower() not in {"0", "false", "no", "off"}
 KEYWORD_GUARD_ENABLED = True
+
+MAX_DREAM_LENGTH = int(os.getenv("MAX_DREAM_LENGTH", "2500"))
+MIN_DREAM_LENGTH = int(os.getenv("MIN_DREAM_LENGTH", "5"))
 
 
 # ============================================================
@@ -132,8 +148,8 @@ FREE_TRIES = int(os.getenv("FREE_QUOTA", os.getenv("FREE_TRIES", "3")))
 COOKIE_NAME = os.getenv("FREE_TRIES_COOKIE", "jts_free_tries_used")
 SHADOW_WINDOW_HOURS = int(os.getenv("SHADOW_WINDOW_HOURS", "72"))
 
-COUNTS_FILE = os.getenv("COUNTS_FILE", "usage_counts.json")
-SUBSCRIBERS_FILE = os.getenv("SUBSCRIBERS_FILE", "subscribers.json")
+COUNTS_FILE = os.getenv("COUNTS_FILE", "/data/usage_counts.json")
+SUBSCRIBERS_FILE = os.getenv("SUBSCRIBERS_FILE", "/data/subscribers.json")
 
 USAGE_COUNTS_PATH = Path(COUNTS_FILE)
 SUBSCRIBERS_PATH = Path(SUBSCRIBERS_FILE)
@@ -371,6 +387,21 @@ def _row_get(row: Dict, *keys: str) -> str:
     return ""
 
 
+def _validate_email(email: str) -> bool:
+    email = (email or "").strip()
+    return bool(email and "@" in email and "." in email.split("@")[-1])
+
+
+def _validate_dream_text(dream: str) -> Optional[str]:
+    if not dream:
+        return "Missing 'dream' or 'text'."
+    if len(dream.strip()) < MIN_DREAM_LENGTH:
+        return f"Dream text is too short. Please enter at least {MIN_DREAM_LENGTH} characters."
+    if len(dream) > MAX_DREAM_LENGTH:
+        return f"Dream text is too long. Maximum allowed is {MAX_DREAM_LENGTH} characters."
+    return None
+
+
 # ============================================================
 # File utilities
 # ============================================================
@@ -388,6 +419,7 @@ def _read_json_file(path: Path, default: Any):
 
 def _write_json_file_atomic(path: Path, data: Any):
     try:
+        path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         tmp.replace(path)
@@ -670,7 +702,7 @@ def _stripe_dream_pack_ok() -> bool:
 
 def _stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
     email = (email or "").strip().lower()
-    if not email or "@" not in email:
+    if not _validate_email(email):
         return (False, "")
 
     if not stripe or not STRIPE_SECRET_KEY:
@@ -1429,36 +1461,6 @@ def _build_doctrine_interpretation(
         logic_summary_bits.append(f"location detected: {', '.join(location_names)}")
     logic_summary = _ensure_terminal_punct("Logic layer — " + "; ".join(logic_summary_bits)) if logic_summary_bits else ""
 
-    if override_hit:
-        spiritual = override_hit["spiritual"] or "A special doctrine override applied to this dream."
-        physical = override_hit["physical"] or "This override may affect how the dream shows up in daily life."
-        action = override_hit["action"] or "Pray for confirmation and respond with discernment."
-
-        full_parts = [opening_tpl]
-        if logic_summary:
-            full_parts.append(logic_summary)
-        full_parts.append(spiritual)
-        if physical:
-            full_parts.append(physical)
-        if action:
-            full_parts.append(action_tpl.format(action=_strip_trailing_punct(action)))
-        full_parts.append(closing_tpl)
-
-        full_interpretation = "\n\n".join([_ensure_terminal_punct(x) for x in full_parts if x and _strip_trailing_punct(x)])
-
-        return {
-            "interpretation": {
-                "spiritual_meaning": _ensure_terminal_punct(spiritual),
-                "effects_in_physical_realm": _ensure_terminal_punct(physical) if physical else "No clear physical effects were generated.",
-                "what_to_do": _ensure_terminal_punct(action) if action else "Pray for wisdom and confirmation.",
-            },
-            "full_interpretation": full_interpretation,
-            "top_symbols": top_symbols,
-            "logic_summary": logic_summary,
-            "override_applied": True,
-            "override_name": override_hit.get("override_name", ""),
-        }
-
     spiritual_lines: List[str] = []
     physical_lines: List[str] = []
     action_lines: List[str] = []
@@ -1478,47 +1480,47 @@ def _build_doctrine_interpretation(
     location_phys_mod = _join_nonempty([_get_location_physical_area_meaning(x["row"]) for x in locations], "; ")
     location_action_mod = _join_nonempty([_get_location_action_modifier(x["row"]) for x in locations], "; ")
 
+    override_spiritual = _strip_trailing_punct((override_hit or {}).get("spiritual", ""))
+    override_physical = _strip_trailing_punct((override_hit or {}).get("physical", ""))
+    override_action = _strip_trailing_punct((override_hit or {}).get("action", ""))
+
     for row, _sc, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
         symbol = _get_base_symbol_input(row)
         base_meaning = _get_base_symbol_meaning(row)
         base_effects = _get_base_symbol_effects(row)
         base_action = _get_base_symbol_action(row)
 
-        final_meaning = _join_nonempty([base_meaning, behavior_mod, state_mod, location_mod], " ")
-        final_effects = _join_nonempty([base_effects, behavior_phys_mod, state_phys_mod, location_phys_mod], " ")
-        final_action = _join_nonempty([base_action, behavior_action_mod, state_action_mod, location_action_mod], " Then, ")
+        core_meaning = override_spiritual or base_meaning
 
-        if final_meaning:
-            rendered_default = default_tpl
-            if "{behavior_effect}" in rendered_default or "{state_effect}" in rendered_default or "{location_effect}" in rendered_default:
-                text = rendered_default.format(
-                    symbol=_title_case_symbol(symbol),
-                    meaning=_strip_trailing_punct(base_meaning or final_meaning),
-                    behavior_effect=_strip_trailing_punct(behavior_mod or "no special behavior was detected"),
-                    state_effect=_strip_trailing_punct(state_mod or "no special state was detected"),
-                    location_effect=_strip_trailing_punct(location_mod or "no special location was detected"),
-                )
-                spiritual_lines.append(_ensure_terminal_punct(text))
-            else:
-                spiritual_lines.append(
-                    _ensure_terminal_punct(symbol_tpl.format(
-                        symbol=_title_case_symbol(symbol),
-                        meaning=_strip_trailing_punct(final_meaning)
-                    ))
-                )
+        rendered_default = default_tpl.format(
+            symbol=_title_case_symbol(symbol),
+            meaning=_strip_trailing_punct(core_meaning or "a meaningful condition"),
+            behavior_effect=_strip_trailing_punct(behavior_mod or "no special behavior was detected"),
+            state_effect=_strip_trailing_punct(state_mod or "no special state was detected"),
+            location_effect=_strip_trailing_punct(location_mod or "no special location was detected"),
+        )
+        spiritual_lines.append(_ensure_terminal_punct(rendered_default))
 
+        final_effects = _join_nonempty(
+            [override_physical, base_effects, behavior_phys_mod, state_phys_mod, location_phys_mod],
+            " "
+        )
         if final_effects:
             physical_lines.append(
-                _ensure_terminal_punct(physical_tpl.format(
-                    effect=_strip_trailing_punct(final_effects)
-                ))
+                _ensure_terminal_punct(
+                    physical_tpl.format(effect=_strip_trailing_punct(final_effects))
+                )
             )
 
+        final_action = _join_nonempty(
+            [base_action, behavior_action_mod, state_action_mod, location_action_mod, override_action],
+            " Then, "
+        )
         if final_action:
             action_lines.append(
-                _ensure_terminal_punct(action_tpl.format(
-                    action=_strip_trailing_punct(final_action)
-                ))
+                _ensure_terminal_punct(
+                    action_tpl.format(action=_strip_trailing_punct(final_action))
+                )
             )
 
     spiritual_lines = _dedupe_preserve_order(spiritual_lines)
@@ -1551,8 +1553,8 @@ def _build_doctrine_interpretation(
         "full_interpretation": full_interpretation,
         "top_symbols": top_symbols,
         "logic_summary": logic_summary,
-        "override_applied": False,
-        "override_name": "",
+        "override_applied": bool(override_hit),
+        "override_name": (override_hit or {}).get("override_name", ""),
     }
 
 
@@ -1783,11 +1785,12 @@ def _upgrade_html_option_a() -> str:
     *{{box-sizing:border-box}}
     body{{margin:0;background:radial-gradient(900px 600px at 50% -100px, rgba(212,175,55,.14), transparent 55%), var(--bg);
       color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:26px;}}
-    .wrap{{max-width:980px;margin:0 auto;display:grid;grid-template-columns:1.05fr .95fr;gap:16px}}
+    .wrap{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.1fr .9fr;gap:16px}}
     @media (max-width: 920px){{.wrap{{grid-template-columns:1fr}}}}
     .card{{background:linear-gradient(180deg, rgba(212,175,55,.07), transparent 180px), var(--panel);
       border:1px solid var(--edge);border-radius:18px;padding:18px;box-shadow:0 14px 50px rgba(0,0,0,.6);}}
     h1{{margin:0 0 8px;font-size:20px;letter-spacing:.2px}}
+    h2{{margin:0 0 8px;font-size:18px;letter-spacing:.2px}}
     .sub{{color:var(--muted);font-size:13px;line-height:1.4;margin-bottom:14px}}
     .pill{{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(212,175,55,.10);
       border:1px solid rgba(212,175,55,.25);color:var(--gold);font-size:12px;margin-bottom:10px}}
@@ -1802,41 +1805,48 @@ def _upgrade_html_option_a() -> str:
     .small{{margin-top:10px;color:var(--muted);font-size:12px}}
     .err{{margin-top:10px;color:#ffb4b4;font-size:12px;white-space:pre-wrap}}
     .ok{{margin-top:10px;color:#b9ffb9;font-size:12px;white-space:pre-wrap}}
+    .stack{{display:grid;gap:14px}}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <div class="pill">Unlock unlimited access</div>
-      <h1>Full Cultural Dream Access</h1>
+      <div class="pill">Unlock dream access</div>
+      <h1>JTS Dream Interpreter</h1>
       <div class="sub">
-        Secure checkout powered by Stripe. If you already subscribed, enter the same email and unlock instantly.
+        Choose the option that fits you best. Use the same email at checkout and later for access verification.
       </div>
       <ul>
-        <li>Unlimited interpretations</li>
-        <li>Advanced Seal of the Dream</li>
-        <li>Full spiritual meaning + effects + what to do</li>
-        <li>Cancel anytime</li>
+        <li>Subscription: ongoing access</li>
+        <li>Dream Pack: {DREAM_PACK_USES} dream interpretations for a one-time purchase</li>
+        <li>Secure checkout powered by Stripe</li>
       </ul>
-      <div class="small">Educational & spiritual insight only. Not medical, psychological, or legal advice.</div>
+      <div class="small">Educational and spiritual insight only. Not medical, psychological, legal, or financial advice.</div>
     </div>
 
-    <div class="card">
-      <h1>Enter your email</h1>
-      <div class="sub">Use the email you used at checkout.</div>
+    <div class="stack">
+      <div class="card">
+        <h2>Enter your email</h2>
+        <div class="sub">Use the same email for unlocking after payment.</div>
 
-      <label>Email</label>
-      <input id="email" type="email" placeholder="you@example.com" />
+        <label>Email</label>
+        <input id="email" type="email" placeholder="you@example.com" />
 
-      <button class="btn2" id="unlock">Unlock Access</button>
+        <button class="btn2" id="unlock">Unlock Existing Access</button>
 
-      <form id="checkoutForm" action="/create-checkout-session" method="POST">
-        <input type="hidden" name="email" id="emailHidden" value="" />
-        <button class="btn" type="submit">Continue to Checkout</button>
-      </form>
+        <form id="checkoutForm" action="/create-checkout-session" method="POST">
+          <input type="hidden" name="email" id="emailHidden" value="" />
+          <button class="btn" type="submit">Start Subscription</button>
+        </form>
 
-      <div class="err" id="err"></div>
-      <div class="ok" id="ok"></div>
+        <form id="dreamPackForm" action="/create-dream-pack-checkout-session" method="POST">
+          <input type="hidden" name="email" id="emailHiddenPack" value="" />
+          <button class="btn2" type="submit">Buy {DREAM_PACK_USES} Dreams</button>
+        </form>
+
+        <div class="err" id="err"></div>
+        <div class="ok" id="ok"></div>
+      </div>
     </div>
   </div>
 
@@ -1845,14 +1855,20 @@ def _upgrade_html_option_a() -> str:
   const ok = document.getElementById('ok');
   const emailInput = document.getElementById('email');
   const emailHidden = document.getElementById('emailHidden');
+  const emailHiddenPack = document.getElementById('emailHiddenPack');
 
   function getEmail(){{
     return (emailInput.value || '').trim();
   }}
 
-  emailInput.addEventListener('input', () => {{
-    emailHidden.value = getEmail();
-  }});
+  function syncEmail(){{
+    const value = getEmail();
+    emailHidden.value = value;
+    emailHiddenPack.value = value;
+  }}
+
+  emailInput.addEventListener('input', syncEmail);
+  syncEmail();
 
   document.getElementById('unlock').addEventListener('click', async () => {{
     err.textContent = '';
@@ -1881,8 +1897,6 @@ def _upgrade_html_option_a() -> str:
       window.location.href = data.return_url || {json.dumps(RETURN_URL)};
     }}, 700);
   }});
-
-  emailHidden.value = getEmail();
 </script>
 </body>
 </html>"""
@@ -1911,7 +1925,14 @@ def health():
         "has_spreadsheet_id": bool(SPREADSHEET_ID),
         "allowed_origins": allowed_origins,
         "match_mode": "strict_word_boundary_with_longest_phrase_priority_and_overlap_guard",
-        "brain_layers": ["symbol_category_logic", "behavior_logic", "size_logic", "location_logic", "override_logic", "template_logic"],
+        "brain_layers": [
+            "symbol_category_logic",
+            "behavior_logic",
+            "size_logic",
+            "location_logic",
+            "override_logic",
+            "template_logic",
+        ],
         "debug_match": DEBUG_MATCH,
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
@@ -1935,6 +1956,7 @@ def health():
         "return_url": RETURN_URL,
         "session_premium": _is_premium_session(),
         "session_email": _get_session_email(),
+        "session_dream_pack": _get_dream_pack_status(_get_session_email()),
     })
 
 
@@ -1970,7 +1992,7 @@ def check_access():
     data = request.get_json(silent=True) or {}
     email = (data.get("email") or "").strip().lower()
 
-    if not email or "@" not in email:
+    if not _validate_email(email):
         return jsonify({"ok": False, "error": "Please enter a valid email."}), 400
 
     is_active, customer_id = _stripe_active_subscription_for_email(email)
@@ -1978,7 +2000,11 @@ def check_access():
         _set_premium_session(email)
         _mark_subscriber(email, True, customer_id)
 
-        resp = make_response(jsonify({"ok": True, "access": "active", "return_url": RETURN_URL}))
+        resp = make_response(jsonify({
+            "ok": True,
+            "access": "active",
+            "return_url": RETURN_URL,
+        }))
         resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
         return resp
 
@@ -2005,7 +2031,7 @@ def check_access():
 def create_checkout_session():
     if not _stripe_config_ok():
         return make_response(
-            "Stripe not configured. Ensure STRIPE_SECRET_KEY and PRICE_WEEKLY (or PRICE_MONTHLY) are set.",
+            "Stripe not configured. Ensure STRIPE_SECRET_KEY and PRICE_WEEKLY or PRICE_MONTHLY are set.",
             500,
         )
 
@@ -2016,8 +2042,8 @@ def create_checkout_session():
         data = request.get_json(silent=True) or {}
         email = (data.get("email") or "").strip().lower()
 
-    if not email or "@" not in email:
-        return make_response("Missing email. Please enter your email on the upgrade page.", 400)
+    if not _validate_email(email):
+        return make_response("Missing email. Please enter a valid email on the upgrade page.", 400)
 
     stripe.api_key = STRIPE_SECRET_KEY
 
@@ -2026,10 +2052,14 @@ def create_checkout_session():
             mode="subscription",
             line_items=[{"price": DEFAULT_STRIPE_PRICE_ID, "quantity": 1}],
             customer_email=email,
+            metadata={
+                "purchase_type": "subscription",
+                "email": email,
+            },
             success_url=url_for("payment_success", _external=True) + f"?email={email}",
             cancel_url=url_for("upgrade", _external=True),
         )
-        return redirect(checkout.url)
+        return redirect(checkout.url, code=303)
     except Exception as e:
         return make_response(f"Stripe error: {str(e)}", 500)
 
@@ -2049,7 +2079,7 @@ def create_dream_pack_checkout_session():
         data = request.get_json(silent=True) or {}
         email = (data.get("email") or "").strip().lower()
 
-    if not email or "@" not in email:
+    if not _validate_email(email):
         return make_response("Missing email for dream pack checkout.", 400)
 
     stripe.api_key = STRIPE_SECRET_KEY
@@ -2063,11 +2093,12 @@ def create_dream_pack_checkout_session():
                 "purchase_type": "dream_pack",
                 "dream_pack_uses": str(DREAM_PACK_USES),
                 "dream_pack_hours": str(DREAM_PACK_HOURS),
+                "email": email,
             },
             success_url=url_for("dream_pack_success", _external=True) + f"?email={email}",
             cancel_url=url_for("upgrade", _external=True),
         )
-        return redirect(checkout.url)
+        return redirect(checkout.url, code=303)
     except Exception as e:
         return make_response(f"Stripe dream pack error: {str(e)}", 500)
 
@@ -2076,7 +2107,7 @@ def create_dream_pack_checkout_session():
 def payment_success():
     email = (request.args.get("email") or "").strip().lower()
 
-    if email and "@" in email:
+    if _validate_email(email):
         is_active, customer_id = _stripe_active_subscription_for_email(email)
         if is_active:
             _set_premium_session(email)
@@ -2108,7 +2139,7 @@ def payment_success():
 def dream_pack_success():
     email = (request.args.get("email") or "").strip().lower()
 
-    if email and "@" in email:
+    if _validate_email(email):
         _set_buyer_session(email)
         _mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
 
@@ -2121,7 +2152,7 @@ def dream_pack_success():
           .muted{{color:#b6b6c3;font-size:13px;margin-top:8px}}
         </style></head><body>
         <div class="card">
-          <h2 style="margin:0 0 8px">3 Dream Pack Activated</h2>
+          <h2 style="margin:0 0 8px">{DREAM_PACK_USES} Dream Pack Activated</h2>
           <div class="muted">Sending you back to the interpreter…</div>
         </div>
         <script>
@@ -2157,10 +2188,10 @@ def stripe_webhook():
         metadata = session_obj.get("metadata") or {}
         purchase_type = (metadata.get("purchase_type") or "").strip().lower()
 
-        if email and mode == "subscription":
+        if _validate_email(email) and mode == "subscription":
             _mark_subscriber(email, True, customer_id)
 
-        if email and mode == "payment" and purchase_type == "dream_pack":
+        if _validate_email(email) and mode == "payment" and purchase_type == "dream_pack":
             _mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
 
     if event["type"] == "customer.subscription.deleted":
@@ -2194,8 +2225,9 @@ def interpret():
     _log("REQUEST ORIGIN:", request.headers.get("Origin", ""))
     _log("REQUEST REFERER:", request.headers.get("Referer", ""))
 
-    if not dream:
-        return jsonify({"error": "Missing 'dream' or 'text'"}), 400
+    validation_error = _validate_dream_text(dream)
+    if validation_error:
+        return jsonify({"error": validation_error}), 400
 
     is_paid = _is_premium_session()
     session_email = _get_session_email()
@@ -2212,7 +2244,7 @@ def interpret():
             return jsonify({
                 "blocked": True,
                 "reason": "free_limit_reached",
-                "message": f"You’ve used your {FREE_TRIES} free tries. Buy 3 more dreams for $1 or subscribe to continue.",
+                "message": f"You’ve used your {FREE_TRIES} free tries. Buy {DREAM_PACK_USES} more dreams or subscribe to continue.",
                 "redirect": url_for("upgrade"),
                 "free_uses_left": 0,
                 "access": "blocked",
@@ -2313,8 +2345,7 @@ def interpret():
 
                 top_symbols = built["top_symbols"]
                 share_phrase = (
-                    f"My dream had symbols like: {', '.join(top_symbols[:3])}. "
-                    f"I decoded it on Jamaican True Stories."
+                    f"My dream had symbols like: {', '.join(top_symbols[:3])}. I decoded it on Jamaican True Stories."
                     if top_symbols else
                     "I decoded my dream on Jamaican True Stories."
                 )
@@ -2354,6 +2385,10 @@ def interpret():
                 }
 
                 _log("TOP SYMBOLS RETURNED:", top_symbols)
+                _log("MATCHED BEHAVIORS:", [b["name"] for b in behaviors])
+                _log("MATCHED STATES:", [s["name"] for s in states])
+                _log("MATCHED LOCATIONS:", [l["name"] for l in locations])
+                _log("OVERRIDE:", override_hit)
                 _log("INTERPRET RESPONSE MODE:", "doctrine_matched")
                 resp = make_response(jsonify(payload))
 
@@ -2549,6 +2584,7 @@ def debug_config():
         "return_url": RETURN_URL,
         "session_premium": _is_premium_session(),
         "session_email": _get_session_email(),
+        "session_dream_pack": _get_dream_pack_status(_get_session_email()),
         "keyword_guard_enabled": KEYWORD_GUARD_ENABLED,
         "doctrine_mode_enabled": DOCTRINE_MODE,
         "doctrine_sheet_names": DOCTRINE_SHEET_NAMES,

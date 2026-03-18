@@ -1,30 +1,30 @@
 # app.py — Jamaican True Stories Dream Interpreter
-# Option A: Stripe-only access, HYBRID FREE GATE
+# Doctrine Engine Version
 #
-# Hybrid brain version:
-# - Google Sheet stores:
-#   - symbol definitions
-#   - keywords
-#   - custom meanings
-#   - special exceptions
-# - Code stores:
-#   - symbol category logic
-#   - behavior logic
-#   - size logic
-#   - location logic
-#   - priority / combining logic
+# Supports:
+# - Stripe-only premium access
+# - Hybrid free gate (cookie + IP shadow)
+# - Legacy single-sheet fallback
+# - Doctrine Engine multi-sheet mode:
+#     BaseSymbols
+#     BehaviorRules
+#     SizeStateRules
+#     LocationRules
+#     OverrideRules
+#     OutputTemplates
 #
-# Env vars (Render):
-# - RETURN_URL=https://jamaicantruestories.com/pages/dream-interpreter
-# - ALLOWED_ORIGINS=...
-# - SPREADSHEET_ID, WORKSHEET_NAME
-# - GOOGLE_SERVICE_ACCOUNT_JSON (or GOOGLE_SERVICE_ACCOUNT_FILE)
-# - FREE_QUOTA, FREE_TRIES_COOKIE, SHADOW_WINDOW_HOURS
-# - COUNTS_FILE, SUBSCRIBERS_FILE
-# - STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+# Primary env vars:
+# - RETURN_URL
+# - ALLOWED_ORIGINS
+# - SPREADSHEET_ID
+# - GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE
+# - FREE_QUOTA / FREE_TRIES_COOKIE / SHADOW_WINDOW_HOURS
+# - COUNTS_FILE / SUBSCRIBERS_FILE
+# - STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
 # - PRICE_WEEKLY / PRICE_MONTHLY
-# - ADMIN_KEY (or JTS_ADMIN_KEY / ADMIN_TOKEN / JTS_ADMIN)
+# - ADMIN_KEY or JTS_ADMIN_KEY / ADMIN_TOKEN / JTS_ADMIN
 # - DEBUG_MATCH=1 (optional)
+# - DOCTRINE_MODE=1 (default on)
 
 import os
 import json
@@ -50,9 +50,9 @@ except Exception:
     stripe = None
 
 
-# ----------------------------
+# ============================================================
 # App setup
-# ----------------------------
+# ============================================================
 app = Flask(__name__)
 
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "").strip() or secrets.token_hex(32)
@@ -76,9 +76,10 @@ CORS(
 )
 
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
-WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
-
 RETURN_URL = os.getenv("RETURN_URL", "https://jamaicantruestories.com/pages/dream-interpreter").strip()
+
+# Legacy fallback
+WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
 ADMIN_KEY = (
     os.getenv("JTS_ADMIN_KEY", "").strip()
@@ -93,19 +94,38 @@ SCOPES = [
 ]
 
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", os.getenv("SHEET_CACHE_TTL", "120")))
-_CACHE: Dict[str, Any] = {"loaded_at": 0.0, "rows": [], "headers": []}
-
 DEBUG_MATCH = os.getenv("DEBUG_MATCH", "").strip().lower() in {"1", "true", "yes", "on"}
 
 NARRATIVE_ENABLED = os.getenv("NARRATIVE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
 NARRATIVE_MAX_SYMBOLS = int(os.getenv("NARRATIVE_MAX_SYMBOLS", "3"))
 
+DOCTRINE_MODE = os.getenv("DOCTRINE_MODE", "1").strip().lower() not in {"0", "false", "no", "off"}
 KEYWORD_GUARD_ENABLED = True
 
 
-# ----------------------------
+# ============================================================
+# Doctrine sheet names
+# ============================================================
+SHEET_BASE_SYMBOLS = os.getenv("SHEET_BASE_SYMBOLS", "BaseSymbols").strip()
+SHEET_BEHAVIOR_RULES = os.getenv("SHEET_BEHAVIOR_RULES", "BehaviorRules").strip()
+SHEET_SIZE_STATE_RULES = os.getenv("SHEET_SIZE_STATE_RULES", "SizeStateRules").strip()
+SHEET_LOCATION_RULES = os.getenv("SHEET_LOCATION_RULES", "LocationRules").strip()
+SHEET_OVERRIDE_RULES = os.getenv("SHEET_OVERRIDE_RULES", "OverrideRules").strip()
+SHEET_OUTPUT_TEMPLATES = os.getenv("SHEET_OUTPUT_TEMPLATES", "OutputTemplates").strip()
+
+DOCTRINE_SHEET_NAMES = [
+    SHEET_BASE_SYMBOLS,
+    SHEET_BEHAVIOR_RULES,
+    SHEET_SIZE_STATE_RULES,
+    SHEET_LOCATION_RULES,
+    SHEET_OVERRIDE_RULES,
+    SHEET_OUTPUT_TEMPLATES,
+]
+
+
+# ============================================================
 # Hybrid Gate Settings
-# ----------------------------
+# ============================================================
 FREE_TRIES = int(os.getenv("FREE_QUOTA", os.getenv("FREE_TRIES", "3")))
 COOKIE_NAME = os.getenv("FREE_TRIES_COOKIE", "jts_free_tries_used")
 SHADOW_WINDOW_HOURS = int(os.getenv("SHADOW_WINDOW_HOURS", "72"))
@@ -117,9 +137,9 @@ USAGE_COUNTS_PATH = Path(COUNTS_FILE)
 SUBSCRIBERS_PATH = Path(SUBSCRIBERS_FILE)
 
 
-# ----------------------------
+# ============================================================
 # Stripe Settings
-# ----------------------------
+# ============================================================
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
 
@@ -128,17 +148,24 @@ PRICE_MONTHLY = os.getenv("PRICE_MONTHLY", "").strip()
 DEFAULT_STRIPE_PRICE_ID = PRICE_WEEKLY or PRICE_MONTHLY
 
 
-# ----------------------------
+# ============================================================
 # Cookie settings
-# ----------------------------
+# ============================================================
 COOKIE_SAMESITE = "None"
 COOKIE_SECURE = True
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
 
-# ----------------------------
+# ============================================================
+# Caches
+# ============================================================
+_LEGACY_CACHE: Dict[str, Any] = {"loaded_at": 0.0, "rows": [], "headers": []}
+_DOCTRINE_CACHE: Dict[str, Any] = {"loaded_at": 0.0, "sheets": {}, "headers": {}}
+
+
+# ============================================================
 # Helpers
-# ----------------------------
+# ============================================================
 def _preflight_ok():
     return make_response("", 204)
 
@@ -175,8 +202,6 @@ def _is_useless_keyword(token: str) -> bool:
     token = _normalize_text(token)
     if not token:
         return True
-
-    # Ignore pure numbers like "1", "3", "2024"
     if token.isdigit():
         return True
 
@@ -184,28 +209,39 @@ def _is_useless_keyword(token: str) -> bool:
     if not words:
         return True
 
-    # Single-word junk protection
     if len(words) == 1:
         w = words[0]
-
-        # Ignore stop-words
         if w in STOP_WORDS:
             return True
-
-        # Ignore very short single words like "i", "to", "an"
         if len(w) < 3:
             return True
 
     return False
 
 
+def _split_keywords(s: str) -> List[str]:
+    if not s:
+        return []
+
+    parts = re.split(r"[,\|;]+", s)
+    out = []
+    seen = set()
+
+    for p in parts:
+        p = _normalize_text(p)
+        if not p:
+            continue
+        if KEYWORD_GUARD_ENABLED and _is_useless_keyword(p):
+            continue
+        if p in seen:
+            continue
+        seen.add(p)
+        out.append(p)
+    return out
+
+
 def _sanitize_keywords_for_storage(keywords_raw: str) -> str:
-    """
-    Cleans keywords before saving them from the admin panel.
-    Removes junk triggers, dedupes, and returns a normalized comma-separated string.
-    """
-    cleaned = _split_keywords(keywords_raw)
-    return ", ".join(cleaned)
+    return ", ".join(_split_keywords(keywords_raw))
 
 
 def _log(*args):
@@ -252,36 +288,22 @@ def _format_label_value(symbol: str, text: str) -> str:
     return f"{symbol}: {text}"
 
 
-def _invalidate_cache():
-    _CACHE["loaded_at"] = 0.0
-    _CACHE["rows"] = []
-    _CACHE["headers"] = []
-
-
-def _sentence_join(parts: List[str]) -> str:
-    parts = [_strip_trailing_punct(x) for x in parts if x and _strip_trailing_punct(x)]
-    if not parts:
-        return ""
-    return _ensure_terminal_punct(" ".join(parts))
-
-
 def _dedupe_preserve_order(items: List[str]) -> List[str]:
     seen = set()
     out = []
     for x in items:
         x = _clean_sentence(x)
-        if not x or x in seen:
+        if not x:
             continue
-        seen.add(x)
+        key = x.lower()
+        if key in seen:
+            continue
+        seen.add(key)
         out.append(x)
     return out
 
 
 def _safe_debug_payload_preview(data: Dict[str, Any], max_len: int = 500) -> Dict[str, Any]:
-    """
-    Returns a trimmed copy of request JSON for debug logs.
-    Keeps logs readable and avoids giant cursed walls of text.
-    """
     try:
         preview = {}
         for k, v in (data or {}).items():
@@ -294,9 +316,50 @@ def _safe_debug_payload_preview(data: Dict[str, Any], max_len: int = 500) -> Dic
         return {"_debug_preview_error": True}
 
 
-# ----------------------------
-# File utilities (atomic JSON)
-# ----------------------------
+def _compile_boundary_regex(token: str) -> re.Pattern:
+    token_n = _normalize_text(token)
+    if not token_n:
+        return re.compile(r"(?!x)x")
+    return re.compile(rf"(?<!\w){re.escape(token_n)}(?!\w)")
+
+
+def _tokenize_words(s: str) -> List[str]:
+    return [w for w in _normalize_text(s).split() if w]
+
+
+def _contains_phrase(text_norm: str, phrase: str) -> bool:
+    if not text_norm or not phrase:
+        return False
+    return bool(_compile_boundary_regex(phrase).search(text_norm))
+
+
+def _find_phrase_spans(text: str, phrase: str) -> List[Tuple[int, int]]:
+    text_n = _normalize_text(text)
+    phrase_n = _normalize_text(phrase)
+    if not text_n or not phrase_n:
+        return []
+    rx = re.compile(rf"(?<!\w){re.escape(phrase_n)}(?!\w)")
+    return [m.span() for m in rx.finditer(text_n)]
+
+
+def _spans_overlap(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
+    return not (a[1] <= b[0] or b[1] <= a[0])
+
+
+def _is_span_blocked(span: Tuple[int, int], used_spans: List[Tuple[int, int]]) -> bool:
+    for u in used_spans:
+        if _spans_overlap(span, u):
+            return True
+    return False
+
+
+def _normalize_yes_no(v: str) -> bool:
+    return str(v or "").strip().lower() in {"yes", "y", "true", "1", "active", "on"}
+
+
+# ============================================================
+# File utilities
+# ============================================================
 def _read_json_file(path: Path, default: Any):
     try:
         if not path.exists():
@@ -328,9 +391,9 @@ def _ensure_files_exist():
 _ensure_files_exist()
 
 
-# ----------------------------
-# Hybrid Gate: cookie + IP shadow
-# ----------------------------
+# ============================================================
+# Hybrid Gate
+# ============================================================
 def _get_client_ip() -> str:
     xff = request.headers.get("X-Forwarded-For", "")
     if xff:
@@ -428,14 +491,12 @@ def _free_tries_remaining_after_this(effective_used_before: int) -> int:
     return max(0, FREE_TRIES - (effective_used_before + 1))
 
 
-# ----------------------------
-# Subscribers file helpers
-# ----------------------------
+# ============================================================
+# Subscriber helpers
+# ============================================================
 def _load_subscribers() -> Dict[str, Any]:
     data = _read_json_file(SUBSCRIBERS_PATH, {})
-    if not isinstance(data, dict):
-        return {}
-    return data
+    return data if isinstance(data, dict) else {}
 
 
 def _save_subscribers(data: Dict[str, Any]):
@@ -456,9 +517,9 @@ def _mark_subscriber(email: str, is_active: bool, stripe_customer_id: str = ""):
     _save_subscribers(subs)
 
 
-# ----------------------------
-# Stripe-only premium session
-# ----------------------------
+# ============================================================
+# Stripe premium session
+# ============================================================
 def _get_session_email() -> str:
     return (session.get("subscriber_email") or "").strip().lower()
 
@@ -510,9 +571,112 @@ def _stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
         return (False, "")
 
 
-# ----------------------------
-# Sheet field getters
-# ----------------------------
+# ============================================================
+# Google Sheets access
+# ============================================================
+def _get_credentials() -> Credentials:
+    raw = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+    if raw:
+        raw_fixed = raw.replace("\\n", "\n")
+        info = json.loads(raw_fixed)
+        return Credentials.from_service_account_info(info, scopes=SCOPES)
+
+    cred_path = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "credentials.json")
+    if not os.path.exists(cred_path):
+        raise RuntimeError(
+            "Missing Google credentials. Set GOOGLE_SERVICE_ACCOUNT_JSON in Render "
+            "or provide credentials.json via GOOGLE_SERVICE_ACCOUNT_FILE."
+        )
+    return Credentials.from_service_account_file(cred_path, scopes=SCOPES)
+
+
+def _get_spreadsheet():
+    if not SPREADSHEET_ID:
+        raise RuntimeError("SPREADSHEET_ID env var is not set.")
+    creds = _get_credentials()
+    gc = gspread.authorize(creds)
+    return gc.open_by_key(SPREADSHEET_ID)
+
+
+def _worksheet_to_rows(ws) -> Tuple[List[str], List[Dict[str, str]]]:
+    values = ws.get_all_values()
+    if not values or len(values) < 1:
+        return [], []
+
+    headers = [_normalize_header(h) for h in values[0]]
+    rows: List[Dict[str, str]] = []
+
+    for r in values[1:]:
+        if len(r) < len(headers):
+            r = r + [""] * (len(headers) - len(r))
+        item = {headers[i]: (r[i] or "").strip() for i in range(len(headers))}
+        rows.append(item)
+
+    return headers, rows
+
+
+def _invalidate_all_caches():
+    _LEGACY_CACHE["loaded_at"] = 0.0
+    _LEGACY_CACHE["rows"] = []
+    _LEGACY_CACHE["headers"] = []
+    _DOCTRINE_CACHE["loaded_at"] = 0.0
+    _DOCTRINE_CACHE["sheets"] = {}
+    _DOCTRINE_CACHE["headers"] = {}
+
+
+def _load_legacy_sheet_rows(force: bool = False) -> List[Dict]:
+    now = time.time()
+    if (not force) and _LEGACY_CACHE["rows"] and (now - _LEGACY_CACHE["loaded_at"] < CACHE_TTL_SECONDS):
+        return _LEGACY_CACHE["rows"]
+
+    sh = _get_spreadsheet()
+    ws = sh.worksheet(WORKSHEET_NAME)
+    headers, rows = _worksheet_to_rows(ws)
+
+    _LEGACY_CACHE["rows"] = rows
+    _LEGACY_CACHE["headers"] = headers
+    _LEGACY_CACHE["loaded_at"] = now
+    return rows
+
+
+def _load_doctrine_sheets(force: bool = False) -> Dict[str, List[Dict]]:
+    now = time.time()
+    if (not force) and _DOCTRINE_CACHE["sheets"] and (now - _DOCTRINE_CACHE["loaded_at"] < CACHE_TTL_SECONDS):
+        return _DOCTRINE_CACHE["sheets"]
+
+    sh = _get_spreadsheet()
+
+    sheets_data: Dict[str, List[Dict]] = {}
+    headers_map: Dict[str, List[str]] = {}
+
+    for name in DOCTRINE_SHEET_NAMES:
+        try:
+            ws = sh.worksheet(name)
+            headers, rows = _worksheet_to_rows(ws)
+            sheets_data[name] = rows
+            headers_map[name] = headers
+        except Exception as e:
+            _log(f"Doctrine sheet load failed for {name!r}: {e}")
+            sheets_data[name] = []
+            headers_map[name] = []
+
+    _DOCTRINE_CACHE["sheets"] = sheets_data
+    _DOCTRINE_CACHE["headers"] = headers_map
+    _DOCTRINE_CACHE["loaded_at"] = now
+    return sheets_data
+
+
+def _doctrine_sheets_available() -> bool:
+    try:
+        sheets = _load_doctrine_sheets(force=False)
+        return len(sheets.get(SHEET_BASE_SYMBOLS, [])) > 0
+    except Exception:
+        return False
+
+
+# ============================================================
+# Legacy field getters
+# ============================================================
 def _get_symbol_cell(row: Dict) -> str:
     return (
         row.get("input")
@@ -531,6 +695,10 @@ def _get_spiritual_meaning_cell(row: Dict) -> str:
         or row.get("spiritual_meaning")
         or row.get("spiritual")
         or row.get("meaning")
+        or row.get("base spiritual meaning")
+        or row.get("base_spiritual_meaning")
+        or row.get("final spiritual meaning")
+        or row.get("final_spiritual_meaning")
         or ""
     ).strip()
 
@@ -542,6 +710,10 @@ def _get_effects_cell(row: Dict) -> str:
         or row.get("physical effects")
         or row.get("physical_effects")
         or row.get("effects")
+        or row.get("base physical effects")
+        or row.get("base_physical_effects")
+        or row.get("final physical effects")
+        or row.get("final_physical_effects")
         or ""
     ).strip()
 
@@ -552,6 +724,10 @@ def _get_what_to_do_cell(row: Dict) -> str:
         or row.get("what_to_do")
         or row.get("action")
         or row.get("actions")
+        or row.get("base action")
+        or row.get("base_action")
+        or row.get("final action")
+        or row.get("final_action")
         or ""
     ).strip()
 
@@ -560,124 +736,9 @@ def _get_keywords_cell(row: Dict) -> str:
     return (row.get("keywords") or row.get("keyword") or row.get("tags") or "").strip()
 
 
-# ----------------------------
-# Google credentials + sheet access
-# ----------------------------
-def _get_credentials() -> Credentials:
-    raw = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
-    if raw:
-        raw_fixed = raw.replace("\\n", "\n")
-        info = json.loads(raw_fixed)
-        return Credentials.from_service_account_info(info, scopes=SCOPES)
-
-    cred_path = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "credentials.json")
-    if not os.path.exists(cred_path):
-        raise RuntimeError(
-            "Missing Google credentials. Set GOOGLE_SERVICE_ACCOUNT_JSON in Render "
-            "or provide credentials.json via GOOGLE_SERVICE_ACCOUNT_FILE."
-        )
-    return Credentials.from_service_account_file(cred_path, scopes=SCOPES)
-
-
-def _get_ws():
-    if not SPREADSHEET_ID:
-        raise RuntimeError("SPREADSHEET_ID env var is not set.")
-    creds = _get_credentials()
-    gc = gspread.authorize(creds)
-    sh = gc.open_by_key(SPREADSHEET_ID)
-    ws = sh.worksheet(WORKSHEET_NAME)
-    return ws
-
-
-def _load_sheet_rows(force: bool = False) -> List[Dict]:
-    now = time.time()
-    if (not force) and _CACHE["rows"] and (now - _CACHE["loaded_at"] < CACHE_TTL_SECONDS):
-        return _CACHE["rows"]
-
-    ws = _get_ws()
-    values = ws.get_all_values()
-
-    if not values or len(values) < 2:
-        _CACHE["rows"] = []
-        _CACHE["headers"] = []
-        _CACHE["loaded_at"] = now
-        return []
-
-    headers = [_normalize_header(h) for h in values[0]]
-    rows: List[Dict] = []
-
-    for r in values[1:]:
-        if len(r) < len(headers):
-            r = r + [""] * (len(headers) - len(r))
-        item = {headers[i]: (r[i] or "").strip() for i in range(len(headers))}
-        rows.append(item)
-
-    _CACHE["rows"] = rows
-    _CACHE["headers"] = headers
-    _CACHE["loaded_at"] = now
-    return rows
-
-
-# ----------------------------
-# Matching logic
-# ----------------------------
-def _split_keywords(s: str) -> List[str]:
-    if not s:
-        return []
-
-    parts = re.split(r"[,\|;]+", s)
-    out = []
-    seen = set()
-
-    for p in parts:
-        p = _normalize_text(p)
-        if not p:
-            continue
-
-        if _is_useless_keyword(p):
-            continue
-
-        if p in seen:
-            continue
-
-        seen.add(p)
-        out.append(p)
-
-    return out
-
-
-def _compile_boundary_regex(token: str) -> re.Pattern:
-    token_n = _normalize_text(token)
-    if not token_n:
-        return re.compile(r"(?!x)x")
-    return re.compile(rf"(?<!\w){re.escape(token_n)}(?!\w)")
-
-
-def _tokenize_words(s: str) -> List[str]:
-    s = _normalize_text(s)
-    return [w for w in s.split() if w]
-
-
-def _find_phrase_spans(text: str, phrase: str) -> List[Tuple[int, int]]:
-    text_n = _normalize_text(text)
-    phrase_n = _normalize_text(phrase)
-    if not text_n or not phrase_n:
-        return []
-    rx = re.compile(rf"(?<!\w){re.escape(phrase_n)}(?!\w)")
-    return [m.span() for m in rx.finditer(text_n)]
-
-
-def _spans_overlap(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
-    return not (a[1] <= b[0] or b[1] <= a[0])
-
-
-def _is_span_blocked(span: Tuple[int, int], used_spans: List[Tuple[int, int]]) -> bool:
-    for u in used_spans:
-        if _spans_overlap(span, u):
-            return True
-    return False
-
-
+# ============================================================
+# Legacy matcher
+# ============================================================
 def _symbol_length_penalty(symbol: str) -> int:
     words = [w for w in _normalize_text(symbol).split() if w]
     n = len(words)
@@ -715,8 +776,6 @@ def _score_row_strict(
             candidates.append(("symbol", symbol, 100))
 
     for kw in keywords:
-        if not kw:
-            continue
         if len(_tokenize_words(kw)) > 1:
             candidates.append(("keyword_phrase", kw, 94))
         else:
@@ -746,23 +805,21 @@ def _score_row_strict(
     return 0, None
 
 
-def _match_symbols_strict(
-    dream: str, rows: List[Dict], top_k: int = 3
+def _match_symbols_legacy(
+    dream: str,
+    rows: List[Dict],
+    top_k: int = 3
 ) -> List[Tuple[Dict, int, Optional[Dict[str, Any]]]]:
     dream_norm = _normalize_text(dream)
     if not dream_norm:
         return []
 
-    _log("\n--- DEBUG_MATCH ON ---")
+    _log("\n--- LEGACY DEBUG_MATCH ON ---")
     _log("DREAM_RAW:", repr(dream))
     _log("DREAM_NORM:", repr(dream_norm))
 
     candidates: List[Tuple[Dict, int, Optional[Dict[str, Any]]]] = []
     for row in rows:
-        symbol_raw = _get_symbol_cell(row)
-        if not symbol_raw:
-            continue
-
         sc, hit = _score_row_strict(dream_norm, row, used_spans=[])
         if sc > 0 and hit:
             candidates.append((row, sc, hit))
@@ -783,7 +840,6 @@ def _match_symbols_strict(
     for row, sc, hit in candidates:
         if not hit:
             continue
-
         span = hit.get("span")
         if not span:
             continue
@@ -792,7 +848,6 @@ def _match_symbols_strict(
         sym_key = _normalize_text(sym)
         if not sym_key or sym_key in seen_symbols:
             continue
-
         if _is_span_blocked(span, used_spans):
             continue
 
@@ -804,565 +859,539 @@ def _match_symbols_strict(
             break
 
     if out:
-        _log("MATCHES:")
+        _log("LEGACY MATCHES:")
         for row, sc, hit in out:
             _log(f" - {_get_symbol_cell(row)!r} score={sc} via={hit}")
     else:
-        _log("MATCHES: (none)")
+        _log("LEGACY MATCHES: (none)")
 
     _log("USED_SPANS:", used_spans)
-    _log("--- END DEBUG_MATCH ---\n")
+    _log("--- END LEGACY DEBUG_MATCH ---\n")
     return out
 
 
-# ----------------------------
-# Rule engine / interpreter brain
-# ----------------------------
-_SYMBOL_CATEGORY_MAP: Dict[str, str] = {
-    "dog": "domestic",
-    "cat": "domestic",
-    "cow": "domestic",
-    "goat": "domestic",
-    "sheep": "domestic",
-    "pig": "domestic",
-    "horse": "domestic",
-    "donkey": "domestic",
-    "chicken": "domestic",
-    "duck": "domestic",
-    "rabbit": "domestic",
-    "rooster": "domestic",
-    "puppy": "domestic",
-    "kitten": "domestic",
-
-    "mouse": "rodent",
-    "mice": "rodent",
-    "rat": "rodent",
-    "rats": "rodent",
-    "hamster": "rodent",
-    "squirrel": "rodent",
-    "beaver": "rodent",
-
-    "snake": "reptile",
-    "snakes": "reptile",
-    "lizard": "reptile",
-    "lizards": "reptile",
-    "crocodile": "reptile",
-    "alligator": "reptile",
-    "turtle": "reptile",
-    "chameleon": "reptile",
-    "iguana": "reptile",
-
-    "frog": "amphibian",
-    "frogs": "amphibian",
-    "toad": "amphibian",
-    "toads": "amphibian",
-    "salamander": "amphibian",
-    "newt": "amphibian",
-
-    "spider": "insect",
-    "spiders": "insect",
-    "ant": "insect",
-    "ants": "insect",
-    "bee": "insect",
-    "bees": "insect",
-    "wasp": "insect",
-    "wasps": "insect",
-    "mosquito": "insect",
-    "mosquitoes": "insect",
-    "butterfly": "insect",
-    "butterflies": "insect",
-    "fly": "insect",
-    "flies": "insect",
-    "beetle": "insect",
-    "beetles": "insect",
-    "cockroach": "insect",
-    "cockroaches": "insect",
-    "centipede": "insect",
-    "centipedes": "insect",
-    "cricket": "insect",
-    "grasshopper": "insect",
-
-    "lion": "predator",
-    "tiger": "predator",
-    "leopard": "predator",
-    "cheetah": "predator",
-    "bear": "predator",
-    "wolf": "predator",
-    "wolves": "predator",
-    "hyena": "predator",
-    "fox": "predator",
-    "panther": "predator",
-
-    "monkey": "primate",
-    "monkeys": "primate",
-    "gorilla": "primate",
-    "chimpanzee": "primate",
-    "baboon": "primate",
-
-    "bird": "bird",
-    "birds": "bird",
-    "owl": "bird",
-    "eagle": "bird",
-    "hawk": "bird",
-    "crow": "bird",
-    "raven": "bird",
-    "pigeon": "bird",
-    "dove": "bird",
-    "parrot": "bird",
-    "vulture": "bird",
-    "peacock": "bird",
-
-    "fish": "sea",
-    "fishes": "sea",
-    "shark": "sea",
-    "whale": "sea",
-    "dolphin": "sea",
-    "octopus": "sea",
-    "squid": "sea",
-    "crab": "sea",
-    "lobster": "sea",
-    "shrimp": "sea",
-    "eel": "sea",
-}
-
-_CATEGORY_MEANING: Dict[str, str] = {
-    "domestic": "This symbol often points to relatives, close people, or familiar influences in your life.",
-    "rodent": "This symbol often points to small hidden enemies, gossip, or quiet interference.",
-    "reptile": "This symbol often points to spiritual enemies, deception, or hidden threats.",
-    "amphibian": "This symbol often points to unstable or spiritually uncomfortable influences.",
-    "insect": "This symbol often points to persistent irritation, repeated pressure, traps, or small attacks.",
-    "predator": "This symbol often points to strong enemies, major opposition, or serious pressure.",
-    "primate": "This symbol often points to witchcraft activity, trickery, or mischievous spiritual interference.",
-    "bird": "This symbol often points to monitoring, observation, spiritual messages, or awareness.",
-    "sea": "This symbol often points to blessings, hidden emotional matters, provision, or deep spiritual themes.",
-}
-
-_BEHAVIOR_RULES: List[Dict[str, Any]] = [
-    {"name": "running_away", "keywords": ["running away", "ran away", "fleeing", "fled", "escaped"], "meaning": "retreat", "severity": 0},
-    {"name": "watching", "keywords": ["watching me", "watching", "staring at me", "staring", "looking at me", "looking"], "meaning": "monitoring", "severity": 1},
-    {"name": "attacking", "keywords": ["attacking me", "attacking", "attack"], "meaning": "strong attack", "severity": 3},
-    {"name": "chasing", "keywords": ["chasing me", "chasing", "following me", "following", "coming after me"], "meaning": "pursuit", "severity": 2},
-    {"name": "biting", "keywords": ["biting me", "bit me", "biting", "bite", "stinging me", "stinging", "stung me", "scratching me", "scratching"], "meaning": "harm", "severity": 3},
-    {"name": "hiding", "keywords": ["hiding", "hidden", "hiding from me"], "meaning": "hidden issue", "severity": 1},
-    {"name": "dead", "keywords": ["dead", "killed", "died"], "meaning": "defeated issue", "severity": -1},
-    {"name": "peaceful", "keywords": ["peaceful", "calm", "friendly", "gentle", "just there", "sitting quietly"], "meaning": "awareness", "severity": 0},
-]
-
-_SIZE_RULES: List[Dict[str, Any]] = [
-    {"name": "giant", "keywords": ["giant", "huge", "massive", "enormous", "oversized"], "meaning": "very strong", "severity": 3},
-    {"name": "big", "keywords": ["big", "large"], "meaning": "strong", "severity": 2},
-    {"name": "small", "keywords": ["small", "little", "tiny", "baby"], "meaning": "minor or early-stage", "severity": 1},
-]
-
-_LOCATION_RULES: List[Dict[str, Any]] = [
-    {"name": "house", "keywords": ["in my house", "in the house", "inside my house", "inside the house", "house"], "meaning": "connected to your personal life, home, or household"},
-    {"name": "under_bed", "keywords": ["under my bed", "under the bed"], "meaning": "connected to hidden or private matters"},
-    {"name": "water", "keywords": ["in water", "under water", "in the river", "in the sea", "in the ocean", "in the pond"], "meaning": "connected to emotional, hidden, or deep spiritual matters"},
-    {"name": "bush", "keywords": ["in bush", "in the bush", "bush"], "meaning": "connected to hidden, secret, or out-of-sight activity"},
-    {"name": "yard", "keywords": ["in the yard", "yard"], "meaning": "connected to your environment, household space, or what is around you"},
-    {"name": "church", "keywords": ["in church", "church"], "meaning": "connected to spiritual life, worship, or spiritual alignment"},
-    {"name": "work", "keywords": ["at work", "workplace", "on the job"], "meaning": "connected to work, calling, or public responsibilities"},
-]
-
-_SYMBOL_SPECIAL_BASE: Dict[str, str] = {
-    "dog": "Dogs often represent relatives, family members, or people close to you.",
-    "fish": "Fish often represent blessings, provision, new life, or pregnancy.",
-    "monkey": "Monkeys often represent witchcraft activity, trickery, or mischievous spiritual interference.",
-    "snake": "Snakes often represent spiritual enemies, deception, or hidden threats.",
-    "mouse": "Mice often represent small hidden enemies, gossip, or quiet interference.",
-    "rat": "Rats often represent betrayal, deceit, or stronger hidden enemies.",
-    "owl": "Owls often represent hidden monitoring, nighttime observation, or secret activity.",
-    "bird": "Birds often represent monitoring, messages, or spiritual awareness.",
-    "spider": "Spiders often represent traps, manipulation, or hidden schemes.",
-}
+# ============================================================
+# Doctrine Engine loaders
+# ============================================================
+def _row_is_active(row: Dict) -> bool:
+    active = row.get("active", "")
+    if not active:
+        return True
+    return _normalize_yes_no(active)
 
 
-def _contains_phrase(text_norm: str, phrase: str) -> bool:
-    if not text_norm or not phrase:
-        return False
-    return bool(_compile_boundary_regex(phrase).search(text_norm))
+def _get_base_symbol_input(row: Dict) -> str:
+    return (row.get("input") or row.get("symbol") or "").strip()
 
 
-def _detect_behaviors(dream: str) -> List[Dict[str, Any]]:
-    dream_norm = _normalize_text(dream)
-    hits: List[Dict[str, Any]] = []
-    used = set()
-
-    for rule in _BEHAVIOR_RULES:
-        for kw in sorted(rule["keywords"], key=len, reverse=True):
-            if kw in used:
-                continue
-            if _contains_phrase(dream_norm, kw):
-                hits.append(rule)
-                used.add(kw)
-                break
-
-    if not hits:
-        hits.append({"name": "peaceful", "meaning": "awareness", "severity": 0})
-    return hits
+def _get_base_symbol_category(row: Dict) -> str:
+    return (row.get("category") or "unknown").strip()
 
 
-def _detect_sizes(dream: str) -> List[Dict[str, Any]]:
-    dream_norm = _normalize_text(dream)
-    hits: List[Dict[str, Any]] = []
-    used_names = set()
-
-    for rule in _SIZE_RULES:
-        for kw in sorted(rule["keywords"], key=len, reverse=True):
-            if _contains_phrase(dream_norm, kw):
-                if rule["name"] not in used_names:
-                    hits.append(rule)
-                    used_names.add(rule["name"])
-                break
-    return hits
+def _get_base_symbol_meaning(row: Dict) -> str:
+    return (
+        row.get("base_spiritual_meaning")
+        or row.get("base spiritual meaning")
+        or row.get("spiritual meaning")
+        or ""
+    ).strip()
 
 
-def _detect_locations(dream: str) -> List[Dict[str, Any]]:
-    dream_norm = _normalize_text(dream)
-    hits: List[Dict[str, Any]] = []
-    used_names = set()
-
-    for rule in _LOCATION_RULES:
-        for kw in sorted(rule["keywords"], key=len, reverse=True):
-            if _contains_phrase(dream_norm, kw):
-                if rule["name"] not in used_names:
-                    hits.append(rule)
-                    used_names.add(rule["name"])
-                break
-    return hits
+def _get_base_symbol_effects(row: Dict) -> str:
+    return (
+        row.get("base_physical_effects")
+        or row.get("base physical effects")
+        or row.get("physical effects")
+        or ""
+    ).strip()
 
 
-def _classify_symbol_category(symbol: str) -> str:
-    sym_norm = _normalize_text(symbol)
-    if not sym_norm:
-        return "unknown"
-
-    if sym_norm in _SYMBOL_CATEGORY_MAP:
-        return _SYMBOL_CATEGORY_MAP[sym_norm]
-
-    words = sym_norm.split()
-    for w in words:
-        if w in _SYMBOL_CATEGORY_MAP:
-            return _SYMBOL_CATEGORY_MAP[w]
-
-    return "unknown"
+def _get_base_symbol_action(row: Dict) -> str:
+    return (
+        row.get("base_action")
+        or row.get("base action")
+        or row.get("action")
+        or row.get("actions")
+        or ""
+    ).strip()
 
 
-def _get_symbol_special_base(symbol: str) -> str:
-    sym_norm = _normalize_text(symbol)
-    if sym_norm in _SYMBOL_SPECIAL_BASE:
-        return _SYMBOL_SPECIAL_BASE[sym_norm]
-    words = sym_norm.split()
-    for w in words:
-        if w in _SYMBOL_SPECIAL_BASE:
-            return _SYMBOL_SPECIAL_BASE[w]
-    return ""
+def _get_base_symbol_override_group(row: Dict) -> str:
+    return (row.get("override_group") or row.get("override group") or "").strip()
 
 
-def _strength_from_sizes(size_hits: List[Dict[str, Any]]) -> str:
-    if any(x["name"] == "giant" for x in size_hits):
-        return "very strong"
-    if any(x["name"] == "big" for x in size_hits):
-        return "strong"
-    if any(x["name"] == "small" for x in size_hits):
-        return "minor or early-stage"
-    return "moderate"
+def _get_rule_keywords(row: Dict) -> List[str]:
+    return _split_keywords(row.get("keywords", ""))
 
 
-def _describe_symbol_logic(
-    symbol: str,
-    category: str,
-    behaviors: List[Dict[str, Any]],
-    sizes: List[Dict[str, Any]],
-    locations: List[Dict[str, Any]],
-) -> Dict[str, str]:
-    special = _get_symbol_special_base(symbol)
-    category_line = _CATEGORY_MEANING.get(category, "This symbol may point to a meaningful influence or condition in your life.")
-
-    behavior_names = [b["name"] for b in behaviors]
-    strength = _strength_from_sizes(sizes)
-
-    behavior_line = ""
-    physical_line = ""
-    action_line = ""
-
-    if "dead" in behavior_names:
-        behavior_line = "Because it appeared dead, the dream may be showing that this issue or enemy is losing power."
-        physical_line = "This can reflect relief, weakening pressure, or the end of a troubling pattern."
-        action_line = "Give thanks, stay grounded, and continue to pray until the matter is fully settled."
-    elif "attacking" in behavior_names or "biting" in behavior_names:
-        behavior_line = f"Because it was aggressive, the dream may be warning of harm, opposition, or active pressure. The overall strength appears {strength}."
-        physical_line = "This can show up as stress, conflict, fear, or increased pressure in daily life."
-        action_line = "Do not panic. Cancel the dream upon waking, pray for protection, stay aligned with God, and avoid giving fear authority."
-    elif "chasing" in behavior_names:
-        behavior_line = f"Because it was chasing, the dream may be showing pursuit, pressure, or an issue trying to gain ground. The overall strength appears {strength}."
-        physical_line = "This may reflect ongoing stress, pressure, or a matter that keeps following you in life."
-        action_line = "Stay alert, pray for protection, and address the issue before it grows."
-    elif "watching" in behavior_names:
-        behavior_line = f"Because it was watching, the dream may be showing monitoring or observation. The overall strength appears {strength}."
-        physical_line = "This can reflect suspicion, heightened awareness, or concern that attention is being placed on your life."
-        action_line = "Remain spiritually grounded, ask God for discernment, and do not let fear control your thinking."
-    elif "hiding" in behavior_names:
-        behavior_line = f"Because it was hiding or hidden, the dream may be showing something operating quietly behind the scenes. The overall strength appears {strength}."
-        physical_line = "This can reflect subtle pressure, hidden motives, or quiet problems developing over time."
-        action_line = "Pray for clarity and ask God to reveal anything hidden that concerns your life."
-    elif "running_away" in behavior_names:
-        behavior_line = "Because it was running away, the dream may be showing retreat, fading pressure, or an enemy losing ground."
-        physical_line = "This can reflect relief, release, or a stressful matter weakening."
-        action_line = "Stay prayerful, remain aligned, and do not reopen what God is closing."
-    else:
-        behavior_line = f"Because it appeared peaceful or simply present, the dream may be making you aware of this influence rather than showing an active attack. The overall strength appears {strength}."
-        physical_line = "This can reflect awareness, sensitivity, or a developing situation coming to your attention."
-        action_line = "Stay calm, watch carefully, and pray for wisdom about what is developing."
-
-    location_bits = []
-    for loc in locations:
-        location_bits.append(loc["meaning"])
-    location_line = ""
-    if location_bits:
-        location_line = _ensure_terminal_punct("This seems " + "; ".join(location_bits))
-
-    spiritual_parts = []
-    if special:
-        spiritual_parts.append(_ensure_terminal_punct(special))
-    spiritual_parts.append(_ensure_terminal_punct(category_line))
-    spiritual_parts.append(_ensure_terminal_punct(behavior_line))
-    if location_line:
-        spiritual_parts.append(location_line)
-
-    return {
-        "spiritual": "\n".join([x for x in spiritual_parts if x]).strip(),
-        "physical": _ensure_terminal_punct(physical_line),
-        "action": _ensure_terminal_punct(action_line),
-    }
+def _get_output_template(rows: List[Dict], template_type: str, fallback: str) -> str:
+    wanted = _normalize_text(template_type)
+    for row in rows:
+        if not _row_is_active(row):
+            continue
+        if _normalize_text(row.get("template_type", "")) == wanted:
+            txt = (row.get("template_text") or "").strip()
+            if txt:
+                return txt
+    return fallback
 
 
-def _build_logic_brain(
+# ============================================================
+# Doctrine Engine detection
+# ============================================================
+def _match_base_symbols_doctrine(
     dream: str,
-    matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]
-) -> Dict[str, Any]:
-    behaviors = _detect_behaviors(dream)
-    sizes = _detect_sizes(dream)
-    locations = _detect_locations(dream)
+    base_rows: List[Dict],
+    top_k: int = 3
+) -> List[Tuple[Dict, int, Dict[str, Any]]]:
+    dream_norm = _normalize_text(dream)
+    if not dream_norm:
+        return []
 
-    symbol_logic: List[Dict[str, Any]] = []
-    for row, sc, hit in matches:
-        sym = _get_symbol_cell(row)
-        cat = _classify_symbol_category(sym)
-        desc = _describe_symbol_logic(sym, cat, behaviors, sizes, locations)
-        symbol_logic.append({
-            "symbol": sym,
-            "category": cat,
-            "score": sc,
-            "match": hit,
-            "logic_spiritual": desc["spiritual"],
-            "logic_physical": desc["physical"],
-            "logic_action": desc["action"],
-        })
+    _log("\n--- DOCTRINE BASE SYMBOL MATCH ---")
+    _log("DREAM_RAW:", repr(dream))
+    _log("DREAM_NORM:", repr(dream_norm))
 
-    return {
-        "behaviors": behaviors,
-        "sizes": sizes,
-        "locations": locations,
-        "symbols": symbol_logic,
-    }
+    candidates: List[Tuple[Dict, int, Dict[str, Any]]] = []
 
+    for row in base_rows:
+        if not _row_is_active(row):
+            continue
 
-def _logic_summary_line(brain: Dict[str, Any]) -> str:
-    if not brain:
-        return ""
-    behavior_names = [b["name"] for b in brain.get("behaviors", [])]
-    size_names = [s["name"] for s in brain.get("sizes", [])]
-    location_names = [l["name"] for l in brain.get("locations", [])]
+        symbol_raw = _get_base_symbol_input(row)
+        if not symbol_raw:
+            continue
 
-    parts = []
-    if behavior_names:
-        parts.append(f"behavior detected: {', '.join(behavior_names)}")
-    if size_names:
-        parts.append(f"size detected: {', '.join(size_names)}")
-    if location_names:
-        parts.append(f"location detected: {', '.join(location_names)}")
+        symbol = _normalize_text(symbol_raw)
+        if not symbol:
+            continue
 
-    if not parts:
-        return ""
-    return _ensure_terminal_punct("Logic layer — " + "; ".join(parts))
+        keywords = _get_rule_keywords(row)
+        local_candidates: List[Tuple[str, str, int]] = []
 
-
-# ----------------------------
-# Output building
-# ----------------------------
-def _combine_fields(
-    matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]],
-    brain: Optional[Dict[str, Any]] = None
-) -> Dict[str, str]:
-    spiritual_parts: List[str] = []
-    physical_parts: List[str] = []
-    action_parts: List[str] = []
-
-    if brain:
-        logic_line = _logic_summary_line(brain)
-        if logic_line:
-            spiritual_parts.append(logic_line)
-
-    logic_by_symbol = {}
-    if brain:
-        logic_by_symbol = {_normalize_text(x["symbol"]): x for x in brain.get("symbols", [])}
-
-    for row, _sc, _hit in matches:
-        symbol = _get_symbol_cell(row)
-        sym_key = _normalize_text(symbol)
-        sm = _get_spiritual_meaning_cell(row)
-        pe = _get_effects_cell(row)
-        ac = _get_what_to_do_cell(row)
-
-        base_line = _format_label_value(symbol, sm)
-        logic_obj = logic_by_symbol.get(sym_key)
-
-        if base_line:
-            spiritual_parts.append(base_line)
-        if logic_obj and logic_obj.get("logic_spiritual"):
-            spiritual_parts.append(_format_label_value(symbol, logic_obj["logic_spiritual"]))
-
-        base_line = _format_label_value(symbol, pe)
-        if base_line:
-            physical_parts.append(base_line)
-        if logic_obj and logic_obj.get("logic_physical"):
-            physical_parts.append(_format_label_value(symbol, logic_obj["logic_physical"]))
-
-        base_line = _format_label_value(symbol, ac)
-        if base_line:
-            action_parts.append(base_line)
-        if logic_obj and logic_obj.get("logic_action"):
-            action_parts.append(_format_label_value(symbol, logic_obj["logic_action"]))
-
-    return {
-        "spiritual_meaning": "\n".join(_dedupe_preserve_order(spiritual_parts)).strip(),
-        "effects_in_physical_realm": "\n".join(_dedupe_preserve_order(physical_parts)).strip(),
-        "what_to_do": "\n".join(_dedupe_preserve_order(action_parts)).strip(),
-    }
-
-
-def _make_receipt_id() -> str:
-    return f"JTS-{secrets.token_hex(4).upper()}"
-
-
-def _compute_seal(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
-    if not matches:
-        return {"status": "Delayed", "type": "Unclear", "risk": "High"}
-
-    avg = sum(sc for _, sc, _ in matches) / max(len(matches), 1)
-    if avg >= 95:
-        return {"status": "Live", "type": "Confirmed", "risk": "Low"}
-    if avg >= 88:
-        return {"status": "Delayed", "type": "Processing", "risk": "Medium"}
-    return {"status": "Delayed", "type": "Processing", "risk": "High"}
-
-
-def _extract_symbol_fields(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]], max_n: int = 3):
-    symbols: List[str] = []
-    meanings: List[str] = []
-    effects: List[str] = []
-    actions: List[str] = []
-
-    for row, _sc, _hit in matches[:max_n]:
-        symbols.append(_get_symbol_cell(row))
-        meanings.append(_get_spiritual_meaning_cell(row))
-        effects.append(_get_effects_cell(row))
-        actions.append(_get_what_to_do_cell(row))
-
-    return symbols, meanings, effects, actions
-
-
-def build_full_interpretation_from_doctrine(
-    matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]],
-    brain: Optional[Dict[str, Any]] = None
-) -> str:
-    if not matches or not NARRATIVE_ENABLED:
-        return ""
-
-    symbols, meanings, effects, actions = _extract_symbol_fields(matches, max_n=NARRATIVE_MAX_SYMBOLS)
-    logic_by_symbol = {}
-    if brain:
-        logic_by_symbol = {_normalize_text(x["symbol"]): x for x in brain.get("symbols", [])}
-
-    opening_parts = [
-        "This dream is revealing a spiritual condition, not predicting physical harm.",
-        "Dreams speak in symbols, and meaning is shown through what appears and what happens."
-    ]
-    logic_line = _logic_summary_line(brain or {})
-    if logic_line:
-        opening_parts.append(_strip_trailing_punct(logic_line))
-    opening = _ensure_terminal_punct(" ".join(opening_parts))
-
-    symbol_sentences: List[str] = []
-    for sym, mean in zip(symbols, meanings):
-        mean_clean = _strip_trailing_punct(mean)
-        logic_obj = logic_by_symbol.get(_normalize_text(sym), {})
-        logic_text = _strip_trailing_punct(logic_obj.get("logic_spiritual", ""))
-
-        parts = []
-        if mean_clean:
-            parts.append(f"{_title_case_symbol(sym)} points to {mean_clean}")
-        if logic_text:
-            parts.append(logic_text)
-
-        if parts:
-            symbol_sentences.append(_ensure_terminal_punct(" ".join(parts)))
-
-    effect_sentences: List[str] = []
-    for sym, eff in zip(symbols, effects):
-        eff_clean = _strip_trailing_punct(eff)
-        logic_obj = logic_by_symbol.get(_normalize_text(sym), {})
-        logic_phys = _strip_trailing_punct(logic_obj.get("logic_physical", ""))
-
-        parts = []
-        if eff_clean:
-            parts.append(f"{_title_case_symbol(sym)} can show up as {eff_clean} in the natural realm")
-        if logic_phys:
-            parts.append(logic_phys)
-
-        if parts:
-            effect_sentences.append(_ensure_terminal_punct(" ".join(parts)))
-
-    action_chunks: List[str] = []
-    for sym, ac in zip(symbols, actions):
-        ac_clean = _strip_trailing_punct(ac)
-        logic_obj = logic_by_symbol.get(_normalize_text(sym), {})
-        logic_action = _strip_trailing_punct(logic_obj.get("logic_action", ""))
-
-        if ac_clean:
-            action_chunks.append(ac_clean)
-        if logic_action:
-            action_chunks.append(logic_action)
-
-    action_chunks = _dedupe_preserve_order(action_chunks)
-    action_text = ""
-    if action_chunks:
-        if len(action_chunks) == 1:
-            action_text = _ensure_terminal_punct(f"What to do: {action_chunks[0]}")
+        if len(_tokenize_words(symbol)) > 1:
+            local_candidates.append(("symbol_phrase", symbol, 100 - _symbol_length_penalty(symbol_raw)))
         else:
-            action_text = _ensure_terminal_punct(
-                f"What to do: {' Then, '.join([_strip_trailing_punct(x) for x in action_chunks])}"
-            )
+            local_candidates.append(("symbol", symbol, 100))
 
-    closing = (
-        "Dreams expose what needs attention so you can respond. "
-        "This is a warning with mercy, not a sentence."
+        for kw in keywords:
+            if len(_tokenize_words(kw)) > 1:
+                local_candidates.append(("keyword_phrase", kw, 94))
+            else:
+                local_candidates.append(("keyword", kw, 90))
+
+        local_candidates.sort(key=lambda x: (-len(x[1]), -x[2]))
+
+        for match_type, token, score in local_candidates:
+            spans = _find_phrase_spans(dream_norm, token)
+            if not spans:
+                continue
+            candidates.append((row, score, {
+                "type": match_type,
+                "token": token,
+                "span": spans[0],
+                "token_len": len(token),
+            }))
+            break
+
+    candidates.sort(
+        key=lambda item: (
+            -int(item[2].get("token_len", 0)),
+            -item[1],
+            -len(_normalize_text(_get_base_symbol_input(item[0])))
+        )
     )
 
-    parts = [
-        opening,
-        " ".join(symbol_sentences).strip() if symbol_sentences else "",
-        " ".join(effect_sentences).strip() if effect_sentences else "",
-        action_text.strip() if action_text else "",
-        _ensure_terminal_punct(closing),
-    ]
-    return "\n\n".join([_clean_sentence(p).strip() for p in parts if p and p.strip()]).strip()
+    out: List[Tuple[Dict, int, Dict[str, Any]]] = []
+    used_spans: List[Tuple[int, int]] = []
+    seen_symbols = set()
+
+    for row, score, hit in candidates:
+        span = hit.get("span")
+        if not span:
+            continue
+
+        sym_key = _normalize_text(_get_base_symbol_input(row))
+        if not sym_key or sym_key in seen_symbols:
+            continue
+        if _is_span_blocked(span, used_spans):
+            continue
+
+        used_spans.append(span)
+        seen_symbols.add(sym_key)
+        out.append((row, score, hit))
+
+        if len(out) >= top_k:
+            break
+
+    if out:
+        _log("DOCTRINE BASE MATCHES:")
+        for row, sc, hit in out:
+            _log(f" - {_get_base_symbol_input(row)!r} score={sc} via={hit}")
+    else:
+        _log("DOCTRINE BASE MATCHES: (none)")
+    _log("--- END DOCTRINE BASE MATCH ---\n")
+
+    return out
 
 
-# ----------------------------
-# Admin auth + HTML
-# ----------------------------
+def _detect_rule_hits(
+    dream: str,
+    rows: List[Dict],
+    name_field: str,
+    priority_field: str = "priority"
+) -> List[Dict[str, Any]]:
+    dream_norm = _normalize_text(dream)
+    hits: List[Dict[str, Any]] = []
+    seen_names = set()
+
+    for row in rows:
+        if not _row_is_active(row):
+            continue
+
+        name = (row.get(name_field) or "").strip()
+        if not name:
+            continue
+
+        rule_keywords = _get_rule_keywords(row)
+        if not rule_keywords:
+            continue
+
+        matched_token = ""
+        token_len = 0
+        for kw in sorted(rule_keywords, key=len, reverse=True):
+            if _contains_phrase(dream_norm, kw):
+                matched_token = kw
+                token_len = len(kw)
+                break
+
+        if not matched_token:
+            continue
+
+        name_key = _normalize_text(name)
+        if name_key in seen_names:
+            continue
+        seen_names.add(name_key)
+
+        priority_val = 0
+        try:
+            priority_val = int(str(row.get(priority_field, "0") or "0").strip())
+        except Exception:
+            priority_val = 0
+
+        hits.append({
+            "name": name,
+            "row": row,
+            "matched_token": matched_token,
+            "token_len": token_len,
+            "priority": priority_val,
+        })
+
+    hits.sort(key=lambda x: (-x["token_len"], -x["priority"], x["name"].lower()))
+    return hits
+
+
+# ============================================================
+# Doctrine overrides
+# ============================================================
+def _override_match_ok(override_val: str, actual_vals: List[str]) -> bool:
+    override_val_n = _normalize_text(override_val)
+    if not override_val_n:
+        return True
+    actual_norm = {_normalize_text(x) for x in actual_vals if x}
+    return override_val_n in actual_norm
+
+
+def _apply_override_rules(
+    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
+    behaviors: List[Dict[str, Any]],
+    states: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+    dream: str,
+    override_rows: List[Dict],
+) -> Optional[Dict[str, Any]]:
+    if not base_matches:
+        return None
+
+    symbol_names = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
+    behavior_names = [x["name"] for x in behaviors]
+    state_names = [x["name"] for x in states]
+    location_names = [x["name"] for x in locations]
+
+    best: Optional[Dict[str, Any]] = None
+    best_priority = -10**9
+
+    for row in override_rows:
+        if not _row_is_active(row):
+            continue
+
+        override_name = (row.get("override_name") or "").strip()
+        if not override_name:
+            continue
+
+        symbol_match = row.get("symbol_match", "")
+        behavior_match = row.get("behavior_match", "")
+        state_match = row.get("state_match", "")
+        location_match = row.get("location_match", "")
+        context_match = row.get("context_match", "")
+
+        if not _override_match_ok(symbol_match, symbol_names):
+            continue
+        if not _override_match_ok(behavior_match, behavior_names):
+            continue
+        if not _override_match_ok(state_match, state_names):
+            continue
+        if not _override_match_ok(location_match, location_names):
+            continue
+
+        context_match_n = _normalize_text(context_match)
+        if context_match_n and not _contains_phrase(_normalize_text(dream), context_match_n):
+            continue
+
+        try:
+            pr = int(str(row.get("priority", "0") or "0").strip())
+        except Exception:
+            pr = 0
+
+        if pr > best_priority:
+            best_priority = pr
+            best = row
+
+    if best:
+        return {
+            "override_name": best.get("override_name", ""),
+            "spiritual": (best.get("final_spiritual_meaning") or "").strip(),
+            "physical": (best.get("final_physical_effects") or "").strip(),
+            "action": (best.get("final_action") or "").strip(),
+            "priority": best_priority,
+            "row": best,
+        }
+
+    return None
+
+
+# ============================================================
+# Doctrine interpretation builder
+# ============================================================
+def _join_nonempty(parts: List[str], sep: str = " ") -> str:
+    return sep.join([_strip_trailing_punct(x) for x in parts if x and _strip_trailing_punct(x)]).strip()
+
+
+def _build_doctrine_interpretation(
+    dream: str,
+    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
+    behaviors: List[Dict[str, Any]],
+    states: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+    override_hit: Optional[Dict[str, Any]],
+    templates: List[Dict],
+) -> Dict[str, Any]:
+    top_symbols = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
+
+    opening_tpl = _get_output_template(
+        templates,
+        "opening",
+        "This dream is revealing a spiritual condition, not predicting physical harm."
+    )
+    symbol_tpl = _get_output_template(
+        templates,
+        "symbol_sentence",
+        "{symbol} points to {meaning}."
+    )
+    physical_tpl = _get_output_template(
+        templates,
+        "physical_sentence",
+        "This may show up as {effect} in daily life."
+    )
+    action_tpl = _get_output_template(
+        templates,
+        "action_sentence",
+        "What to do: {action}."
+    )
+    closing_tpl = _get_output_template(
+        templates,
+        "closing",
+        "Dreams expose what needs attention so you can respond with wisdom."
+    )
+
+    behavior_names = [x["name"] for x in behaviors]
+    state_names = [x["name"] for x in states]
+    location_names = [x["name"] for x in locations]
+
+    logic_summary_bits = []
+    if behavior_names:
+        logic_summary_bits.append(f"behavior detected: {', '.join(behavior_names)}")
+    if state_names:
+        logic_summary_bits.append(f"state detected: {', '.join(state_names)}")
+    if location_names:
+        logic_summary_bits.append(f"location detected: {', '.join(location_names)}")
+    logic_summary = _ensure_terminal_punct("Logic layer — " + "; ".join(logic_summary_bits)) if logic_summary_bits else ""
+
+    if override_hit:
+        spiritual = override_hit["spiritual"] or "A special doctrine override applied to this dream."
+        physical = override_hit["physical"] or "This override may affect how the dream shows up in daily life."
+        action = override_hit["action"] or "Pray for confirmation and respond with discernment."
+
+        full_parts = [
+            opening_tpl,
+            logic_summary,
+            spiritual,
+            physical,
+            action_tpl.format(action=_strip_trailing_punct(action)),
+            closing_tpl,
+        ]
+        full_interpretation = "\n\n".join([_ensure_terminal_punct(x) for x in full_parts if x and _strip_trailing_punct(x)])
+
+        return {
+            "interpretation": {
+                "spiritual_meaning": _ensure_terminal_punct(spiritual),
+                "effects_in_physical_realm": _ensure_terminal_punct(physical),
+                "what_to_do": _ensure_terminal_punct(action),
+            },
+            "full_interpretation": full_interpretation,
+            "top_symbols": top_symbols,
+            "logic_summary": logic_summary,
+            "override_applied": True,
+            "override_name": override_hit.get("override_name", ""),
+        }
+
+    spiritual_lines: List[str] = []
+    physical_lines: List[str] = []
+    action_lines: List[str] = []
+
+    if logic_summary:
+        spiritual_lines.append(logic_summary)
+
+    for row, _sc, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
+        symbol = _get_base_symbol_input(row)
+        base_meaning = _get_base_symbol_meaning(row)
+        base_effects = _get_base_symbol_effects(row)
+        base_action = _get_base_symbol_action(row)
+        category = _get_base_symbol_category(row)
+
+        behavior_mod = ""
+        behavior_phys_mod = ""
+        behavior_action_mod = ""
+        if behaviors:
+            behavior_mod = _join_nonempty([(x["row"].get("meaning_modifier") or "") for x in behaviors], "; ")
+            behavior_phys_mod = _join_nonempty([(x["row"].get("physical_modifier") or "") for x in behaviors], "; ")
+            behavior_action_mod = _join_nonempty([(x["row"].get("action_modifier") or "") for x in behaviors], "; ")
+
+        state_mod = ""
+        state_phys_mod = ""
+        state_action_mod = ""
+        if states:
+            state_mod = _join_nonempty([(x["row"].get("meaning_modifier") or "") for x in states], "; ")
+            state_phys_mod = _join_nonempty([(x["row"].get("physical_modifier") or "") for x in states], "; ")
+            state_action_mod = _join_nonempty([(x["row"].get("action_modifier") or "") for x in states], "; ")
+
+        location_mod = ""
+        location_phys_mod = ""
+        location_action_mod = ""
+        if locations:
+            location_mod = _join_nonempty([(x["row"].get("life_area_meaning") or "") for x in locations], "; ")
+            location_phys_mod = _join_nonempty([(x["row"].get("physical_area_meaning") or "") for x in locations], "; ")
+            location_action_mod = _join_nonempty([(x["row"].get("action_modifier") or "") for x in locations], "; ")
+
+        meaning_parts = [base_meaning]
+        if category and category.lower() != "unknown":
+            meaning_parts.append(f"Category: {category}")
+        if behavior_mod:
+            meaning_parts.append(behavior_mod)
+        if state_mod:
+            meaning_parts.append(state_mod)
+        if location_mod:
+            meaning_parts.append(location_mod)
+
+        final_meaning = _join_nonempty(meaning_parts, " ")
+        if final_meaning:
+            spiritual_lines.append(
+                _ensure_terminal_punct(symbol_tpl.format(
+                    symbol=_title_case_symbol(symbol),
+                    meaning=_strip_trailing_punct(final_meaning)
+                ))
+            )
+
+        effects_parts = [base_effects]
+        if behavior_phys_mod:
+            effects_parts.append(behavior_phys_mod)
+        if state_phys_mod:
+            effects_parts.append(state_phys_mod)
+        if location_phys_mod:
+            effects_parts.append(location_phys_mod)
+
+        final_effects = _join_nonempty(effects_parts, " ")
+        if final_effects:
+            physical_lines.append(
+                _ensure_terminal_punct(physical_tpl.format(
+                    effect=_strip_trailing_punct(final_effects)
+                ))
+            )
+
+        action_parts = [base_action]
+        if behavior_action_mod:
+            action_parts.append(behavior_action_mod)
+        if state_action_mod:
+            action_parts.append(state_action_mod)
+        if location_action_mod:
+            action_parts.append(location_action_mod)
+
+        final_action = _join_nonempty(action_parts, " Then, ")
+        if final_action:
+            action_lines.append(
+                _ensure_terminal_punct(action_tpl.format(
+                    action=_strip_trailing_punct(final_action)
+                ))
+            )
+
+    spiritual_lines = _dedupe_preserve_order(spiritual_lines)
+    physical_lines = _dedupe_preserve_order(physical_lines)
+    action_lines = _dedupe_preserve_order(action_lines)
+
+    spiritual_joined = "\n".join(spiritual_lines).strip()
+    physical_joined = "\n".join(physical_lines).strip()
+    action_joined = "\n".join(action_lines).strip()
+
+    full_parts = [opening_tpl]
+    if spiritual_joined:
+        full_parts.append(spiritual_joined)
+    if physical_joined:
+        full_parts.append(physical_joined)
+    if action_joined:
+        full_parts.append(action_joined)
+    full_parts.append(closing_tpl)
+
+    full_interpretation = "\n\n".join([
+        _ensure_terminal_punct(x) for x in full_parts if x and _strip_trailing_punct(x)
+    ])
+
+    return {
+        "interpretation": {
+            "spiritual_meaning": spiritual_joined or "No clear spiritual meaning was generated.",
+            "effects_in_physical_realm": physical_joined or "No clear physical effects were generated.",
+            "what_to_do": action_joined or "Pray for wisdom and confirmation.",
+        },
+        "full_interpretation": full_interpretation,
+        "top_symbols": top_symbols,
+        "logic_summary": logic_summary,
+        "override_applied": False,
+        "override_name": "",
+    }
+
+
+def _compute_seal_from_symbol_count(symbol_count: int) -> Dict[str, str]:
+    if symbol_count <= 0:
+        return {"status": "Delayed", "type": "Unclear", "risk": "High"}
+    if symbol_count == 1:
+        return {"status": "Live", "type": "Confirmed", "risk": "Low"}
+    if symbol_count == 2:
+        return {"status": "Delayed", "type": "Processing", "risk": "Medium"}
+    return {"status": "Delayed", "type": "Processing", "risk": "Medium"}
+
+
+# ============================================================
+# Admin HTML
+# ============================================================
 def _get_admin_key_from_request() -> str:
     q = (request.args.get("key") or "").strip()
     h = (request.headers.get("X-Admin-Key") or "").strip()
@@ -1372,7 +1401,6 @@ def _get_admin_key_from_request() -> str:
 def _require_admin() -> Optional[Response]:
     if not ADMIN_KEY:
         return make_response("Admin is not configured (missing ADMIN_KEY / JTS_ADMIN_KEY).", 403)
-
     provided = _get_admin_key_from_request()
     if not provided or provided != ADMIN_KEY:
         return make_response("Forbidden", 403)
@@ -1477,6 +1505,9 @@ ADMIN_HTML = """<!DOCTYPE html>
 """
 
 
+# ============================================================
+# Admin writing helpers
+# ============================================================
 def _build_col_map(header_row: List[str]) -> Dict[str, int]:
     col_map: Dict[str, int] = {}
     for idx, h in enumerate(header_row, start=1):
@@ -1497,7 +1528,8 @@ def _find_existing_row_index(ws, input_value: str, input_col: int) -> Optional[i
 
 
 def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
-    ws = _get_ws()
+    sh = _get_spreadsheet()
+    ws = sh.worksheet(WORKSHEET_NAME)
     header_row = ws.row_values(1)
     if not header_row:
         raise RuntimeError("Sheet has no header row.")
@@ -1521,10 +1553,7 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
     spiritual = (payload.get("spiritual_meaning") or payload.get("spiritual") or "").strip()
     effects = (payload.get("physical_effects") or payload.get("effects") or "").strip()
     action = (payload.get("action") or "").strip()
-    keywords = (payload.get("keywords") or "").strip()
-
-    # Long-term safety: sanitize admin-entered keywords before saving
-    keywords = _sanitize_keywords_for_storage(keywords)
+    keywords = _sanitize_keywords_for_storage((payload.get("keywords") or "").strip())
 
     existing_row = None
     if mode != "add":
@@ -1550,7 +1579,7 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
     cell_list = [gspread.Cell(r, c, v) for r, c, v in updates]
     ws.update_cells(cell_list, value_input_option="RAW")
 
-    _invalidate_cache()
+    _invalidate_all_caches()
 
     return {
         "ok": True,
@@ -1562,9 +1591,9 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-# ----------------------------
+# ============================================================
 # Upgrade HTML
-# ----------------------------
+# ============================================================
 def _upgrade_html_option_a() -> str:
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -1682,9 +1711,9 @@ def _upgrade_html_option_a() -> str:
 </html>"""
 
 
-# ----------------------------
+# ============================================================
 # Routes
-# ----------------------------
+# ============================================================
 @app.route("/", methods=["GET"])
 def home():
     return redirect(RETURN_URL, code=302)
@@ -1692,6 +1721,12 @@ def home():
 
 @app.route("/health", methods=["GET"])
 def health():
+    doctrine_available = False
+    try:
+        doctrine_available = _doctrine_sheets_available()
+    except Exception:
+        doctrine_available = False
+
     return jsonify({
         "ok": True,
         "service": "dream-interpreter",
@@ -1699,11 +1734,14 @@ def health():
         "has_spreadsheet_id": bool(SPREADSHEET_ID),
         "allowed_origins": allowed_origins,
         "match_mode": "strict_word_boundary_with_longest_phrase_priority_and_overlap_guard",
-        "brain_layers": ["symbol_category_logic", "behavior_logic", "size_logic", "location_logic"],
+        "brain_layers": ["symbol_category_logic", "behavior_logic", "size_logic", "location_logic", "override_logic", "template_logic"],
         "debug_match": DEBUG_MATCH,
         "narrative_enabled": NARRATIVE_ENABLED,
         "narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
         "keyword_guard_enabled": KEYWORD_GUARD_ENABLED,
+        "doctrine_mode_enabled": DOCTRINE_MODE,
+        "doctrine_sheets_available": doctrine_available,
+        "doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
         "admin_configured": bool(ADMIN_KEY),
         "free_quota": FREE_TRIES,
         "shadow_window_hours": SHADOW_WINDOW_HOURS,
@@ -1883,9 +1921,6 @@ def interpret():
     data = request.get_json(silent=True) or {}
     dream = (data.get("dream") or data.get("text") or "").strip()
 
-    # ----------------------------
-    # DEBUG LOGS
-    # ----------------------------
     _log("RAW JSON RECEIVED:", _safe_debug_payload_preview(data))
     _log("RAW DREAM RECEIVED:", repr(dream))
     _log("REQUEST CONTENT-TYPE:", request.headers.get("Content-Type", ""))
@@ -1914,86 +1949,218 @@ def interpret():
                 "is_paid": False,
             }), 402
 
-    try:
-        rows = _load_sheet_rows()
-    except Exception as e:
-        return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
-
-    matches = _match_symbols_strict(dream, rows, top_k=3)
-    brain = _build_logic_brain(dream, matches)
-    receipt_id = _make_receipt_id()
-    seal = _compute_seal(matches)
-
     free_uses_left = 0
     if not is_paid:
         ip = _get_client_ip()
         cookie_used = _get_cookie_tries_used()
         ip_used = _shadow_count(ip)
         effective_used = max(cookie_used, ip_used)
-
         _shadow_increment(ip)
         free_uses_left = _free_tries_remaining_after_this(effective_used)
 
-    if not matches:
-        payload = {
-            "access": "paid" if is_paid else "free",
-            "is_paid": bool(is_paid),
-            "free_uses_left": free_uses_left,
-            "seal": seal,
-            "brain": {
-                "behaviors": [b["name"] for b in brain.get("behaviors", [])],
-                "sizes": [s["name"] for s in brain.get("sizes", [])],
-                "locations": [l["name"] for l in brain.get("locations", [])],
-            },
-            "receipt": {
-                "id": receipt_id,
-                "top_symbols": [],
-                "share_phrase": "I decoded my dream on Jamaican True Stories.",
-            },
-            "interpretation": {
-                "spiritual_meaning": "No matching symbols were found for the exact words in this dream.",
-                "effects_in_physical_realm": "Tip: use clear symbol words or phrases that exist in your Symbols sheet.",
-                "what_to_do": "Add 1–2 more key symbols or phrases and try again.",
-            },
-            "full_interpretation": "",
-        }
+    doctrine_active = DOCTRINE_MODE and _doctrine_sheets_available()
 
-        _log("TOP SYMBOLS RETURNED:", [])
-        _log("INTERPRET RESPONSE MODE:", "no_matches")
+    if doctrine_active:
+        try:
+            sheets = _load_doctrine_sheets()
+            base_rows = sheets.get(SHEET_BASE_SYMBOLS, [])
+            behavior_rows = sheets.get(SHEET_BEHAVIOR_RULES, [])
+            state_rows = sheets.get(SHEET_SIZE_STATE_RULES, [])
+            location_rows = sheets.get(SHEET_LOCATION_RULES, [])
+            override_rows = sheets.get(SHEET_OVERRIDE_RULES, [])
+            template_rows = sheets.get(SHEET_OUTPUT_TEMPLATES, [])
 
-        resp = make_response(jsonify(payload))
+            base_matches = _match_base_symbols_doctrine(dream, base_rows, top_k=3)
+            behaviors = _detect_rule_hits(dream, behavior_rows, "behavior_name")
+            states = _detect_rule_hits(dream, state_rows, "state_name")
+            locations = _detect_rule_hits(dream, location_rows, "location_name")
+            override_hit = _apply_override_rules(
+                base_matches=base_matches,
+                behaviors=behaviors,
+                states=states,
+                locations=locations,
+                dream=dream,
+                override_rows=override_rows,
+            )
+
+            receipt_id = f"JTS-{secrets.token_hex(4).upper()}"
+            seal = _compute_seal_from_symbol_count(len(base_matches))
+
+            if not base_matches and not override_hit:
+                payload = {
+                    "engine_mode": "doctrine",
+                    "access": "paid" if is_paid else "free",
+                    "is_paid": bool(is_paid),
+                    "free_uses_left": free_uses_left,
+                    "seal": seal,
+                    "brain": {
+                        "behaviors": [b["name"] for b in behaviors],
+                        "states": [s["name"] for s in states],
+                        "locations": [l["name"] for l in locations],
+                    },
+                    "receipt": {
+                        "id": receipt_id,
+                        "top_symbols": [],
+                        "share_phrase": "I decoded my dream on Jamaican True Stories.",
+                    },
+                    "interpretation": {
+                        "spiritual_meaning": "No matching doctrine symbols were found for the exact words in this dream.",
+                        "effects_in_physical_realm": "Tip: use clear dream symbols or phrases that exist in your doctrine system.",
+                        "what_to_do": "Add 1–2 more key symbols or phrases and try again.",
+                    },
+                    "full_interpretation": "",
+                }
+                _log("TOP SYMBOLS RETURNED:", [])
+                _log("INTERPRET RESPONSE MODE:", "doctrine_no_matches")
+                resp = make_response(jsonify(payload))
+            else:
+                built = _build_doctrine_interpretation(
+                    dream=dream,
+                    base_matches=base_matches,
+                    behaviors=behaviors,
+                    states=states,
+                    locations=locations,
+                    override_hit=override_hit,
+                    templates=template_rows,
+                )
+
+                top_symbols = built["top_symbols"]
+                share_phrase = (
+                    f"My dream had symbols like: {', '.join(top_symbols[:3])}. "
+                    f"I decoded it on Jamaican True Stories."
+                    if top_symbols else
+                    "I decoded my dream on Jamaican True Stories."
+                )
+
+                payload = {
+                    "engine_mode": "doctrine",
+                    "access": "paid" if is_paid else "free",
+                    "is_paid": bool(is_paid),
+                    "free_uses_left": free_uses_left,
+                    "seal": seal,
+                    "brain": {
+                        "behaviors": [b["name"] for b in behaviors],
+                        "states": [s["name"] for s in states],
+                        "locations": [l["name"] for l in locations],
+                        "top_symbol_categories": [
+                            {
+                                "symbol": _get_base_symbol_input(row),
+                                "category": _get_base_symbol_category(row)
+                            }
+                            for row, _sc, _hit in base_matches
+                        ],
+                        "override_applied": built["override_applied"],
+                        "override_name": built["override_name"],
+                    },
+                    "interpretation": built["interpretation"],
+                    "full_interpretation": built["full_interpretation"],
+                    "receipt": {
+                        "id": receipt_id,
+                        "top_symbols": top_symbols,
+                        "share_phrase": share_phrase,
+                    },
+                }
+
+                _log("TOP SYMBOLS RETURNED:", top_symbols)
+                _log("INTERPRET RESPONSE MODE:", "doctrine_matched")
+                resp = make_response(jsonify(payload))
+
+        except Exception as e:
+            return jsonify({
+                "error": "Doctrine engine failed",
+                "details": str(e),
+            }), 500
+
     else:
-        interpretation = _combine_fields(matches, brain=brain)
-        top_symbols = [_get_symbol_cell(row) for row, _sc, _hit in matches if _get_symbol_cell(row)]
-        share_phrase = f"My dream had symbols like: {', '.join(top_symbols[:3])}. I decoded it on Jamaican True Stories."
-        full_interpretation = build_full_interpretation_from_doctrine(matches, brain=brain)
+        try:
+            legacy_rows = _load_legacy_sheet_rows()
+        except Exception as e:
+            return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
 
-        payload = {
-            "access": "paid" if is_paid else "free",
-            "is_paid": bool(is_paid),
-            "free_uses_left": free_uses_left,
-            "seal": seal,
-            "brain": {
-                "behaviors": [b["name"] for b in brain.get("behaviors", [])],
-                "sizes": [s["name"] for s in brain.get("sizes", [])],
-                "locations": [l["name"] for l in brain.get("locations", [])],
-                "symbol_categories": [
-                    {"symbol": x["symbol"], "category": x["category"]} for x in brain.get("symbols", [])
-                ],
-            },
-            "interpretation": interpretation,
-            "full_interpretation": full_interpretation,
-            "receipt": {
-                "id": receipt_id,
-                "top_symbols": top_symbols,
-                "share_phrase": share_phrase,
-            },
-        }
+        matches = _match_symbols_legacy(dream, legacy_rows, top_k=3)
+        receipt_id = f"JTS-{secrets.token_hex(4).upper()}"
+        seal = _compute_seal_from_symbol_count(len(matches))
 
-        _log("TOP SYMBOLS RETURNED:", top_symbols)
-        _log("INTERPRET RESPONSE MODE:", "matched")
+        if not matches:
+            payload = {
+                "engine_mode": "legacy",
+                "access": "paid" if is_paid else "free",
+                "is_paid": bool(is_paid),
+                "free_uses_left": free_uses_left,
+                "seal": seal,
+                "brain": {},
+                "receipt": {
+                    "id": receipt_id,
+                    "top_symbols": [],
+                    "share_phrase": "I decoded my dream on Jamaican True Stories.",
+                },
+                "interpretation": {
+                    "spiritual_meaning": "No matching symbols were found for the exact words in this dream.",
+                    "effects_in_physical_realm": "Tip: use clear symbol words or phrases that exist in your Symbols sheet.",
+                    "what_to_do": "Add 1–2 more key symbols or phrases and try again.",
+                },
+                "full_interpretation": "",
+            }
+            _log("TOP SYMBOLS RETURNED:", [])
+            _log("INTERPRET RESPONSE MODE:", "legacy_no_matches")
+            resp = make_response(jsonify(payload))
+        else:
+            spiritual_parts = []
+            physical_parts = []
+            action_parts = []
+            top_symbols = []
 
-        resp = make_response(jsonify(payload))
+            for row, _sc, _hit in matches:
+                symbol = _get_symbol_cell(row)
+                top_symbols.append(symbol)
+
+                sm = _get_spiritual_meaning_cell(row)
+                pe = _get_effects_cell(row)
+                ac = _get_what_to_do_cell(row)
+
+                if sm:
+                    spiritual_parts.append(_format_label_value(symbol, sm))
+                if pe:
+                    physical_parts.append(_format_label_value(symbol, pe))
+                if ac:
+                    action_parts.append(_format_label_value(symbol, ac))
+
+            spiritual_joined = "\n".join(_dedupe_preserve_order(spiritual_parts)).strip()
+            physical_joined = "\n".join(_dedupe_preserve_order(physical_parts)).strip()
+            action_joined = "\n".join(_dedupe_preserve_order(action_parts)).strip()
+
+            full_parts = [
+                "This dream is revealing symbolic meaning through the matched symbols.",
+                spiritual_joined,
+                physical_joined,
+                action_joined,
+                "Dreams expose what needs attention so you can respond with wisdom.",
+            ]
+            full_interpretation = "\n\n".join([_ensure_terminal_punct(x) for x in full_parts if x])
+
+            payload = {
+                "engine_mode": "legacy",
+                "access": "paid" if is_paid else "free",
+                "is_paid": bool(is_paid),
+                "free_uses_left": free_uses_left,
+                "seal": seal,
+                "brain": {},
+                "interpretation": {
+                    "spiritual_meaning": spiritual_joined,
+                    "effects_in_physical_realm": physical_joined,
+                    "what_to_do": action_joined,
+                },
+                "full_interpretation": full_interpretation,
+                "receipt": {
+                    "id": receipt_id,
+                    "top_symbols": top_symbols,
+                    "share_phrase": f"My dream had symbols like: {', '.join(top_symbols[:3])}. I decoded it on Jamaican True Stories.",
+                },
+            }
+
+            _log("TOP SYMBOLS RETURNED:", top_symbols)
+            _log("INTERPRET RESPONSE MODE:", "legacy_matched")
+            resp = make_response(jsonify(payload))
 
     if not is_paid:
         cookie_used = _get_cookie_tries_used()
@@ -2023,9 +2190,9 @@ def track():
     })
 
 
-# ----------------------------
+# ============================================================
 # Admin routes
-# ----------------------------
+# ============================================================
 @app.route("/admin", methods=["GET"])
 def admin():
     auth_fail = _require_admin()
@@ -2051,13 +2218,14 @@ def admin_upsert():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-# ----------------------------
+# ============================================================
 # Debug routes
-# ----------------------------
+# ============================================================
 @app.route("/debug/config", methods=["GET"])
 def debug_config():
     if not DEBUG_MATCH:
         return jsonify({"error": "Debug disabled"}), 403
+
     return jsonify({
         "spreadsheet_id": SPREADSHEET_ID,
         "worksheet_name": WORKSHEET_NAME,
@@ -2076,7 +2244,8 @@ def debug_config():
         "session_premium": _is_premium_session(),
         "session_email": _get_session_email(),
         "keyword_guard_enabled": KEYWORD_GUARD_ENABLED,
-        "brain_layers": ["symbol_category_logic", "behavior_logic", "size_logic", "location_logic"],
+        "doctrine_mode_enabled": DOCTRINE_MODE,
+        "doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
     })
 
 
@@ -2085,8 +2254,8 @@ def debug_sheet():
     if not DEBUG_MATCH:
         return jsonify({"error": "Debug disabled"}), 403
 
-    rows = _load_sheet_rows(force=True)
-    headers = _CACHE.get("headers", [])
+    rows = _load_legacy_sheet_rows(force=True)
+    headers = _LEGACY_CACHE.get("headers", [])
     sample = rows[0] if rows else {}
 
     return jsonify({
@@ -2101,6 +2270,35 @@ def debug_sheet():
         "sample_keywords": _get_keywords_cell(sample),
         "sample_keywords_split": _split_keywords(_get_keywords_cell(sample)),
     })
+
+
+@app.route("/debug/doctrine", methods=["GET"])
+def debug_doctrine():
+    if not DEBUG_MATCH:
+        return jsonify({"error": "Debug disabled"}), 403
+
+    try:
+        sheets = _load_doctrine_sheets(force=True)
+        headers = _DOCTRINE_CACHE.get("headers", {})
+        summary = {}
+
+        for name in DOCTRINE_SHEET_NAMES:
+            rows = sheets.get(name, [])
+            sample = rows[0] if rows else {}
+            summary[name] = {
+                "row_count": len(rows),
+                "headers_seen": headers.get(name, []),
+                "sample_keys": list(sample.keys()) if sample else [],
+                "sample_row": sample,
+            }
+
+        return jsonify({
+            "doctrine_mode_enabled": DOCTRINE_MODE,
+            "doctrine_sheets_available": _doctrine_sheets_available(),
+            "sheets": summary,
+        })
+    except Exception as e:
+        return jsonify({"error": "Doctrine debug failed", "details": str(e)}), 500
 
 
 if __name__ == "__main__":

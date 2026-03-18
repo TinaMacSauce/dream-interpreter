@@ -1,9 +1,10 @@
 # app.py — Jamaican True Stories Dream Interpreter
-# Doctrine Engine Version
+# Doctrine Engine Version + $1 Dream Pack
 #
 # Supports:
 # - Stripe-only premium access
 # - Hybrid free gate (cookie + IP shadow)
+# - $1 dream pack (3 uses, expiring)
 # - Legacy single-sheet fallback
 # - Doctrine Engine multi-sheet mode:
 #     BaseSymbols
@@ -21,7 +22,8 @@
 # - FREE_QUOTA / FREE_TRIES_COOKIE / SHADOW_WINDOW_HOURS
 # - COUNTS_FILE / SUBSCRIBERS_FILE
 # - STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET
-# - PRICE_WEEKLY / PRICE_MONTHLY
+# - PRICE_WEEKLY / PRICE_MONTHLY / PRICE_DREAM_PACK
+# - DREAM_PACK_USES / DREAM_PACK_HOURS
 # - ADMIN_KEY or JTS_ADMIN_KEY / ADMIN_TOKEN / JTS_ADMIN
 # - DEBUG_MATCH=1 (optional)
 # - DOCTRINE_MODE=1 (default on)
@@ -147,6 +149,10 @@ PRICE_WEEKLY = os.getenv("PRICE_WEEKLY", "").strip()
 PRICE_MONTHLY = os.getenv("PRICE_MONTHLY", "").strip()
 DEFAULT_STRIPE_PRICE_ID = PRICE_WEEKLY or PRICE_MONTHLY
 
+PRICE_DREAM_PACK = os.getenv("PRICE_DREAM_PACK", "").strip()
+DREAM_PACK_USES = int(os.getenv("DREAM_PACK_USES", "3"))
+DREAM_PACK_HOURS = int(os.getenv("DREAM_PACK_HOURS", "72"))
+
 
 # ============================================================
 # Cookie settings
@@ -237,6 +243,7 @@ def _split_keywords(s: str) -> List[str]:
             continue
         seen.add(p)
         out.append(p)
+
     return out
 
 
@@ -355,6 +362,13 @@ def _is_span_blocked(span: Tuple[int, int], used_spans: List[Tuple[int, int]]) -
 
 def _normalize_yes_no(v: str) -> bool:
     return str(v or "").strip().lower() in {"yes", "y", "true", "1", "active", "on"}
+
+
+def _row_get(row: Dict, *keys: str) -> str:
+    for key in keys:
+        if key in row and str(row.get(key, "")).strip():
+            return str(row.get(key, "")).strip()
+    return ""
 
 
 # ============================================================
@@ -508,13 +522,118 @@ def _mark_subscriber(email: str, is_active: bool, stripe_customer_id: str = ""):
         return
     email_n = email.strip().lower()
     subs = _load_subscribers()
-    subs[email_n] = {
-        "email": email_n,
-        "is_active": bool(is_active),
-        "stripe_customer_id": stripe_customer_id,
-        "updated_at": datetime.utcnow().isoformat() + "Z",
-    }
+    rec = subs.get(email_n, {}) if isinstance(subs.get(email_n, {}), dict) else {}
+    rec["email"] = email_n
+    rec["is_active"] = bool(is_active)
+    rec["stripe_customer_id"] = stripe_customer_id
+    rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
+    subs[email_n] = rec
     _save_subscribers(subs)
+
+
+def _parse_iso_z(dt_str: str) -> Optional[datetime]:
+    try:
+        if not dt_str:
+            return None
+        return datetime.fromisoformat(dt_str.replace("Z", ""))
+    except Exception:
+        return None
+
+
+def _set_buyer_session(email: str):
+    email_n = (email or "").strip().lower()
+    if not email_n:
+        return
+    session["subscriber_email"] = email_n
+    session["buyer_set_at"] = datetime.utcnow().isoformat() + "Z"
+
+
+def _mark_dream_pack_purchase(email: str, uses: int = DREAM_PACK_USES, hours: int = DREAM_PACK_HOURS):
+    if not email:
+        return
+
+    email_n = email.strip().lower()
+    subs = _load_subscribers()
+    rec = subs.get(email_n, {}) if isinstance(subs.get(email_n, {}), dict) else {}
+
+    expires_at = datetime.utcnow() + timedelta(hours=hours)
+
+    rec["email"] = email_n
+    rec["dream_pack_uses_remaining"] = int(uses)
+    rec["dream_pack_expires_at"] = expires_at.isoformat() + "Z"
+    rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
+
+    if "is_active" not in rec:
+        rec["is_active"] = False
+    if "stripe_customer_id" not in rec:
+        rec["stripe_customer_id"] = ""
+
+    subs[email_n] = rec
+    _save_subscribers(subs)
+
+
+def _get_dream_pack_status(email: str) -> Dict[str, Any]:
+    email_n = (email or "").strip().lower()
+    if not email_n:
+        return {
+            "active": False,
+            "uses_remaining": 0,
+            "expires_at": "",
+        }
+
+    subs = _load_subscribers()
+    rec = subs.get(email_n, {}) if isinstance(subs.get(email_n, {}), dict) else {}
+
+    uses_remaining = 0
+    try:
+        uses_remaining = int(rec.get("dream_pack_uses_remaining", 0) or 0)
+    except Exception:
+        uses_remaining = 0
+
+    expires_at = (rec.get("dream_pack_expires_at") or "").strip()
+    expires_dt = _parse_iso_z(expires_at)
+
+    active = False
+    if uses_remaining > 0 and expires_dt and datetime.utcnow() < expires_dt:
+        active = True
+
+    return {
+        "active": active,
+        "uses_remaining": uses_remaining if active else 0,
+        "expires_at": expires_at if active else "",
+    }
+
+
+def _consume_dream_pack_use(email: str) -> Dict[str, Any]:
+    email_n = (email or "").strip().lower()
+    if not email_n:
+        return {
+            "active": False,
+            "uses_remaining": 0,
+            "expires_at": "",
+        }
+
+    subs = _load_subscribers()
+    rec = subs.get(email_n, {}) if isinstance(subs.get(email_n, {}), dict) else {}
+
+    current = _get_dream_pack_status(email_n)
+    if not current["active"]:
+        return current
+
+    uses_remaining = max(0, int(current["uses_remaining"]) - 1)
+    rec["dream_pack_uses_remaining"] = uses_remaining
+    rec["dream_pack_expires_at"] = current["expires_at"]
+    rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
+
+    subs[email_n] = rec
+    _save_subscribers(subs)
+
+    active_after = uses_remaining > 0 and bool(current["expires_at"])
+    return {
+        "active": active_after,
+        "uses_remaining": uses_remaining,
+        "expires_at": current["expires_at"],
+    }
 
 
 # ============================================================
@@ -538,10 +657,15 @@ def _clear_premium_session():
     session.pop("subscriber_email", None)
     session.pop("premium", None)
     session.pop("premium_set_at", None)
+    session.pop("buyer_set_at", None)
 
 
 def _stripe_config_ok() -> bool:
     return bool(stripe and STRIPE_SECRET_KEY and DEFAULT_STRIPE_PRICE_ID)
+
+
+def _stripe_dream_pack_ok() -> bool:
+    return bool(stripe and STRIPE_SECRET_KEY and PRICE_DREAM_PACK)
 
 
 def _stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
@@ -603,7 +727,21 @@ def _worksheet_to_rows(ws) -> Tuple[List[str], List[Dict[str, str]]]:
     if not values or len(values) < 1:
         return [], []
 
-    headers = [_normalize_header(h) for h in values[0]]
+    raw_headers = values[0]
+    headers = []
+    seen = {}
+
+    for h in raw_headers:
+        nh = _normalize_header(h)
+        if not nh:
+            nh = "col"
+        count = seen.get(nh, 0)
+        seen[nh] = count + 1
+        if count == 0:
+            headers.append(nh)
+        else:
+            headers.append(f"{nh}__{count+1}")
+
     rows: List[Dict[str, str]] = []
 
     for r in values[1:]:
@@ -678,62 +816,41 @@ def _doctrine_sheets_available() -> bool:
 # Legacy field getters
 # ============================================================
 def _get_symbol_cell(row: Dict) -> str:
-    return (
-        row.get("input")
-        or row.get("symbol")
-        or row.get("symbols")
-        or row.get("input symbol")
-        or row.get("dream symbol")
-        or row.get("symbol name")
-        or ""
-    ).strip()
+    return _row_get(
+        row,
+        "input", "symbol", "symbols", "input symbol", "dream symbol", "symbol name"
+    )
 
 
 def _get_spiritual_meaning_cell(row: Dict) -> str:
-    return (
-        row.get("spiritual meaning")
-        or row.get("spiritual_meaning")
-        or row.get("spiritual")
-        or row.get("meaning")
-        or row.get("base spiritual meaning")
-        or row.get("base_spiritual_meaning")
-        or row.get("final spiritual meaning")
-        or row.get("final_spiritual_meaning")
-        or ""
-    ).strip()
+    return _row_get(
+        row,
+        "spiritual meaning", "spiritual_meaning", "spiritual",
+        "meaning", "base spiritual meaning", "base_spiritual_meaning",
+        "final spiritual meaning", "final_spiritual_meaning"
+    )
 
 
 def _get_effects_cell(row: Dict) -> str:
-    return (
-        row.get("effects in the physical realm")
-        or row.get("effects_in_the_physical_realm")
-        or row.get("physical effects")
-        or row.get("physical_effects")
-        or row.get("effects")
-        or row.get("base physical effects")
-        or row.get("base_physical_effects")
-        or row.get("final physical effects")
-        or row.get("final_physical_effects")
-        or ""
-    ).strip()
+    return _row_get(
+        row,
+        "effects in the physical realm", "effects_in_the_physical_realm",
+        "physical effects", "physical_effects",
+        "effects", "base physical effects", "base_physical_effects",
+        "final physical effects", "final_physical_effects"
+    )
 
 
 def _get_what_to_do_cell(row: Dict) -> str:
-    return (
-        row.get("what to do")
-        or row.get("what_to_do")
-        or row.get("action")
-        or row.get("actions")
-        or row.get("base action")
-        or row.get("base_action")
-        or row.get("final action")
-        or row.get("final_action")
-        or ""
-    ).strip()
+    return _row_get(
+        row,
+        "what to do", "what_to_do", "action", "actions",
+        "base action", "base_action", "final action", "final_action"
+    )
 
 
 def _get_keywords_cell(row: Dict) -> str:
-    return (row.get("keywords") or row.get("keyword") or row.get("tags") or "").strip()
+    return _row_get(row, "keywords", "keyword", "tags")
 
 
 # ============================================================
@@ -871,57 +988,100 @@ def _match_symbols_legacy(
 
 
 # ============================================================
-# Doctrine Engine loaders
+# Doctrine field getters
 # ============================================================
 def _row_is_active(row: Dict) -> bool:
-    active = row.get("active", "")
+    active = _row_get(row, "active")
     if not active:
         return True
     return _normalize_yes_no(active)
 
 
 def _get_base_symbol_input(row: Dict) -> str:
-    return (row.get("input") or row.get("symbol") or "").strip()
+    return _row_get(row, "input", "symbol")
 
 
 def _get_base_symbol_category(row: Dict) -> str:
-    return (row.get("category") or "unknown").strip()
+    return _row_get(row, "category") or "unknown"
 
 
 def _get_base_symbol_meaning(row: Dict) -> str:
-    return (
-        row.get("base_spiritual_meaning")
-        or row.get("base spiritual meaning")
-        or row.get("spiritual meaning")
-        or ""
-    ).strip()
+    return _row_get(
+        row,
+        "base_spiritual_meaning", "base spiritual meaning",
+        "spiritual meaning", "meaning"
+    )
 
 
 def _get_base_symbol_effects(row: Dict) -> str:
-    return (
-        row.get("base_physical_effects")
-        or row.get("base physical effects")
-        or row.get("physical effects")
-        or ""
-    ).strip()
+    return _row_get(
+        row,
+        "base_physical_effects", "base physical effects",
+        "physical effects", "effects"
+    )
 
 
 def _get_base_symbol_action(row: Dict) -> str:
-    return (
-        row.get("base_action")
-        or row.get("base action")
-        or row.get("action")
-        or row.get("actions")
-        or ""
-    ).strip()
+    return _row_get(
+        row,
+        "base_action", "base action", "action", "actions"
+    )
 
 
-def _get_base_symbol_override_group(row: Dict) -> str:
-    return (row.get("override_group") or row.get("override group") or "").strip()
+def _get_rule_name(row: Dict, *keys: str) -> str:
+    return _row_get(row, *keys)
 
 
 def _get_rule_keywords(row: Dict) -> List[str]:
-    return _split_keywords(row.get("keywords", ""))
+    return _split_keywords(_row_get(row, "keywords", "keyword", "tags"))
+
+
+def _get_behavior_name(row: Dict) -> str:
+    return _get_rule_name(row, "behavior_name", "behavior")
+
+
+def _get_behavior_meaning_modifier(row: Dict) -> str:
+    return _row_get(row, "meaning_modifier", "meaning modifier", "effect", "effects")
+
+
+def _get_behavior_physical_modifier(row: Dict) -> str:
+    return _row_get(row, "physical_modifier", "physical modifier", "physical_effect", "physical effects", "effect", "effects")
+
+
+def _get_behavior_action_modifier(row: Dict) -> str:
+    return _row_get(row, "action_modifier", "action modifier", "action", "actions")
+
+
+def _get_state_name(row: Dict) -> str:
+    return _get_rule_name(row, "state_name", "state")
+
+
+def _get_state_meaning_modifier(row: Dict) -> str:
+    return _row_get(row, "meaning_modifier", "meaning modifier", "effect", "effects")
+
+
+def _get_state_physical_modifier(row: Dict) -> str:
+    return _row_get(row, "physical_modifier", "physical modifier", "physical_effect", "physical effects", "effect", "effects")
+
+
+def _get_state_action_modifier(row: Dict) -> str:
+    return _row_get(row, "action_modifier", "action modifier", "action", "actions")
+
+
+def _get_location_name(row: Dict) -> str:
+    return _get_rule_name(row, "location_name", "location")
+
+
+def _get_location_life_area_meaning(row: Dict) -> str:
+    return _row_get(row, "life_area_meaning", "life area meaning", "effect", "effects")
+
+
+def _get_location_physical_area_meaning(row: Dict) -> str:
+    return _row_get(row, "physical_area_meaning", "physical area meaning", "effect", "effects")
+
+
+def _get_location_action_modifier(row: Dict) -> str:
+    return _row_get(row, "action_modifier", "action modifier", "action", "actions")
 
 
 def _get_output_template(rows: List[Dict], template_type: str, fallback: str) -> str:
@@ -929,8 +1089,8 @@ def _get_output_template(rows: List[Dict], template_type: str, fallback: str) ->
     for row in rows:
         if not _row_is_active(row):
             continue
-        if _normalize_text(row.get("template_type", "")) == wanted:
-            txt = (row.get("template_text") or "").strip()
+        if _normalize_text(_row_get(row, "template_type")) == wanted:
+            txt = _row_get(row, "template_text")
             if txt:
                 return txt
     return fallback
@@ -1038,7 +1198,7 @@ def _match_base_symbols_doctrine(
 def _detect_rule_hits(
     dream: str,
     rows: List[Dict],
-    name_field: str,
+    kind: str,
     priority_field: str = "priority"
 ) -> List[Dict[str, Any]]:
     dream_norm = _normalize_text(dream)
@@ -1049,7 +1209,15 @@ def _detect_rule_hits(
         if not _row_is_active(row):
             continue
 
-        name = (row.get(name_field) or "").strip()
+        if kind == "behavior":
+            name = _get_behavior_name(row)
+        elif kind == "state":
+            name = _get_state_name(row)
+        elif kind == "location":
+            name = _get_location_name(row)
+        else:
+            name = ""
+
         if not name:
             continue
 
@@ -1075,7 +1243,7 @@ def _detect_rule_hits(
 
         priority_val = 0
         try:
-            priority_val = int(str(row.get(priority_field, "0") or "0").strip())
+            priority_val = int(str(_row_get(row, priority_field) or "0").strip())
         except Exception:
             priority_val = 0
 
@@ -1085,6 +1253,7 @@ def _detect_rule_hits(
             "matched_token": matched_token,
             "token_len": token_len,
             "priority": priority_val,
+            "kind": kind,
         })
 
     hits.sort(key=lambda x: (-x["token_len"], -x["priority"], x["name"].lower()))
@@ -1100,6 +1269,11 @@ def _override_match_ok(override_val: str, actual_vals: List[str]) -> bool:
         return True
     actual_norm = {_normalize_text(x) for x in actual_vals if x}
     return override_val_n in actual_norm
+
+
+def _parse_simple_condition(condition: str) -> Dict[str, List[str]]:
+    tokens = [_normalize_text(x) for x in re.split(r"\+", condition or "") if _normalize_text(x)]
+    return {"tokens": tokens}
 
 
 def _apply_override_rules(
@@ -1121,35 +1295,54 @@ def _apply_override_rules(
     best: Optional[Dict[str, Any]] = None
     best_priority = -10**9
 
+    all_values_norm = {
+        "symbols": {_normalize_text(x) for x in symbol_names if x},
+        "behaviors": {_normalize_text(x) for x in behavior_names if x},
+        "states": {_normalize_text(x) for x in state_names if x},
+        "locations": {_normalize_text(x) for x in location_names if x},
+        "dream": _normalize_text(dream),
+    }
+
     for row in override_rows:
         if not _row_is_active(row):
             continue
 
-        override_name = (row.get("override_name") or "").strip()
-        if not override_name:
-            continue
+        override_name = _row_get(row, "override_name")
+        condition = _row_get(row, "condition")
+        symbol_match = _row_get(row, "symbol_match")
+        behavior_match = _row_get(row, "behavior_match")
+        state_match = _row_get(row, "state_match")
+        location_match = _row_get(row, "location_match")
+        context_match = _row_get(row, "context_match")
 
-        symbol_match = row.get("symbol_match", "")
-        behavior_match = row.get("behavior_match", "")
-        state_match = row.get("state_match", "")
-        location_match = row.get("location_match", "")
-        context_match = row.get("context_match", "")
+        is_match = False
 
-        if not _override_match_ok(symbol_match, symbol_names):
-            continue
-        if not _override_match_ok(behavior_match, behavior_names):
-            continue
-        if not _override_match_ok(state_match, state_names):
-            continue
-        if not _override_match_ok(location_match, location_names):
-            continue
+        if override_name or symbol_match or behavior_match or state_match or location_match or context_match:
+            if _override_match_ok(symbol_match, symbol_names) and \
+               _override_match_ok(behavior_match, behavior_names) and \
+               _override_match_ok(state_match, state_names) and \
+               _override_match_ok(location_match, location_names):
+                if context_match:
+                    is_match = _contains_phrase(all_values_norm["dream"], context_match)
+                else:
+                    is_match = True
 
-        context_match_n = _normalize_text(context_match)
-        if context_match_n and not _contains_phrase(_normalize_text(dream), context_match_n):
+        elif condition:
+            parsed = _parse_simple_condition(condition)
+            tokens = parsed["tokens"]
+            combined = set()
+            combined.update(all_values_norm["symbols"])
+            combined.update(all_values_norm["behaviors"])
+            combined.update(all_values_norm["states"])
+            combined.update(all_values_norm["locations"])
+            if tokens and all(t in combined for t in tokens):
+                is_match = True
+
+        if not is_match:
             continue
 
         try:
-            pr = int(str(row.get("priority", "0") or "0").strip())
+            pr = int(str(_row_get(row, "priority") or "0").strip())
         except Exception:
             pr = 0
 
@@ -1157,17 +1350,21 @@ def _apply_override_rules(
             best_priority = pr
             best = row
 
-    if best:
-        return {
-            "override_name": best.get("override_name", ""),
-            "spiritual": (best.get("final_spiritual_meaning") or "").strip(),
-            "physical": (best.get("final_physical_effects") or "").strip(),
-            "action": (best.get("final_action") or "").strip(),
-            "priority": best_priority,
-            "row": best,
-        }
+    if not best:
+        return None
 
-    return None
+    spiritual = _row_get(best, "final_spiritual_meaning", "override_effect", "effect", "effects")
+    physical = _row_get(best, "final_physical_effects")
+    action = _row_get(best, "final_action")
+
+    return {
+        "override_name": _row_get(best, "override_name", "condition"),
+        "spiritual": spiritual,
+        "physical": physical,
+        "action": action,
+        "priority": best_priority,
+        "row": best,
+    }
 
 
 # ============================================================
@@ -1213,6 +1410,11 @@ def _build_doctrine_interpretation(
         "closing",
         "Dreams expose what needs attention so you can respond with wisdom."
     )
+    default_tpl = _get_output_template(
+        templates,
+        "default",
+        "{symbol} represents {meaning}. The behavior shows {behavior_effect}. The situation is {state_effect} and relates to {location_effect}."
+    )
 
     behavior_names = [x["name"] for x in behaviors]
     state_names = [x["name"] for x in states]
@@ -1232,21 +1434,23 @@ def _build_doctrine_interpretation(
         physical = override_hit["physical"] or "This override may affect how the dream shows up in daily life."
         action = override_hit["action"] or "Pray for confirmation and respond with discernment."
 
-        full_parts = [
-            opening_tpl,
-            logic_summary,
-            spiritual,
-            physical,
-            action_tpl.format(action=_strip_trailing_punct(action)),
-            closing_tpl,
-        ]
+        full_parts = [opening_tpl]
+        if logic_summary:
+            full_parts.append(logic_summary)
+        full_parts.append(spiritual)
+        if physical:
+            full_parts.append(physical)
+        if action:
+            full_parts.append(action_tpl.format(action=_strip_trailing_punct(action)))
+        full_parts.append(closing_tpl)
+
         full_interpretation = "\n\n".join([_ensure_terminal_punct(x) for x in full_parts if x and _strip_trailing_punct(x)])
 
         return {
             "interpretation": {
                 "spiritual_meaning": _ensure_terminal_punct(spiritual),
-                "effects_in_physical_realm": _ensure_terminal_punct(physical),
-                "what_to_do": _ensure_terminal_punct(action),
+                "effects_in_physical_realm": _ensure_terminal_punct(physical) if physical else "No clear physical effects were generated.",
+                "what_to_do": _ensure_terminal_punct(action) if action else "Pray for wisdom and confirmation.",
             },
             "full_interpretation": full_interpretation,
             "top_symbols": top_symbols,
@@ -1262,65 +1466,47 @@ def _build_doctrine_interpretation(
     if logic_summary:
         spiritual_lines.append(logic_summary)
 
+    behavior_mod = _join_nonempty([_get_behavior_meaning_modifier(x["row"]) for x in behaviors], "; ")
+    behavior_phys_mod = _join_nonempty([_get_behavior_physical_modifier(x["row"]) for x in behaviors], "; ")
+    behavior_action_mod = _join_nonempty([_get_behavior_action_modifier(x["row"]) for x in behaviors], "; ")
+
+    state_mod = _join_nonempty([_get_state_meaning_modifier(x["row"]) for x in states], "; ")
+    state_phys_mod = _join_nonempty([_get_state_physical_modifier(x["row"]) for x in states], "; ")
+    state_action_mod = _join_nonempty([_get_state_action_modifier(x["row"]) for x in states], "; ")
+
+    location_mod = _join_nonempty([_get_location_life_area_meaning(x["row"]) for x in locations], "; ")
+    location_phys_mod = _join_nonempty([_get_location_physical_area_meaning(x["row"]) for x in locations], "; ")
+    location_action_mod = _join_nonempty([_get_location_action_modifier(x["row"]) for x in locations], "; ")
+
     for row, _sc, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
         symbol = _get_base_symbol_input(row)
         base_meaning = _get_base_symbol_meaning(row)
         base_effects = _get_base_symbol_effects(row)
         base_action = _get_base_symbol_action(row)
-        category = _get_base_symbol_category(row)
 
-        behavior_mod = ""
-        behavior_phys_mod = ""
-        behavior_action_mod = ""
-        if behaviors:
-            behavior_mod = _join_nonempty([(x["row"].get("meaning_modifier") or "") for x in behaviors], "; ")
-            behavior_phys_mod = _join_nonempty([(x["row"].get("physical_modifier") or "") for x in behaviors], "; ")
-            behavior_action_mod = _join_nonempty([(x["row"].get("action_modifier") or "") for x in behaviors], "; ")
+        final_meaning = _join_nonempty([base_meaning, behavior_mod, state_mod, location_mod], " ")
+        final_effects = _join_nonempty([base_effects, behavior_phys_mod, state_phys_mod, location_phys_mod], " ")
+        final_action = _join_nonempty([base_action, behavior_action_mod, state_action_mod, location_action_mod], " Then, ")
 
-        state_mod = ""
-        state_phys_mod = ""
-        state_action_mod = ""
-        if states:
-            state_mod = _join_nonempty([(x["row"].get("meaning_modifier") or "") for x in states], "; ")
-            state_phys_mod = _join_nonempty([(x["row"].get("physical_modifier") or "") for x in states], "; ")
-            state_action_mod = _join_nonempty([(x["row"].get("action_modifier") or "") for x in states], "; ")
-
-        location_mod = ""
-        location_phys_mod = ""
-        location_action_mod = ""
-        if locations:
-            location_mod = _join_nonempty([(x["row"].get("life_area_meaning") or "") for x in locations], "; ")
-            location_phys_mod = _join_nonempty([(x["row"].get("physical_area_meaning") or "") for x in locations], "; ")
-            location_action_mod = _join_nonempty([(x["row"].get("action_modifier") or "") for x in locations], "; ")
-
-        meaning_parts = [base_meaning]
-        if category and category.lower() != "unknown":
-            meaning_parts.append(f"Category: {category}")
-        if behavior_mod:
-            meaning_parts.append(behavior_mod)
-        if state_mod:
-            meaning_parts.append(state_mod)
-        if location_mod:
-            meaning_parts.append(location_mod)
-
-        final_meaning = _join_nonempty(meaning_parts, " ")
         if final_meaning:
-            spiritual_lines.append(
-                _ensure_terminal_punct(symbol_tpl.format(
+            rendered_default = default_tpl
+            if "{behavior_effect}" in rendered_default or "{state_effect}" in rendered_default or "{location_effect}" in rendered_default:
+                text = rendered_default.format(
                     symbol=_title_case_symbol(symbol),
-                    meaning=_strip_trailing_punct(final_meaning)
-                ))
-            )
+                    meaning=_strip_trailing_punct(base_meaning or final_meaning),
+                    behavior_effect=_strip_trailing_punct(behavior_mod or "no special behavior was detected"),
+                    state_effect=_strip_trailing_punct(state_mod or "no special state was detected"),
+                    location_effect=_strip_trailing_punct(location_mod or "no special location was detected"),
+                )
+                spiritual_lines.append(_ensure_terminal_punct(text))
+            else:
+                spiritual_lines.append(
+                    _ensure_terminal_punct(symbol_tpl.format(
+                        symbol=_title_case_symbol(symbol),
+                        meaning=_strip_trailing_punct(final_meaning)
+                    ))
+                )
 
-        effects_parts = [base_effects]
-        if behavior_phys_mod:
-            effects_parts.append(behavior_phys_mod)
-        if state_phys_mod:
-            effects_parts.append(state_phys_mod)
-        if location_phys_mod:
-            effects_parts.append(location_phys_mod)
-
-        final_effects = _join_nonempty(effects_parts, " ")
         if final_effects:
             physical_lines.append(
                 _ensure_terminal_punct(physical_tpl.format(
@@ -1328,15 +1514,6 @@ def _build_doctrine_interpretation(
                 ))
             )
 
-        action_parts = [base_action]
-        if behavior_action_mod:
-            action_parts.append(behavior_action_mod)
-        if state_action_mod:
-            action_parts.append(state_action_mod)
-        if location_action_mod:
-            action_parts.append(location_action_mod)
-
-        final_action = _join_nonempty(action_parts, " Then, ")
         if final_action:
             action_lines.append(
                 _ensure_terminal_punct(action_tpl.format(
@@ -1751,6 +1928,9 @@ def health():
         "subscribers_file": str(SUBSCRIBERS_PATH),
         "price_weekly_set": bool(PRICE_WEEKLY),
         "price_monthly_set": bool(PRICE_MONTHLY),
+        "price_dream_pack_set": bool(PRICE_DREAM_PACK),
+        "dream_pack_uses": DREAM_PACK_USES,
+        "dream_pack_hours": DREAM_PACK_HOURS,
         "cookie_samesite": COOKIE_SAMESITE,
         "return_url": RETURN_URL,
         "session_premium": _is_premium_session(),
@@ -1794,19 +1974,31 @@ def check_access():
         return jsonify({"ok": False, "error": "Please enter a valid email."}), 400
 
     is_active, customer_id = _stripe_active_subscription_for_email(email)
-    if not is_active:
-        return jsonify({
-            "ok": False,
-            "access": "inactive",
-            "message": "No active subscription found for that email. If you subscribed with a different email, use that one."
-        }), 402
+    if is_active:
+        _set_premium_session(email)
+        _mark_subscriber(email, True, customer_id)
 
-    _set_premium_session(email)
-    _mark_subscriber(email, True, customer_id)
+        resp = make_response(jsonify({"ok": True, "access": "active", "return_url": RETURN_URL}))
+        resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+        return resp
 
-    resp = make_response(jsonify({"ok": True, "access": "active", "return_url": RETURN_URL}))
-    resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
-    return resp
+    dream_pack_status = _get_dream_pack_status(email)
+    if dream_pack_status["active"]:
+        _set_buyer_session(email)
+        resp = make_response(jsonify({
+            "ok": True,
+            "access": "dream_pack_active",
+            "return_url": RETURN_URL,
+            "dream_pack": dream_pack_status,
+        }))
+        resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+        return resp
+
+    return jsonify({
+        "ok": False,
+        "access": "inactive",
+        "message": "No active subscription or dream pack found for that email."
+    }), 402
 
 
 @app.route("/create-checkout-session", methods=["POST"])
@@ -1842,6 +2034,44 @@ def create_checkout_session():
         return make_response(f"Stripe error: {str(e)}", 500)
 
 
+@app.route("/create-dream-pack-checkout-session", methods=["POST"])
+def create_dream_pack_checkout_session():
+    if not _stripe_dream_pack_ok():
+        return make_response(
+            "Dream pack Stripe config missing. Ensure STRIPE_SECRET_KEY and PRICE_DREAM_PACK are set.",
+            500,
+        )
+
+    email = ""
+    if request.form and request.form.get("email"):
+        email = (request.form.get("email") or "").strip().lower()
+    else:
+        data = request.get_json(silent=True) or {}
+        email = (data.get("email") or "").strip().lower()
+
+    if not email or "@" not in email:
+        return make_response("Missing email for dream pack checkout.", 400)
+
+    stripe.api_key = STRIPE_SECRET_KEY
+
+    try:
+        checkout = stripe.checkout.Session.create(
+            mode="payment",
+            line_items=[{"price": PRICE_DREAM_PACK, "quantity": 1}],
+            customer_email=email,
+            metadata={
+                "purchase_type": "dream_pack",
+                "dream_pack_uses": str(DREAM_PACK_USES),
+                "dream_pack_hours": str(DREAM_PACK_HOURS),
+            },
+            success_url=url_for("dream_pack_success", _external=True) + f"?email={email}",
+            cancel_url=url_for("upgrade", _external=True),
+        )
+        return redirect(checkout.url)
+    except Exception as e:
+        return make_response(f"Stripe dream pack error: {str(e)}", 500)
+
+
 @app.route("/payment-success", methods=["GET"])
 def payment_success():
     email = (request.args.get("email") or "").strip().lower()
@@ -1874,6 +2104,36 @@ def payment_success():
     return resp
 
 
+@app.route("/dream-pack-success", methods=["GET"])
+def dream_pack_success():
+    email = (request.args.get("email") or "").strip().lower()
+
+    if email and "@" in email:
+        _set_buyer_session(email)
+        _mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
+
+    resp = Response(
+        f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Dream Pack Active</title>
+        <style>
+          body{{margin:0;background:#07070a;color:#f2f2f7;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:26px}}
+          .card{{max-width:520px;margin:0 auto;background:#101017;border:1px solid rgba(212,175,55,.22);border-radius:18px;padding:18px}}
+          .muted{{color:#b6b6c3;font-size:13px;margin-top:8px}}
+        </style></head><body>
+        <div class="card">
+          <h2 style="margin:0 0 8px">3 Dream Pack Activated</h2>
+          <div class="muted">Sending you back to the interpreter…</div>
+        </div>
+        <script>
+          setTimeout(()=>{{ window.location.href={json.dumps(RETURN_URL)}; }}, 1200);
+        </script>
+        </body></html>""",
+        mimetype="text/html"
+    )
+    resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+    return resp
+
+
 @app.route("/webhook", methods=["POST"])
 def stripe_webhook():
     if not stripe or not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET:
@@ -1893,8 +2153,15 @@ def stripe_webhook():
         session_obj = event["data"]["object"]
         email = (session_obj.get("customer_email") or "").strip().lower()
         customer_id = session_obj.get("customer") or ""
-        if email:
+        mode = (session_obj.get("mode") or "").strip().lower()
+        metadata = session_obj.get("metadata") or {}
+        purchase_type = (metadata.get("purchase_type") or "").strip().lower()
+
+        if email and mode == "subscription":
             _mark_subscriber(email, True, customer_id)
+
+        if email and mode == "payment" and purchase_type == "dream_pack":
+            _mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
 
     if event["type"] == "customer.subscription.deleted":
         sub = event["data"]["object"]
@@ -1931,6 +2198,9 @@ def interpret():
         return jsonify({"error": "Missing 'dream' or 'text'"}), 400
 
     is_paid = _is_premium_session()
+    session_email = _get_session_email()
+    dream_pack_status_before = _get_dream_pack_status(session_email)
+    has_active_dream_pack = bool(dream_pack_status_before["active"])
 
     if not is_paid:
         ip = _get_client_ip()
@@ -1938,25 +2208,37 @@ def interpret():
         ip_used = _shadow_count(ip)
         effective_used = max(cookie_used, ip_used)
 
-        if effective_used >= FREE_TRIES:
+        if (not has_active_dream_pack) and effective_used >= FREE_TRIES:
             return jsonify({
                 "blocked": True,
                 "reason": "free_limit_reached",
-                "message": f"You’ve used your {FREE_TRIES} free tries. Subscribe to continue.",
+                "message": f"You’ve used your {FREE_TRIES} free tries. Buy 3 more dreams for $1 or subscribe to continue.",
                 "redirect": url_for("upgrade"),
                 "free_uses_left": 0,
                 "access": "blocked",
                 "is_paid": False,
+                "dream_pack_available": bool(PRICE_DREAM_PACK),
+                "dream_pack": {
+                    "active": False,
+                    "uses_remaining": 0,
+                    "expires_at": "",
+                },
             }), 402
 
     free_uses_left = 0
+    dream_pack_status_after = dream_pack_status_before
+
     if not is_paid:
-        ip = _get_client_ip()
-        cookie_used = _get_cookie_tries_used()
-        ip_used = _shadow_count(ip)
-        effective_used = max(cookie_used, ip_used)
-        _shadow_increment(ip)
-        free_uses_left = _free_tries_remaining_after_this(effective_used)
+        if has_active_dream_pack:
+            dream_pack_status_after = _consume_dream_pack_use(session_email)
+            free_uses_left = 0
+        else:
+            ip = _get_client_ip()
+            cookie_used = _get_cookie_tries_used()
+            ip_used = _shadow_count(ip)
+            effective_used = max(cookie_used, ip_used)
+            _shadow_increment(ip)
+            free_uses_left = _free_tries_remaining_after_this(effective_used)
 
     doctrine_active = DOCTRINE_MODE and _doctrine_sheets_available()
 
@@ -1971,9 +2253,9 @@ def interpret():
             template_rows = sheets.get(SHEET_OUTPUT_TEMPLATES, [])
 
             base_matches = _match_base_symbols_doctrine(dream, base_rows, top_k=3)
-            behaviors = _detect_rule_hits(dream, behavior_rows, "behavior_name")
-            states = _detect_rule_hits(dream, state_rows, "state_name")
-            locations = _detect_rule_hits(dream, location_rows, "location_name")
+            behaviors = _detect_rule_hits(dream, behavior_rows, "behavior")
+            states = _detect_rule_hits(dream, state_rows, "state")
+            locations = _detect_rule_hits(dream, location_rows, "location")
             override_hit = _apply_override_rules(
                 base_matches=base_matches,
                 behaviors=behaviors,
@@ -1992,6 +2274,11 @@ def interpret():
                     "access": "paid" if is_paid else "free",
                     "is_paid": bool(is_paid),
                     "free_uses_left": free_uses_left,
+                    "dream_pack": {
+                        "active": bool(dream_pack_status_after["active"]),
+                        "uses_remaining": int(dream_pack_status_after["uses_remaining"]),
+                        "expires_at": dream_pack_status_after["expires_at"],
+                    },
                     "seal": seal,
                     "brain": {
                         "behaviors": [b["name"] for b in behaviors],
@@ -2037,6 +2324,11 @@ def interpret():
                     "access": "paid" if is_paid else "free",
                     "is_paid": bool(is_paid),
                     "free_uses_left": free_uses_left,
+                    "dream_pack": {
+                        "active": bool(dream_pack_status_after["active"]),
+                        "uses_remaining": int(dream_pack_status_after["uses_remaining"]),
+                        "expires_at": dream_pack_status_after["expires_at"],
+                    },
                     "seal": seal,
                     "brain": {
                         "behaviors": [b["name"] for b in behaviors],
@@ -2087,6 +2379,11 @@ def interpret():
                 "access": "paid" if is_paid else "free",
                 "is_paid": bool(is_paid),
                 "free_uses_left": free_uses_left,
+                "dream_pack": {
+                    "active": bool(dream_pack_status_after["active"]),
+                    "uses_remaining": int(dream_pack_status_after["uses_remaining"]),
+                    "expires_at": dream_pack_status_after["expires_at"],
+                },
                 "seal": seal,
                 "brain": {},
                 "receipt": {
@@ -2143,6 +2440,11 @@ def interpret():
                 "access": "paid" if is_paid else "free",
                 "is_paid": bool(is_paid),
                 "free_uses_left": free_uses_left,
+                "dream_pack": {
+                    "active": bool(dream_pack_status_after["active"]),
+                    "uses_remaining": int(dream_pack_status_after["uses_remaining"]),
+                    "expires_at": dream_pack_status_after["expires_at"],
+                },
                 "seal": seal,
                 "brain": {},
                 "interpretation": {
@@ -2162,7 +2464,7 @@ def interpret():
             _log("INTERPRET RESPONSE MODE:", "legacy_matched")
             resp = make_response(jsonify(payload))
 
-    if not is_paid:
+    if not is_paid and not has_active_dream_pack:
         cookie_used = _get_cookie_tries_used()
         resp.set_cookie(
             COOKIE_NAME,
@@ -2187,6 +2489,7 @@ def track():
         "event": event_name,
         "session_email": _get_session_email(),
         "session_premium": _is_premium_session(),
+        "dream_pack": _get_dream_pack_status(_get_session_email()),
     })
 
 
@@ -2237,6 +2540,9 @@ def debug_config():
         "stripe_has_key": bool(STRIPE_SECRET_KEY),
         "stripe_has_price": bool(DEFAULT_STRIPE_PRICE_ID),
         "webhook_configured": bool(STRIPE_WEBHOOK_SECRET),
+        "price_dream_pack_set": bool(PRICE_DREAM_PACK),
+        "dream_pack_uses": DREAM_PACK_USES,
+        "dream_pack_hours": DREAM_PACK_HOURS,
         "counts_file": str(USAGE_COUNTS_PATH),
         "subscribers_file": str(SUBSCRIBERS_PATH),
         "cookie_samesite": COOKIE_SAMESITE,

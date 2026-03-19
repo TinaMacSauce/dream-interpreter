@@ -1,5 +1,5 @@
 # app.py — Jamaican True Stories Dream Interpreter
-# Production version
+# Final production version
 #
 # Features:
 # - Stripe subscription access
@@ -400,6 +400,251 @@ def _validate_dream_text(dream: str) -> Optional[str]:
     if len(dream) > MAX_DREAM_LENGTH:
         return f"Dream text is too long. Maximum allowed is {MAX_DREAM_LENGTH} characters."
     return None
+
+
+# ============================================================
+# Elite formatting helpers
+# ============================================================
+def _capitalize_first(s: str) -> str:
+    s = _clean_sentence(s)
+    if not s:
+        return ""
+    return s[:1].upper() + s[1:]
+
+
+def _dedupe_words_soft(text: str) -> str:
+    text = _clean_sentence(text)
+    if not text:
+        return ""
+
+    words = text.split()
+    out = []
+    prev = ""
+
+    for w in words:
+        wl = w.lower().strip(".,;:!?")
+        if wl and wl == prev:
+            continue
+        out.append(w)
+        prev = wl
+
+    return " ".join(out)
+
+
+def _sentence(text: str) -> str:
+    text = _dedupe_words_soft(text)
+    text = _capitalize_first(text)
+    return _ensure_terminal_punct(text)
+
+
+def _join_phrases_natural(parts: List[str]) -> str:
+    cleaned = [_strip_trailing_punct(x) for x in parts if x and _strip_trailing_punct(x)]
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    if len(cleaned) == 2:
+        return f"{cleaned[0]} and {cleaned[1]}"
+    return ", ".join(cleaned[:-1]) + f", and {cleaned[-1]}"
+
+
+def _clean_debug_like_phrase(text: str) -> str:
+    text = _clean_sentence(text)
+    if not text:
+        return ""
+
+    banned_starts = [
+        "logic layer",
+        "behavior detected",
+        "state detected",
+        "location detected",
+    ]
+
+    lower = text.lower()
+    for b in banned_starts:
+        if lower.startswith(b):
+            return ""
+
+    return text
+
+
+def _normalize_effect_phrase(text: str) -> str:
+    text = _strip_trailing_punct(text)
+    if not text:
+        return ""
+
+    lowered = text.lower()
+
+    replacements = {
+        "active attack": "an active attack",
+        "intensified": "heightened intensity",
+        "personal life": "your personal life",
+        "attack or manipulation": "attack or manipulation",
+        "enemy or deception": "pressure through deception or opposition",
+    }
+
+    if lowered in replacements:
+        return replacements[lowered]
+
+    return text
+
+
+def _normalize_action_phrase(text: str) -> str:
+    text = _strip_trailing_punct(text)
+    if not text:
+        return ""
+
+    lowered = text.lower()
+
+    if lowered.startswith("what to do:"):
+        text = text.split(":", 1)[-1].strip()
+        lowered = text.lower()
+
+    elite_map = {
+        "pray and be alert": "Stay prayerful and alert. Be mindful of spiritual influence around you",
+        "pray for wisdom and confirmation": "Pray for wisdom and confirmation. Stay spiritually grounded as clarity comes",
+        "pray": "Pray and remain spiritually steady",
+        "be alert": "Stay alert and guard what concerns you",
+    }
+
+    if lowered in elite_map:
+        return elite_map[lowered]
+
+    return text
+
+
+def _merge_natural_paragraphs(parts: List[str]) -> str:
+    cleaned = []
+    seen = set()
+
+    for p in parts:
+        p = _clean_debug_like_phrase(p)
+        p = _clean_sentence(p)
+        if not p:
+            continue
+        key = p.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(p)
+
+    return "\n".join(cleaned).strip()
+
+
+def _elite_behavior_sentence(text: str) -> str:
+    text = _strip_trailing_punct(text)
+    if not text:
+        return ""
+    return _sentence(f"This suggests {text}")
+
+
+def _elite_state_sentence(text: str) -> str:
+    text = _strip_trailing_punct(text)
+    if not text:
+        return ""
+    return _sentence(f"This indicates {text}")
+
+
+def _elite_location_sentence(text: str) -> str:
+    text = _strip_trailing_punct(text)
+    if not text:
+        return ""
+    return _sentence(f"This points to {text}")
+
+
+def _build_spiritual_meaning_paragraph(
+    symbol: str,
+    base_meaning: str,
+    behavior_mod: str,
+    state_mod: str,
+    location_mod: str,
+    override_spiritual: str = "",
+) -> str:
+    symbol_name = _title_case_symbol(symbol)
+    core = _strip_trailing_punct(override_spiritual or base_meaning)
+
+    parts = []
+
+    if core:
+        parts.append(_sentence(f"{symbol_name} represents {core}"))
+
+    if behavior_mod:
+        parts.append(_elite_behavior_sentence(behavior_mod))
+
+    if state_mod:
+        parts.append(_elite_state_sentence(state_mod))
+
+    if location_mod:
+        parts.append(_elite_location_sentence(location_mod))
+
+    return " ".join([p for p in parts if p]).strip()
+
+
+def _build_physical_effect_sentence(
+    base_effects: str,
+    behavior_phys_mod: str,
+    state_phys_mod: str,
+    location_phys_mod: str,
+    override_physical: str = "",
+) -> str:
+    parts = []
+
+    if override_physical:
+        parts.append(_normalize_effect_phrase(override_physical))
+    if base_effects:
+        parts.append(_normalize_effect_phrase(base_effects))
+    if behavior_phys_mod:
+        parts.append(_normalize_effect_phrase(behavior_phys_mod))
+    if state_phys_mod:
+        parts.append(_normalize_effect_phrase(state_phys_mod))
+    if location_phys_mod:
+        parts.append(_normalize_effect_phrase(location_phys_mod))
+
+    joined = _join_phrases_natural(parts)
+    if not joined:
+        return "No clear physical effects were generated."
+
+    return _sentence(f"This may manifest as {joined}")
+
+
+def _build_action_sentence(
+    base_action: str,
+    behavior_action_mod: str,
+    state_action_mod: str,
+    location_action_mod: str,
+    override_action: str = "",
+) -> str:
+    parts = []
+
+    if override_action:
+        parts.append(_normalize_action_phrase(override_action))
+    if base_action:
+        parts.append(_normalize_action_phrase(base_action))
+    if behavior_action_mod:
+        parts.append(_normalize_action_phrase(behavior_action_mod))
+    if state_action_mod:
+        parts.append(_normalize_action_phrase(state_action_mod))
+    if location_action_mod:
+        parts.append(_normalize_action_phrase(location_action_mod))
+
+    cleaned_parts = []
+    seen = set()
+
+    for p in parts:
+        p = _clean_sentence(p)
+        if not p:
+            continue
+        key = p.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned_parts.append(p)
+
+    joined = " ".join(cleaned_parts).strip()
+    if not joined:
+        return "Pray for wisdom and confirmation."
+
+    return _sentence(joined)
 
 
 # ============================================================
@@ -1077,7 +1322,12 @@ def _get_behavior_meaning_modifier(row: Dict) -> str:
 
 
 def _get_behavior_physical_modifier(row: Dict) -> str:
-    return _row_get(row, "physical_modifier", "physical modifier", "physical_effect", "physical effects", "effect", "effects")
+    return _row_get(
+        row,
+        "physical_modifier", "physical modifier",
+        "physical_effect", "physical effects",
+        "effect", "effects"
+    )
 
 
 def _get_behavior_action_modifier(row: Dict) -> str:
@@ -1093,7 +1343,12 @@ def _get_state_meaning_modifier(row: Dict) -> str:
 
 
 def _get_state_physical_modifier(row: Dict) -> str:
-    return _row_get(row, "physical_modifier", "physical modifier", "physical_effect", "physical effects", "effect", "effects")
+    return _row_get(
+        row,
+        "physical_modifier", "physical modifier",
+        "physical_effect", "physical effects",
+        "effect", "effects"
+    )
 
 
 def _get_state_action_modifier(row: Dict) -> str:
@@ -1422,67 +1677,68 @@ def _build_doctrine_interpretation(
         "opening",
         "This dream is revealing a spiritual condition, not predicting physical harm."
     )
-    symbol_tpl = _get_output_template(
-        templates,
-        "symbol_sentence",
-        "{symbol} points to {meaning}."
-    )
-    physical_tpl = _get_output_template(
-        templates,
-        "physical_sentence",
-        "This may show up as {effect} in daily life."
-    )
-    action_tpl = _get_output_template(
-        templates,
-        "action_sentence",
-        "What to do: {action}."
-    )
     closing_tpl = _get_output_template(
         templates,
         "closing",
         "Dreams expose what needs attention so you can respond with wisdom."
     )
-    default_tpl = _get_output_template(
-        templates,
-        "default",
-        "{symbol} represents {meaning}. The behavior shows {behavior_effect}. The situation is {state_effect} and relates to {location_effect}."
-    )
-
-    behavior_names = [x["name"] for x in behaviors]
-    state_names = [x["name"] for x in states]
-    location_names = [x["name"] for x in locations]
-
-    logic_summary_bits = []
-    if behavior_names:
-        logic_summary_bits.append(f"behavior detected: {', '.join(behavior_names)}")
-    if state_names:
-        logic_summary_bits.append(f"state detected: {', '.join(state_names)}")
-    if location_names:
-        logic_summary_bits.append(f"location detected: {', '.join(location_names)}")
-    logic_summary = _ensure_terminal_punct("Logic layer — " + "; ".join(logic_summary_bits)) if logic_summary_bits else ""
 
     spiritual_lines: List[str] = []
     physical_lines: List[str] = []
     action_lines: List[str] = []
 
-    if logic_summary:
-        spiritual_lines.append(logic_summary)
+    behavior_mod = _join_nonempty([_get_behavior_meaning_modifier(x["row"]) for x in behaviors], " ")
+    behavior_phys_mod = _join_nonempty([_get_behavior_physical_modifier(x["row"]) for x in behaviors], " ")
+    behavior_action_mod = _join_nonempty([_get_behavior_action_modifier(x["row"]) for x in behaviors], " ")
 
-    behavior_mod = _join_nonempty([_get_behavior_meaning_modifier(x["row"]) for x in behaviors], "; ")
-    behavior_phys_mod = _join_nonempty([_get_behavior_physical_modifier(x["row"]) for x in behaviors], "; ")
-    behavior_action_mod = _join_nonempty([_get_behavior_action_modifier(x["row"]) for x in behaviors], "; ")
+    state_mod = _join_nonempty([_get_state_meaning_modifier(x["row"]) for x in states], " ")
+    state_phys_mod = _join_nonempty([_get_state_physical_modifier(x["row"]) for x in states], " ")
+    state_action_mod = _join_nonempty([_get_state_action_modifier(x["row"]) for x in states], " ")
 
-    state_mod = _join_nonempty([_get_state_meaning_modifier(x["row"]) for x in states], "; ")
-    state_phys_mod = _join_nonempty([_get_state_physical_modifier(x["row"]) for x in states], "; ")
-    state_action_mod = _join_nonempty([_get_state_action_modifier(x["row"]) for x in states], "; ")
-
-    location_mod = _join_nonempty([_get_location_life_area_meaning(x["row"]) for x in locations], "; ")
-    location_phys_mod = _join_nonempty([_get_location_physical_area_meaning(x["row"]) for x in locations], "; ")
-    location_action_mod = _join_nonempty([_get_location_action_modifier(x["row"]) for x in locations], "; ")
+    location_mod = _join_nonempty([_get_location_life_area_meaning(x["row"]) for x in locations], " ")
+    location_phys_mod = _join_nonempty([_get_location_physical_area_meaning(x["row"]) for x in locations], " ")
+    location_action_mod = _join_nonempty([_get_location_action_modifier(x["row"]) for x in locations], " ")
 
     override_spiritual = _strip_trailing_punct((override_hit or {}).get("spiritual", ""))
     override_physical = _strip_trailing_punct((override_hit or {}).get("physical", ""))
     override_action = _strip_trailing_punct((override_hit or {}).get("action", ""))
+
+    if override_hit and not base_matches:
+        spiritual_text = _sentence(override_spiritual or "A special doctrine condition applies to this dream.")
+        physical_text = _build_physical_effect_sentence(
+            base_effects="",
+            behavior_phys_mod=behavior_phys_mod,
+            state_phys_mod=state_phys_mod,
+            location_phys_mod=location_phys_mod,
+            override_physical=override_physical,
+        )
+        action_text = _build_action_sentence(
+            base_action="",
+            behavior_action_mod=behavior_action_mod,
+            state_action_mod=state_action_mod,
+            location_action_mod=location_action_mod,
+            override_action=override_action,
+        )
+
+        full_interpretation = "\n\n".join([
+            _sentence(opening_tpl),
+            spiritual_text,
+            physical_text,
+            action_text,
+            _sentence(closing_tpl),
+        ])
+
+        return {
+            "interpretation": {
+                "spiritual_meaning": spiritual_text,
+                "effects_in_physical_realm": physical_text,
+                "what_to_do": action_text,
+            },
+            "full_interpretation": full_interpretation,
+            "top_symbols": top_symbols,
+            "override_applied": True,
+            "override_name": (override_hit or {}).get("override_name", ""),
+        }
 
     for row, _sc, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
         symbol = _get_base_symbol_input(row)
@@ -1490,71 +1746,111 @@ def _build_doctrine_interpretation(
         base_effects = _get_base_symbol_effects(row)
         base_action = _get_base_symbol_action(row)
 
-        core_meaning = override_spiritual or base_meaning
-
-        rendered_default = default_tpl.format(
-            symbol=_title_case_symbol(symbol),
-            meaning=_strip_trailing_punct(core_meaning or "a meaningful condition"),
-            behavior_effect=_strip_trailing_punct(behavior_mod or "no special behavior was detected"),
-            state_effect=_strip_trailing_punct(state_mod or "no special state was detected"),
-            location_effect=_strip_trailing_punct(location_mod or "no special location was detected"),
+        spiritual_text = _build_spiritual_meaning_paragraph(
+            symbol=symbol,
+            base_meaning=base_meaning,
+            behavior_mod=behavior_mod,
+            state_mod=state_mod,
+            location_mod=location_mod,
+            override_spiritual=override_spiritual,
         )
-        spiritual_lines.append(_ensure_terminal_punct(rendered_default))
 
-        final_effects = _join_nonempty(
-            [override_physical, base_effects, behavior_phys_mod, state_phys_mod, location_phys_mod],
-            " "
+        physical_text = _build_physical_effect_sentence(
+            base_effects=base_effects,
+            behavior_phys_mod=behavior_phys_mod,
+            state_phys_mod=state_phys_mod,
+            location_phys_mod=location_phys_mod,
+            override_physical=override_physical,
         )
-        if final_effects:
-            physical_lines.append(
-                _ensure_terminal_punct(
-                    physical_tpl.format(effect=_strip_trailing_punct(final_effects))
-                )
-            )
 
-        final_action = _join_nonempty(
-            [base_action, behavior_action_mod, state_action_mod, location_action_mod, override_action],
-            " Then, "
+        action_text = _build_action_sentence(
+            base_action=base_action,
+            behavior_action_mod=behavior_action_mod,
+            state_action_mod=state_action_mod,
+            location_action_mod=location_action_mod,
+            override_action=override_action,
         )
-        if final_action:
-            action_lines.append(
-                _ensure_terminal_punct(
-                    action_tpl.format(action=_strip_trailing_punct(final_action))
-                )
-            )
 
-    spiritual_lines = _dedupe_preserve_order(spiritual_lines)
-    physical_lines = _dedupe_preserve_order(physical_lines)
-    action_lines = _dedupe_preserve_order(action_lines)
+        if spiritual_text:
+            spiritual_lines.append(spiritual_text)
+        if physical_text:
+            physical_lines.append(physical_text)
+        if action_text:
+            action_lines.append(action_text)
 
-    spiritual_joined = "\n".join(spiritual_lines).strip()
-    physical_joined = "\n".join(physical_lines).strip()
-    action_joined = "\n".join(action_lines).strip()
+    spiritual_joined = _merge_natural_paragraphs(spiritual_lines) or "No clear spiritual meaning was generated."
+    physical_joined = _merge_natural_paragraphs(physical_lines) or "No clear physical effects were generated."
+    action_joined = _merge_natural_paragraphs(action_lines) or "Pray for wisdom and confirmation."
 
-    full_parts = [opening_tpl]
-    if spiritual_joined:
-        full_parts.append(spiritual_joined)
-    if physical_joined:
-        full_parts.append(physical_joined)
-    if action_joined:
-        full_parts.append(action_joined)
-    full_parts.append(closing_tpl)
-
-    full_interpretation = "\n\n".join([
-        _ensure_terminal_punct(x) for x in full_parts if x and _strip_trailing_punct(x)
-    ])
+    full_parts = [
+        _sentence(opening_tpl),
+        spiritual_joined,
+        physical_joined,
+        action_joined,
+        _sentence(closing_tpl),
+    ]
+    full_interpretation = "\n\n".join([p for p in full_parts if p and p.strip()])
 
     return {
         "interpretation": {
-            "spiritual_meaning": spiritual_joined or "No clear spiritual meaning was generated.",
-            "effects_in_physical_realm": physical_joined or "No clear physical effects were generated.",
-            "what_to_do": action_joined or "Pray for wisdom and confirmation.",
+            "spiritual_meaning": spiritual_joined,
+            "effects_in_physical_realm": physical_joined,
+            "what_to_do": action_joined,
         },
         "full_interpretation": full_interpretation,
         "top_symbols": top_symbols,
-        "logic_summary": logic_summary,
         "override_applied": bool(override_hit),
         "override_name": (override_hit or {}).get("override_name", ""),
+    }
+
+
+def _build_legacy_interpretation(
+    matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]
+) -> Dict[str, str]:
+    spiritual_lines: List[str] = []
+    physical_lines: List[str] = []
+    action_lines: List[str] = []
+
+    for row, _sc, _hit in matches[:NARRATIVE_MAX_SYMBOLS]:
+        symbol = _get_symbol_cell(row)
+        base_meaning = _get_spiritual_meaning_cell(row)
+        base_effects = _get_effects_cell(row)
+        base_action = _get_what_to_do_cell(row)
+
+        spiritual_text = _build_spiritual_meaning_paragraph(
+            symbol=symbol,
+            base_meaning=base_meaning,
+            behavior_mod="",
+            state_mod="",
+            location_mod="",
+            override_spiritual="",
+        )
+        physical_text = _build_physical_effect_sentence(
+            base_effects=base_effects,
+            behavior_phys_mod="",
+            state_phys_mod="",
+            location_phys_mod="",
+            override_physical="",
+        )
+        action_text = _build_action_sentence(
+            base_action=base_action,
+            behavior_action_mod="",
+            state_action_mod="",
+            location_action_mod="",
+            override_action="",
+        )
+
+        if spiritual_text:
+            spiritual_lines.append(spiritual_text)
+        if physical_text:
+            physical_lines.append(physical_text)
+        if action_text:
+            action_lines.append(action_text)
+
+    return {
+        "spiritual_meaning": _merge_natural_paragraphs(spiritual_lines) or "No clear spiritual meaning was generated.",
+        "effects_in_physical_realm": _merge_natural_paragraphs(physical_lines) or "No clear physical effects were generated.",
+        "what_to_do": _merge_natural_paragraphs(action_lines) or "Pray for wisdom and confirmation.",
     }
 
 
@@ -2437,38 +2733,17 @@ def interpret():
             _log("INTERPRET RESPONSE MODE:", "legacy_no_matches")
             resp = make_response(jsonify(payload))
         else:
-            spiritual_parts = []
-            physical_parts = []
-            action_parts = []
-            top_symbols = []
-
-            for row, _sc, _hit in matches:
-                symbol = _get_symbol_cell(row)
-                top_symbols.append(symbol)
-
-                sm = _get_spiritual_meaning_cell(row)
-                pe = _get_effects_cell(row)
-                ac = _get_what_to_do_cell(row)
-
-                if sm:
-                    spiritual_parts.append(_format_label_value(symbol, sm))
-                if pe:
-                    physical_parts.append(_format_label_value(symbol, pe))
-                if ac:
-                    action_parts.append(_format_label_value(symbol, ac))
-
-            spiritual_joined = "\n".join(_dedupe_preserve_order(spiritual_parts)).strip()
-            physical_joined = "\n".join(_dedupe_preserve_order(physical_parts)).strip()
-            action_joined = "\n".join(_dedupe_preserve_order(action_parts)).strip()
+            built_legacy = _build_legacy_interpretation(matches)
+            top_symbols = [_get_symbol_cell(row) for row, _sc, _hit in matches if _get_symbol_cell(row)]
 
             full_parts = [
-                "This dream is revealing symbolic meaning through the matched symbols.",
-                spiritual_joined,
-                physical_joined,
-                action_joined,
-                "Dreams expose what needs attention so you can respond with wisdom.",
+                _sentence("This dream is revealing symbolic meaning through the matched symbols"),
+                built_legacy["spiritual_meaning"],
+                built_legacy["effects_in_physical_realm"],
+                built_legacy["what_to_do"],
+                _sentence("Dreams expose what needs attention so you can respond with wisdom"),
             ]
-            full_interpretation = "\n\n".join([_ensure_terminal_punct(x) for x in full_parts if x])
+            full_interpretation = "\n\n".join([x for x in full_parts if x and x.strip()])
 
             payload = {
                 "engine_mode": "legacy",
@@ -2482,11 +2757,7 @@ def interpret():
                 },
                 "seal": seal,
                 "brain": {},
-                "interpretation": {
-                    "spiritual_meaning": spiritual_joined,
-                    "effects_in_physical_realm": physical_joined,
-                    "what_to_do": action_joined,
-                },
+                "interpretation": built_legacy,
                 "full_interpretation": full_interpretation,
                 "receipt": {
                     "id": receipt_id,

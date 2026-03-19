@@ -57,7 +57,7 @@
     .jts-shell{
       position:relative;
       z-index:1;
-      width:min(1040px, 100%);
+      width:min(1080px, 100%);
       border-radius:22px;
       border:1px solid rgba(212,175,55,0.5);
       box-shadow: 0 0 30px rgba(212,175,55,0.20) inset, 0 24px 50px rgba(0,0,0,0.92);
@@ -77,7 +77,7 @@
 
     .jts-grid{
       display:grid;
-      grid-template-columns: 1.05fr 0.95fr;
+      grid-template-columns: 1.1fr 0.9fr;
       gap: 18px;
     }
 
@@ -111,7 +111,7 @@
 
     .jts-lede{
       margin: 0 auto 12px;
-      max-width: 56ch;
+      max-width: 60ch;
       text-align:center;
       font-size: 0.96rem;
       line-height:1.65;
@@ -143,6 +143,7 @@
       font-size: 0.92rem;
       line-height: 1.6;
     }
+
     li{ margin: 6px 0; }
 
     .jts-note{
@@ -197,6 +198,7 @@
       box-shadow:0 10px 25px rgba(0,0,0,0.72);
       transition: transform .08s ease, filter .12s ease;
     }
+
     .btn:active{ transform:scale(0.99); }
     .btn:hover{ filter:brightness(1.05); }
 
@@ -214,6 +216,7 @@
       letter-spacing:0.06em;
       transition: transform .08s ease, filter .12s ease;
     }
+
     .btn-outline:active{ transform:scale(0.99); }
     .btn-outline:hover{ filter:brightness(1.06); }
 
@@ -277,44 +280,41 @@
     <div class="jts-card">
 
       <div style="text-align:center;">
-        <span class="jts-pill">Free limit reached</span>
+        <span class="jts-pill">Unlock dream access</span>
       </div>
 
-      <h1 class="jts-h1">Unlock PRO Dream Access</h1>
+      <h1 class="jts-h1">JTS Dream Interpreter</h1>
 
       <p class="jts-lede">
-        You’ve used your free decodes. If you want the deeper version — unlock PRO and continue with
-        full meaning, real-life effects, and clear next steps.
+        Choose the access level that fits you best. Unlock ongoing subscription access, or purchase a smaller dream pack for a limited number of interpretations.
       </p>
 
       <div class="jts-grid">
 
-        <!-- LEFT: OFFER / VALUE -->
         <div class="jts-box">
-          <div class="jts-section-title">What PRO unlocks</div>
+          <div class="jts-section-title">Choose your access</div>
 
           <ul>
-            <li><strong>Unlimited</strong> interpretations</li>
-            <li><strong>Advanced Seal of the Dream</strong> analysis</li>
-            <li><strong>Full layered explanation</strong> (doctrine-based, readable)</li>
-            <li><strong>Stronger guidance</strong> on what to do next</li>
+            <li><strong>Subscription</strong> for continued access</li>
+            <li><strong>Dream Pack</strong> for a lower one-time entry option</li>
+            <li><strong>Full doctrine-based output</strong> with spiritual meaning, possible real-life effects, and what to do</li>
+            <li><strong>Secure checkout</strong> powered by Stripe</li>
           </ul>
 
           <p class="jts-note">
-            Secure checkout powered by Stripe. Cancel anytime.
+            Use the same email at checkout and later when unlocking access.
           </p>
 
           <p class="micro" style="text-align:center;">
-            Cultural + educational only. Not therapy or medical advice.
+            Cultural and educational only. Not therapy, legal, medical, or financial advice.
           </p>
         </div>
 
-        <!-- RIGHT: UNLOCK + CHECKOUT -->
         <div class="jts-box">
-          <div class="jts-section-title">Already subscribed?</div>
+          <div class="jts-section-title">Unlock existing access</div>
 
           <p style="margin:0 0 10px;color:var(--muted);font-size:0.92rem;line-height:1.6;">
-            Enter the same email you used to subscribe. If it’s active, access unlocks instantly.
+            Already subscribed or purchased a dream pack? Enter the same email you used at checkout.
           </p>
 
           <label for="email">Email</label>
@@ -326,15 +326,28 @@
 
           <div class="jts-divider" style="height:1px;background:linear-gradient(90deg,transparent,rgba(212,175,55,0.25),transparent);margin:14px 0;"></div>
 
-          <div class="jts-section-title">New here?</div>
+          <div class="jts-section-title">Subscription</div>
 
           <p style="margin:0 0 10px;color:var(--muted);font-size:0.92rem;line-height:1.6;">
-            Continue to secure checkout. After payment, you’ll be able to unlock access with this email.
+            Best for ongoing access and repeated dream interpretation.
           </p>
 
           <form action="/create-checkout-session" method="POST" id="checkoutForm">
             <input type="hidden" name="email" id="emailHidden">
-            <button class="btn" type="submit">Continue to Secure Checkout</button>
+            <button class="btn" type="submit">Start Subscription</button>
+          </form>
+
+          <div class="jts-divider" style="height:1px;background:linear-gradient(90deg,transparent,rgba(212,175,55,0.25),transparent);margin:14px 0;"></div>
+
+          <div class="jts-section-title">Dream Pack</div>
+
+          <p style="margin:0 0 10px;color:var(--muted);font-size:0.92rem;line-height:1.6;">
+            Buy a smaller access pack for a limited number of dream interpretations.
+          </p>
+
+          <form action="/create-dream-pack-checkout-session" method="POST" id="dreamPackForm">
+            <input type="hidden" name="email" id="emailHiddenPack">
+            <button class="btn-outline" type="submit">Buy Dream Pack</button>
           </form>
 
           <a class="mini-link" href="/" id="backLink">Return to the interpreter</a>
@@ -343,7 +356,7 @@
           <div id="ok" class="ok" role="status" aria-live="polite"></div>
 
           <div class="micro">
-            Tip: If you paid already but used a different email, try that email here.
+            Tip: If you already paid, try the exact email you used during checkout.
           </div>
         </div>
 
@@ -354,28 +367,34 @@
 
 <script>
 (function(){
-  const emailInput  = document.getElementById("email");
-  const emailHidden = document.getElementById("emailHidden");
-  const unlockBtn   = document.getElementById("unlock");
-  const err         = document.getElementById("err");
-  const ok          = document.getElementById("ok");
-  const backLink    = document.getElementById("backLink");
+  const emailInput     = document.getElementById("email");
+  const emailHidden    = document.getElementById("emailHidden");
+  const emailHiddenPack = document.getElementById("emailHiddenPack");
+  const unlockBtn      = document.getElementById("unlock");
+  const err            = document.getElementById("err");
+  const ok             = document.getElementById("ok");
+  const backLink       = document.getElementById("backLink");
 
   function setMsg(type, text){
-    if (type === "err") { err.textContent = text || ""; ok.textContent = ""; }
-    else { ok.textContent = text || ""; err.textContent = ""; }
+    if (type === "err") {
+      err.textContent = text || "";
+      ok.textContent = "";
+    } else {
+      ok.textContent = text || "";
+      err.textContent = "";
+    }
   }
 
   function syncEmail(){
-    emailHidden.value = (emailInput.value || "").trim();
+    const value = (emailInput.value || "").trim();
+    emailHidden.value = value;
+    emailHiddenPack.value = value;
   }
 
   function validEmail(email){
-    // Simple, safe validation (avoid overly strict regex)
     return !!email && email.includes("@") && email.includes(".");
   }
 
-  // Preserve return intent if provided as ?return=
   try{
     const u = new URL(window.location.href);
     const r = u.searchParams.get("return");
@@ -412,7 +431,7 @@
       const data = await res.json().catch(()=>({}));
 
       if (!res.ok) {
-        setMsg("err", data.message || "No active subscription found for that email.");
+        setMsg("err", data.message || "No active access found for that email.");
         return;
       }
 
@@ -429,7 +448,6 @@
     }
   });
 
-  // Make sure hidden email is set on first load too
   syncEmail();
 })();
 </script>

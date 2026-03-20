@@ -1606,3 +1606,1406 @@ if any(x in combined for x in ["clean", "wash", "purif", "release"]):
 return "cleansing"
 if any(x in combined for x in ["promotion", "elevation", "lifted", "favor"]):
 return "promotion"
+if any(x in combined for x in ["warning", "danger", "attack", "disgrace"]):
+return "warning"
+
+behavior_names = {_normalize_text(x["name"]) for x in behaviors}
+state_names = {_normalize_text(x["name"]) for x in states}
+location_names = {_normalize_text(x["name"]) for x in locations}
+interp_text = _normalize_text(" ".join(interpretation.values()))
+
+if {"being attacked", "attacking", "being chased", "chasing", "fighting"} & behavior_names:
+return "warfare"
+if {"escaping", "crossing", "finding"} & behavior_names:
+return "breakthrough"
+if {"dirty", "murky", "broken", "bleeding", "dark"} & state_names:
+return "warning"
+if {"graveyard", "prison", "darkness"} & location_names:
+return "warning"
+if any(x in interp_text for x in ["monitoring spirit", "being watched", "spiritual spy"]):
+return "monitoring"
+if any(x in interp_text for x in ["cleansing", "washed", "release"]):
+return "cleansing"
+
+return "default"
+
+
+# ============================================================
+# Doctrine interpretation builder
+# ============================================================
+def _join_nonempty(parts: List[str], sep: str = " ") -> str:
+return sep.join([_strip_trailing_punct(x) for x in parts if x and _strip_trailing_punct(x)]).strip()
+
+
+def _build_doctrine_interpretation(
+dream: str,
+base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
+behaviors: List[Dict[str, Any]],
+states: List[Dict[str, Any]],
+locations: List[Dict[str, Any]],
+override_hit: Optional[Dict[str, Any]],
+templates: List[Dict],
+) -> Dict[str, Any]:
+top_symbols = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
+
+behavior_mod = _join_nonempty([_get_behavior_meaning_modifier(x["row"]) for x in behaviors], " ")
+behavior_phys_mod = _join_nonempty([_get_behavior_physical_modifier(x["row"]) for x in behaviors], " ")
+behavior_action_mod = _join_nonempty([_get_behavior_action_modifier(x["row"]) for x in behaviors], " ")
+
+state_mod = _join_nonempty([_get_state_meaning_modifier(x["row"]) for x in states], " ")
+state_phys_mod = _join_nonempty([_get_state_physical_modifier(x["row"]) for x in states], " ")
+state_action_mod = _join_nonempty([_get_state_action_modifier(x["row"]) for x in states], " ")
+
+location_mod = _join_nonempty([_get_location_life_area_meaning(x["row"]) for x in locations], " ")
+location_phys_mod = _join_nonempty([_get_location_physical_area_meaning(x["row"]) for x in locations], " ")
+location_action_mod = _join_nonempty([_get_location_action_modifier(x["row"]) for x in locations], " ")
+
+override_spiritual = _strip_trailing_punct((override_hit or {}).get("spiritual", ""))
+override_physical = _strip_trailing_punct((override_hit or {}).get("physical", ""))
+override_action = _strip_trailing_punct((override_hit or {}).get("action", ""))
+
+spiritual_lines: List[str] = []
+physical_lines: List[str] = []
+action_lines: List[str] = []
+
+if override_hit and not base_matches:
+spiritual_text = _sentence(override_spiritual or "A special doctrine condition applies to this dream.")
+physical_text = _build_physical_effect_sentence(
+base_effects="",
+behavior_phys_mod=behavior_phys_mod,
+state_phys_mod=state_phys_mod,
+location_phys_mod=location_phys_mod,
+override_physical=override_physical,
+)
+action_text = _build_action_sentence(
+base_action="",
+behavior_action_mod=behavior_action_mod,
+state_action_mod=state_action_mod,
+location_action_mod=location_action_mod,
+override_action=override_action,
+)
+else:
+for row, _sc, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
+symbol = _get_base_symbol_input(row)
+base_meaning = _get_base_symbol_meaning(row)
+base_effects = _get_base_symbol_effects(row)
+base_action = _get_base_symbol_action(row)
+
+spiritual_text_i = _build_spiritual_meaning_paragraph(
+symbol=symbol,
+base_meaning=base_meaning,
+behavior_mod=behavior_mod,
+state_mod=state_mod,
+location_mod=location_mod,
+override_spiritual=override_spiritual,
+)
+physical_text_i = _build_physical_effect_sentence(
+base_effects=base_effects,
+behavior_phys_mod=behavior_phys_mod,
+state_phys_mod=state_phys_mod,
+location_phys_mod=location_phys_mod,
+override_physical=override_physical,
+)
+action_text_i = _build_action_sentence(
+base_action=base_action,
+behavior_action_mod=behavior_action_mod,
+state_action_mod=state_action_mod,
+location_action_mod=location_action_mod,
+override_action=override_action,
+)
+
+if spiritual_text_i:
+spiritual_lines.append(spiritual_text_i)
+if physical_text_i:
+physical_lines.append(physical_text_i)
+if action_text_i:
+action_lines.append(action_text_i)
+
+spiritual_text = _merge_natural_paragraphs(spiritual_lines) or "No clear spiritual meaning was generated."
+physical_text = _merge_natural_paragraphs(physical_lines) or "No clear physical effects were generated."
+action_text = _merge_natural_paragraphs(action_lines) or "Pray for wisdom and confirmation."
+
+interpretation = {
+"spiritual_meaning": spiritual_text,
+"effects_in_physical_realm": physical_text,
+"what_to_do": action_text,
+}
+
+template_type = _choose_template_type(
+override_hit=override_hit,
+behaviors=behaviors,
+states=states,
+locations=locations,
+interpretation=interpretation,
+)
+
+opening_tpl = _get_output_template(
+templates,
+"opening",
+"This dream is revealing a spiritual condition that requires discernment, not panic."
+)
+closing_tpl = _get_output_template(
+templates,
+"closing",
+"Dreams expose what needs attention so you can respond with wisdom, prayer, and obedience."
+)
+main_tpl = _get_output_template(
+templates,
+template_type,
+"{symbol} represents {meaning}. The behavior shows {behavior_effect}. The condition shows {state_effect}. The location points to {location_effect}."
+)
+
+context = {
+"symbol": ", ".join(top_symbols[:1]) if top_symbols else "This dream",
+"meaning": interpretation["spiritual_meaning"],
+"behavior_effect": _join_nonempty([_get_behavior_meaning_modifier(x["row"]) for x in behaviors], ", "),
+"state_effect": _join_nonempty([_get_state_meaning_modifier(x["row"]) for x in states], ", "),
+"location_effect": _join_nonempty([_get_location_life_area_meaning(x["row"]) for x in locations], ", "),
+}
+
+rendered_main = _render_template_text(main_tpl, context)
+
+full_parts = [
+_sentence(opening_tpl),
+rendered_main,
+interpretation["effects_in_physical_realm"],
+interpretation["what_to_do"],
+_sentence(closing_tpl),
+]
+full_interpretation = "\n\n".join([p for p in full_parts if p and p.strip()])
+
+return {
+"interpretation": interpretation,
+"full_interpretation": full_interpretation,
+"top_symbols": top_symbols,
+"override_applied": bool(override_hit),
+"override_name": (override_hit or {}).get("override_name", ""),
+"template_type": template_type,
+}
+
+
+def _build_legacy_interpretation(
+matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]
+) -> Dict[str, str]:
+spiritual_lines: List[str] = []
+physical_lines: List[str] = []
+action_lines: List[str] = []
+
+for row, _sc, _hit in matches[:NARRATIVE_MAX_SYMBOLS]:
+symbol = _get_symbol_cell(row)
+base_meaning = _get_spiritual_meaning_cell(row)
+base_effects = _get_effects_cell(row)
+base_action = _get_what_to_do_cell(row)
+
+spiritual_text = _build_spiritual_meaning_paragraph(
+symbol=symbol,
+base_meaning=base_meaning,
+behavior_mod="",
+state_mod="",
+location_mod="",
+override_spiritual="",
+)
+physical_text = _build_physical_effect_sentence(
+base_effects=base_effects,
+behavior_phys_mod="",
+state_phys_mod="",
+location_phys_mod="",
+override_physical="",
+)
+action_text = _build_action_sentence(
+base_action=base_action,
+behavior_action_mod="",
+state_action_mod="",
+location_action_mod="",
+override_action="",
+)
+
+if spiritual_text:
+spiritual_lines.append(spiritual_text)
+if physical_text:
+physical_lines.append(physical_text)
+if action_text:
+action_lines.append(action_text)
+
+return {
+"spiritual_meaning": _merge_natural_paragraphs(spiritual_lines) or "No clear spiritual meaning was generated.",
+"effects_in_physical_realm": _merge_natural_paragraphs(physical_lines) or "No clear physical effects were generated.",
+"what_to_do": _merge_natural_paragraphs(action_lines) or "Pray for wisdom and confirmation.",
+}
+
+
+def _compute_seal_from_symbol_count(symbol_count: int) -> Dict[str, str]:
+if symbol_count <= 0:
+return {"status": "Delayed", "type": "Unclear", "risk": "High"}
+if symbol_count == 1:
+return {"status": "Live", "type": "Confirmed", "risk": "Low"}
+if symbol_count == 2:
+return {"status": "Delayed", "type": "Processing", "risk": "Medium"}
+return {"status": "Delayed", "type": "Processing", "risk": "Medium"}
+
+
+# ============================================================
+# Admin HTML
+# ============================================================
+def _get_admin_key_from_request() -> str:
+q = (request.args.get("key") or "").strip()
+h = (request.headers.get("X-Admin-Key") or "").strip()
+return q or h
+
+
+def _require_admin() -> Optional[Response]:
+if not ADMIN_KEY:
+return make_response("Admin is not configured (missing ADMIN_KEY / JTS_ADMIN_KEY).", 403)
+provided = _get_admin_key_from_request()
+if not provided or provided != ADMIN_KEY:
+return make_response("Forbidden", 403)
+return None
+
+
+ADMIN_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JTS Admin Panel</title>
+<style>
+:root{--bg:#0b0b0e;--panel:#121218;--ink:#e9e9ef;--muted:#b7b7c2;--gold:#d4af37;--gold2:#b8921e;--edge:#2b2730;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:22px;}
+.wrap{max-width:980px;margin:0 auto;}
+.card{background:linear-gradient(180deg, rgba(212,175,55,.05), transparent 160px), var(--panel);
+border:1px solid rgba(212,175,55,.18);border-radius:18px; padding:18px 16px; box-shadow:0 10px 30px rgba(0,0,0,.45);}
+h1{margin:0 0 8px;font-size:18px}
+.mini{color:var(--muted);font-size:13px;margin-bottom:14px}
+label{display:block;margin-top:10px;margin-bottom:6px;color:var(--muted);font-size:13px}
+input, textarea, select{
+width:100%; background:#0e0e14; color:var(--ink);
+border:1px solid rgba(212,175,55,.2); border-radius:12px;
+padding:10px 12px; outline:none;
+}
+textarea{min-height:74px; resize:vertical}
+.btn{
+margin-top:14px; width:100%;
+border:none; border-radius:999px; padding:12px 16px; font-weight:700; cursor:pointer;
+background:linear-gradient(180deg, var(--gold), var(--gold2)); color:#0b0b0e;
+}
+pre{white-space:pre-wrap;background:rgba(0,0,0,.35);padding:12px;border-radius:12px;border:1px solid rgba(212,175,55,.16);margin-top:12px}
+a{color:var(--gold)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<h1>JTS Admin Panel</h1>
+<div class="mini">Keep this link private. Health: <a href="/health" target="_blank">/health</a></div>
+
+<label>Target Sheet</label>
+<select id="target_sheet">
+<option value="legacy">Legacy Sheet</option>
+<option value="BaseSymbols">BaseSymbols</option>
+<option value="BehaviorRules">BehaviorRules</option>
+<option value="SizeStateRules">SizeStateRules</option>
+<option value="LocationRules">LocationRules</option>
+<option value="OverrideRules">OverrideRules</option>
+<option value="OutputTemplates">OutputTemplates</option>
+</select>
+
+<label>Mode</label>
+<select id="mode">
+<option value="upsert">upsert (update if exists)</option>
+<option value="add">add (always append)</option>
+</select>
+
+<label>Payload JSON</label>
+<textarea id="payload" placeholder='{"symbol":"teeth falling out","category":"body","base_spiritual_meaning":"warning","base_physical_effects":"loss","base_action":"pray immediately","keywords":"teeth falling out, teeth, mouth","active":"yes"}'></textarea>
+
+<button class="btn" id="save">Save Row</button>
+<pre id="out">{}</pre>
+</div>
+</div>
+
+<script>
+const out = document.getElementById('out');
+const saveBtn = document.getElementById('save');
+
+function getKeyFromUrl(){
+const u = new URL(window.location.href);
+return u.searchParams.get('key') || '';
+}
+
+saveBtn.addEventListener('click', async () => {
+out.textContent = 'Saving...';
+
+let payload = {};
+try {
+payload = JSON.parse(document.getElementById('payload').value || '{}');
+} catch (e) {
+out.textContent = JSON.stringify({ok:false,error:'Invalid JSON payload'}, null, 2);
+return;
+}
+
+payload.mode = document.getElementById('mode').value;
+payload.target_sheet = document.getElementById('target_sheet').value;
+
+const key = getKeyFromUrl();
+const res = await fetch('/admin/upsert?key=' + encodeURIComponent(key), {
+method: 'POST',
+headers: {'Content-Type': 'application/json'},
+body: JSON.stringify(payload),
+});
+
+const data = await res.json().catch(() => ({error:'Bad JSON'}));
+out.textContent = JSON.stringify(data, null, 2);
+});
+</script>
+</body>
+</html>
+"""
+
+
+# ============================================================
+# Admin write helpers
+# ============================================================
+def _build_col_map(header_row: List[str]) -> Dict[str, int]:
+col_map: Dict[str, int] = {}
+for idx, h in enumerate(header_row, start=1):
+col_map[_normalize_header(h)] = idx
+return col_map
+
+
+def _find_existing_row_index_by_column(ws, lookup_value: str, lookup_col: int) -> Optional[int]:
+target = _normalize_text(lookup_value)
+if not target:
+return None
+
+col_vals = ws.col_values(lookup_col)
+for i, v in enumerate(col_vals[1:], start=2):
+if _normalize_text(v) == target:
+return i
+return None
+
+
+def _sheet_primary_lookup_headers(sheet_name: str) -> List[str]:
+if sheet_name == SHEET_BASE_SYMBOLS:
+return ["symbol", "input"]
+if sheet_name == SHEET_BEHAVIOR_RULES:
+return ["behavior_name", "behavior"]
+if sheet_name == SHEET_SIZE_STATE_RULES:
+return ["state_name", "state"]
+if sheet_name == SHEET_LOCATION_RULES:
+return ["location_name", "location"]
+if sheet_name == SHEET_OVERRIDE_RULES:
+return ["override_name", "condition"]
+if sheet_name == SHEET_OUTPUT_TEMPLATES:
+return ["template_type"]
+return ["input", "symbol"]
+
+
+def _admin_upsert_generic_sheet(sheet_name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+sh = _get_spreadsheet()
+ws = sh.worksheet(sheet_name)
+header_row = ws.row_values(1)
+if not header_row:
+raise RuntimeError(f"Sheet {sheet_name} has no header row.")
+
+col_map = _build_col_map(header_row)
+mode = (payload.get("mode") or "upsert").strip().lower()
+
+lookup_col = None
+lookup_value = ""
+
+for key in _sheet_primary_lookup_headers(sheet_name):
+if col_map.get(_normalize_header(key)) and str(payload.get(key, "")).strip():
+lookup_col = col_map[_normalize_header(key)]
+lookup_value = str(payload.get(key, "")).strip()
+break
+
+if not lookup_col or not lookup_value:
+raise RuntimeError(f"Missing primary lookup field for sheet {sheet_name}.")
+
+existing_row = None
+if mode != "add":
+existing_row = _find_existing_row_index_by_column(ws, lookup_value, lookup_col)
+
+if existing_row:
+row_index = existing_row
+op = "updated"
+else:
+row_index = len(ws.get_all_values()) + 1
+op = "added"
+
+updates = []
+for raw_header in header_row:
+nh = _normalize_header(raw_header)
+chosen_value = None
+
+for payload_key, payload_val in payload.items():
+if _normalize_header(payload_key) == nh:
+chosen_value = payload_val
+break
+
+if chosen_value is None:
+continue
+
+if nh == "keywords":
+chosen_value = _sanitize_keywords_for_storage(str(chosen_value))
+else:
+chosen_value = str(chosen_value).strip()
+
+col_index = col_map.get(nh)
+if col_index:
+updates.append((row_index, col_index, chosen_value))
+
+if not updates:
+raise RuntimeError("No matching payload fields found for target sheet headers.")
+
+cell_list = [gspread.Cell(r, c, v) for r, c, v in updates]
+ws.update_cells(cell_list, value_input_option="RAW")
+
+_invalidate_all_caches()
+
+return {
+"ok": True,
+"action": op,
+"written_row": row_index,
+"spreadsheet_id": SPREADSHEET_ID,
+"worksheet_name": sheet_name,
+}
+
+
+def _admin_upsert_legacy_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
+sh = _get_spreadsheet()
+ws = sh.worksheet(WORKSHEET_NAME)
+header_row = ws.row_values(1)
+if not header_row:
+raise RuntimeError("Sheet has no header row.")
+
+col_map = _build_col_map(header_row)
+
+input_col = col_map.get("input") or col_map.get("symbol")
+spiritual_col = col_map.get("spiritual meaning") or col_map.get("spiritual_meaning") or col_map.get("spiritual")
+effects_col = col_map.get("physical effects") or col_map.get("physical_effects") or col_map.get("effects in the physical realm")
+action_col = col_map.get("action") or col_map.get("what to do") or col_map.get("what_to_do")
+keywords_col = col_map.get("keywords")
+
+if not input_col:
+raise RuntimeError("Missing 'input' column in header row.")
+
+mode = (payload.get("mode") or "upsert").strip().lower()
+input_value = (payload.get("input") or payload.get("symbol") or "").strip()
+if not input_value:
+return {"ok": False, "error": "Missing input"}
+
+spiritual = (payload.get("spiritual_meaning") or payload.get("spiritual") or "").strip()
+effects = (payload.get("physical_effects") or payload.get("effects") or "").strip()
+action = (payload.get("action") or "").strip()
+keywords = _sanitize_keywords_for_storage((payload.get("keywords") or "").strip())
+
+existing_row = None
+if mode != "add":
+existing_row = _find_existing_row_index_by_column(ws, input_value, input_col)
+
+if existing_row:
+row_index = existing_row
+op = "updated"
+else:
+row_index = len(ws.get_all_values()) + 1
+op = "added"
+
+updates = [(row_index, input_col, input_value)]
+if spiritual_col:
+updates.append((row_index, spiritual_col, spiritual))
+if effects_col:
+updates.append((row_index, effects_col, effects))
+if action_col:
+updates.append((row_index, action_col, action))
+if keywords_col:
+updates.append((row_index, keywords_col, keywords))
+
+cell_list = [gspread.Cell(r, c, v) for r, c, v in updates]
+ws.update_cells(cell_list, value_input_option="RAW")
+
+_invalidate_all_caches()
+
+return {
+"ok": True,
+"action": op,
+"input": input_value,
+"written_row": row_index,
+"spreadsheet_id": SPREADSHEET_ID,
+"worksheet_name": WORKSHEET_NAME,
+}
+
+
+def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
+target_sheet = (payload.get("target_sheet") or "legacy").strip()
+
+if target_sheet == "legacy":
+return _admin_upsert_legacy_sheet(payload)
+
+sheet_alias_map = {
+"BaseSymbols": SHEET_BASE_SYMBOLS,
+"BehaviorRules": SHEET_BEHAVIOR_RULES,
+"SizeStateRules": SHEET_SIZE_STATE_RULES,
+"LocationRules": SHEET_LOCATION_RULES,
+"OverrideRules": SHEET_OVERRIDE_RULES,
+"OutputTemplates": SHEET_OUTPUT_TEMPLATES,
+}
+
+real_sheet_name = sheet_alias_map.get(target_sheet, target_sheet)
+return _admin_upsert_generic_sheet(real_sheet_name, payload)
+
+
+# ============================================================
+# Upgrade HTML
+# ============================================================
+def _upgrade_html_option_a() -> str:
+return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Unlock JTS Dream Interpreter</title>
+<style>
+:root{{--bg:#07070a;--panel:#101017;--ink:#f2f2f7;--muted:#b6b6c3;--gold:#d4af37;--gold2:#b8921e;--edge:rgba(212,175,55,.22);}}
+*{{box-sizing:border-box}}
+body{{margin:0;background:radial-gradient(900px 600px at 50% -100px, rgba(212,175,55,.14), transparent 55%), var(--bg);
+color:var(--ink);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:26px;}}
+.wrap{{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.1fr .9fr;gap:16px}}
+@media (max-width: 920px){{.wrap{{grid-template-columns:1fr}}}}
+.card{{background:linear-gradient(180deg, rgba(212,175,55,.07), transparent 180px), var(--panel);
+border:1px solid var(--edge);border-radius:18px;padding:18px;box-shadow:0 14px 50px rgba(0,0,0,.6);}}
+h1{{margin:0 0 8px;font-size:20px;letter-spacing:.2px}}
+h2{{margin:0 0 8px;font-size:18px;letter-spacing:.2px}}
+.sub{{color:var(--muted);font-size:13px;line-height:1.4;margin-bottom:14px}}
+.pill{{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(212,175,55,.10);
+border:1px solid rgba(212,175,55,.25);color:var(--gold);font-size:12px;margin-bottom:10px}}
+ul{{margin:0;padding-left:18px;color:var(--muted);font-size:13px}}
+li{{margin:6px 0}}
+label{{display:block;margin:10px 0 6px;color:var(--muted);font-size:12px}}
+input{{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(212,175,55,.20);background:#0b0b12;color:var(--ink);outline:none}}
+.btn{{width:100%;border:none;border-radius:999px;padding:12px 14px;font-weight:800;cursor:pointer;
+background:linear-gradient(180deg,var(--gold),var(--gold2));color:#09090c;margin-top:12px}}
+.btn2{{width:100%;border:1px solid rgba(212,175,55,.22);border-radius:999px;padding:12px 14px;font-weight:800;cursor:pointer;
+background:transparent;color:var(--ink);margin-top:10px}}
+.small{{margin-top:10px;color:var(--muted);font-size:12px}}
+.err{{margin-top:10px;color:#ffb4b4;font-size:12px;white-space:pre-wrap}}
+.ok{{margin-top:10px;color:#b9ffb9;font-size:12px;white-space:pre-wrap}}
+.stack{{display:grid;gap:14px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="card">
+<div class="pill">Unlock dream access</div>
+<h1>JTS Dream Interpreter</h1>
+<div class="sub">
+Choose the option that fits you best. Use the same email at checkout and later for access verification.
+</div>
+<ul>
+<li>Subscription: ongoing access</li>
+<li>Dream Pack: {DREAM_PACK_USES} dream interpretations for a one-time purchase</li>
+<li>Secure checkout powered by Stripe</li>
+</ul>
+<div class="small">Educational and spiritual insight only. Not medical, psychological, legal, or financial advice.</div>
+</div>
+
+<div class="stack">
+<div class="card">
+<h2>Enter your email</h2>
+<div class="sub">Use the same email for unlocking after payment.</div>
+
+<label>Email</label>
+<input id="email" type="email" placeholder="you@example.com" />
+
+<button class="btn2" id="unlock">Unlock Existing Access</button>
+
+<form id="checkoutForm" action="/create-checkout-session" method="POST">
+<input type="hidden" name="email" id="emailHidden" value="" />
+<button class="btn" type="submit">Start Subscription</button>
+</form>
+
+<form id="dreamPackForm" action="/create-dream-pack-checkout-session" method="POST">
+<input type="hidden" name="email" id="emailHiddenPack" value="" />
+<button class="btn2" type="submit">Buy {DREAM_PACK_USES} Dreams</button>
+</form>
+
+<div class="err" id="err"></div>
+<div class="ok" id="ok"></div>
+</div>
+</div>
+</div>
+
+<script>
+const err = document.getElementById('err');
+const ok = document.getElementById('ok');
+const emailInput = document.getElementById('email');
+const emailHidden = document.getElementById('emailHidden');
+const emailHiddenPack = document.getElementById('emailHiddenPack');
+
+function getEmail(){{
+return (emailInput.value || '').trim();
+}}
+
+function syncEmail(){{
+const value = getEmail();
+emailHidden.value = value;
+emailHiddenPack.value = value;
+}}
+
+emailInput.addEventListener('input', syncEmail);
+syncEmail();
+
+document.getElementById('unlock').addEventListener('click', async () => {{
+err.textContent = '';
+ok.textContent = '';
+const email = getEmail();
+if (!email || !email.includes('@')) {{
+err.textContent = 'Please enter a valid email.';
+return;
+}}
+
+const res = await fetch('/check-access', {{
+method: 'POST',
+headers: {{'Content-Type':'application/json'}},
+body: JSON.stringify({{email}}),
+credentials: 'include'
+}});
+
+const data = await res.json().catch(() => ({{}}));
+if (!res.ok) {{
+err.textContent = data.error || data.message || 'Could not verify access.';
+return;
+}}
+
+ok.textContent = 'Access confirmed. Sending you back to the interpreter…';
+setTimeout(() => {{
+window.location.href = data.return_url || {json.dumps(RETURN_URL)};
+}}, 700);
+}});
+</script>
+</body>
+</html>"""
+
+
+# ============================================================
+# Routes
+# ============================================================
+@app.route("/", methods=["GET"])
+def home():
+return redirect(RETURN_URL, code=302)
+
+
+@app.route("/health", methods=["GET"])
+def health():
+doctrine_available = False
+try:
+doctrine_available = _doctrine_sheets_available()
+except Exception:
+doctrine_available = False
+
+return jsonify({
+"ok": True,
+"service": "dream-interpreter",
+"sheet": WORKSHEET_NAME,
+"has_spreadsheet_id": bool(SPREADSHEET_ID),
+"allowed_origins": allowed_origins,
+"match_mode": "strict_word_boundary_with_longest_phrase_priority_and_overlap_guard",
+"brain_layers": [
+"symbol_logic",
+"behavior_logic",
+"state_logic",
+"location_logic",
+"override_logic",
+"template_logic",
+],
+"debug_match": DEBUG_MATCH,
+"narrative_enabled": NARRATIVE_ENABLED,
+"narrative_max_symbols": NARRATIVE_MAX_SYMBOLS,
+"keyword_guard_enabled": KEYWORD_GUARD_ENABLED,
+"doctrine_mode_enabled": DOCTRINE_MODE,
+"doctrine_sheets_available": doctrine_available,
+"doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
+"admin_configured": bool(ADMIN_KEY),
+"free_quota": FREE_TRIES,
+"shadow_window_hours": SHADOW_WINDOW_HOURS,
+"stripe_configured": bool(_stripe_config_ok()),
+"webhook_configured": bool(STRIPE_WEBHOOK_SECRET),
+"counts_file": str(USAGE_COUNTS_PATH),
+"subscribers_file": str(SUBSCRIBERS_PATH),
+"price_weekly_set": bool(PRICE_WEEKLY),
+"price_monthly_set": bool(PRICE_MONTHLY),
+"price_dream_pack_set": bool(PRICE_DREAM_PACK),
+"dream_pack_uses": DREAM_PACK_USES,
+"dream_pack_hours": DREAM_PACK_HOURS,
+"cookie_samesite": COOKIE_SAMESITE,
+"return_url": RETURN_URL,
+"session_premium": _is_premium_session(),
+"session_email": _get_session_email(),
+"session_dream_pack": _get_dream_pack_status(_get_session_email()),
+})
+
+
+@app.route("/healthz", methods=["GET"])
+def healthz():
+return health()
+
+
+@app.route("/upgrade", methods=["GET"])
+def upgrade():
+try:
+return render_template("upgrade.html")
+except Exception:
+return Response(_upgrade_html_option_a(), mimetype="text/html")
+
+
+@app.route("/subscribe", methods=["GET"])
+def subscribe():
+return redirect(url_for("upgrade"), code=302)
+
+
+@app.route("/logout", methods=["POST", "GET"])
+def logout():
+_clear_premium_session()
+return redirect(url_for("upgrade"), code=302)
+
+
+@app.route("/check-access", methods=["POST", "OPTIONS"])
+def check_access():
+if request.method == "OPTIONS":
+return _preflight_ok()
+
+data = request.get_json(silent=True) or {}
+email = (data.get("email") or "").strip().lower()
+
+if not _validate_email(email):
+return jsonify({"ok": False, "error": "Please enter a valid email."}), 400
+
+is_active, customer_id = _stripe_active_subscription_for_email(email)
+if is_active:
+_set_premium_session(email)
+_mark_subscriber(email, True, customer_id)
+
+resp = make_response(jsonify({
+"ok": True,
+"access": "active",
+"return_url": RETURN_URL,
+}))
+resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+return resp
+
+dream_pack_status = _get_dream_pack_status(email)
+if dream_pack_status["active"]:
+_set_buyer_session(email)
+resp = make_response(jsonify({
+"ok": True,
+"access": "dream_pack_active",
+"return_url": RETURN_URL,
+"dream_pack": dream_pack_status,
+}))
+resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+return resp
+
+return jsonify({
+"ok": False,
+"access": "inactive",
+"message": "No active subscription or dream pack found for that email."
+}), 402
+
+
+@app.route("/create-checkout-session", methods=["POST"])
+def create_checkout_session():
+if not _stripe_config_ok():
+return make_response(
+"Stripe not configured. Ensure STRIPE_SECRET_KEY and PRICE_WEEKLY or PRICE_MONTHLY are set.",
+500,
+)
+
+email = ""
+if request.form and request.form.get("email"):
+email = (request.form.get("email") or "").strip().lower()
+else:
+data = request.get_json(silent=True) or {}
+email = (data.get("email") or "").strip().lower()
+
+if not _validate_email(email):
+return make_response("Missing email. Please enter a valid email on the upgrade page.", 400)
+
+stripe.api_key = STRIPE_SECRET_KEY
+
+try:
+checkout = stripe.checkout.Session.create(
+mode="subscription",
+line_items=[{"price": DEFAULT_STRIPE_PRICE_ID, "quantity": 1}],
+customer_email=email,
+metadata={
+"purchase_type": "subscription",
+"email": email,
+},
+success_url=url_for("payment_success", _external=True) + f"?email={email}",
+cancel_url=url_for("upgrade", _external=True),
+)
+return redirect(checkout.url, code=303)
+except Exception as e:
+return make_response(f"Stripe error: {str(e)}", 500)
+
+
+@app.route("/create-dream-pack-checkout-session", methods=["POST"])
+def create_dream_pack_checkout_session():
+if not _stripe_dream_pack_ok():
+return make_response(
+"Dream pack Stripe config missing. Ensure STRIPE_SECRET_KEY and PRICE_DREAM_PACK are set.",
+500,
+)
+
+email = ""
+if request.form and request.form.get("email"):
+email = (request.form.get("email") or "").strip().lower()
+else:
+data = request.get_json(silent=True) or {}
+email = (data.get("email") or "").strip().lower()
+
+if not _validate_email(email):
+return make_response("Missing email for dream pack checkout.", 400)
+
+stripe.api_key = STRIPE_SECRET_KEY
+
+try:
+checkout = stripe.checkout.Session.create(
+mode="payment",
+line_items=[{"price": PRICE_DREAM_PACK, "quantity": 1}],
+customer_email=email,
+metadata={
+"purchase_type": "dream_pack",
+"dream_pack_uses": str(DREAM_PACK_USES),
+"dream_pack_hours": str(DREAM_PACK_HOURS),
+"email": email,
+},
+success_url=url_for("dream_pack_success", _external=True) + f"?email={email}",
+cancel_url=url_for("upgrade", _external=True),
+)
+return redirect(checkout.url, code=303)
+except Exception as e:
+return make_response(f"Stripe dream pack error: {str(e)}", 500)
+
+
+@app.route("/payment-success", methods=["GET"])
+def payment_success():
+email = (request.args.get("email") or "").strip().lower()
+
+if _validate_email(email):
+is_active, customer_id = _stripe_active_subscription_for_email(email)
+if is_active:
+_set_premium_session(email)
+_mark_subscriber(email, True, customer_id)
+
+resp = Response(
+f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Access Active</title>
+<style>
+body{{margin:0;background:#07070a;color:#f2f2f7;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:26px}}
+.card{{max-width:520px;margin:0 auto;background:#101017;border:1px solid rgba(212,175,55,.22);border-radius:18px;padding:18px}}
+.muted{{color:#b6b6c3;font-size:13px;margin-top:8px}}
+</style></head><body>
+<div class="card">
+<h2 style="margin:0 0 8px">Access Activated</h2>
+<div class="muted">Sending you back to the interpreter…</div>
+</div>
+<script>
+setTimeout(()=>{{ window.location.href={json.dumps(RETURN_URL)}; }}, 1200);
+</script>
+</body></html>""",
+mimetype="text/html"
+)
+resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+return resp
+
+
+@app.route("/dream-pack-success", methods=["GET"])
+def dream_pack_success():
+email = (request.args.get("email") or "").strip().lower()
+
+if _validate_email(email):
+_set_buyer_session(email)
+_mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
+
+resp = Response(
+f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dream Pack Active</title>
+<style>
+body{{margin:0;background:#07070a;color:#f2f2f7;font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:26px}}
+.card{{max-width:520px;margin:0 auto;background:#101017;border:1px solid rgba(212,175,55,.22);border-radius:18px;padding:18px}}
+.muted{{color:#b6b6c3;font-size:13px;margin-top:8px}}
+</style></head><body>
+<div class="card">
+<h2 style="margin:0 0 8px">{DREAM_PACK_USES} Dream Pack Activated</h2>
+<div class="muted">Sending you back to the interpreter…</div>
+</div>
+<script>
+setTimeout(()=>{{ window.location.href={json.dumps(RETURN_URL)}; }}, 1200);
+</script>
+</body></html>""",
+mimetype="text/html"
+)
+resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
+return resp
+
+
+@app.route("/webhook", methods=["POST"])
+def stripe_webhook():
+if not stripe or not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET:
+return ("not configured", 400)
+
+stripe.api_key = STRIPE_SECRET_KEY
+
+payload = request.data
+sig_header = request.headers.get("Stripe-Signature", "")
+
+try:
+event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+except Exception:
+return ("bad signature", 400)
+
+if event["type"] == "checkout.session.completed":
+session_obj = event["data"]["object"]
+email = (session_obj.get("customer_email") or "").strip().lower()
+customer_id = session_obj.get("customer") or ""
+mode = (session_obj.get("mode") or "").strip().lower()
+metadata = session_obj.get("metadata") or {}
+purchase_type = (metadata.get("purchase_type") or "").strip().lower()
+
+if _validate_email(email) and mode == "subscription":
+_mark_subscriber(email, True, customer_id)
+
+if _validate_email(email) and mode == "payment" and purchase_type == "dream_pack":
+_mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
+
+if event["type"] == "customer.subscription.deleted":
+sub = event["data"]["object"]
+customer_id = sub.get("customer") or ""
+subs = _load_subscribers()
+changed = False
+for em, rec in subs.items():
+if (rec or {}).get("stripe_customer_id") == customer_id and em:
+rec["is_active"] = False
+rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
+subs[em] = rec
+changed = True
+if changed:
+_save_subscribers(subs)
+
+return ("ok", 200)
+
+
+@app.route("/interpret", methods=["POST", "OPTIONS"])
+def interpret():
+if request.method == "OPTIONS":
+return _preflight_ok()
+
+data = request.get_json(silent=True) or {}
+dream = (data.get("dream") or data.get("text") or "").strip()
+
+_log("RAW JSON RECEIVED:", _safe_debug_payload_preview(data))
+_log("RAW DREAM RECEIVED:", repr(dream))
+_log("REQUEST CONTENT-TYPE:", request.headers.get("Content-Type", ""))
+_log("REQUEST ORIGIN:", request.headers.get("Origin", ""))
+_log("REQUEST REFERER:", request.headers.get("Referer", ""))
+
+validation_error = _validate_dream_text(dream)
+if validation_error:
+return jsonify({"error": validation_error}), 400
+
+is_paid = _is_premium_session()
+session_email = _get_session_email()
+dream_pack_status_before = _get_dream_pack_status(session_email)
+has_active_dream_pack = bool(dream_pack_status_before["active"])
+
+if not is_paid:
+ip = _get_client_ip()
+cookie_used = _get_cookie_tries_used()
+ip_used = _shadow_count(ip)
+effective_used = max(cookie_used, ip_used)
+
+if (not has_active_dream_pack) and effective_used >= FREE_TRIES:
+return jsonify({
+"blocked": True,
+"reason": "free_limit_reached",
+"message": f"You’ve used your {FREE_TRIES} free tries. Buy {DREAM_PACK_USES} more dreams or subscribe to continue.",
+"redirect": url_for("upgrade"),
+"free_uses_left": 0,
+"access": "blocked",
+"is_paid": False,
+"dream_pack_available": bool(PRICE_DREAM_PACK),
+"dream_pack": {
+"active": False,
+"uses_remaining": 0,
+"expires_at": "",
+},
+}), 402
+
+free_uses_left = 0
+dream_pack_status_after = dream_pack_status_before
+
+if not is_paid:
+if has_active_dream_pack:
+dream_pack_status_after = _consume_dream_pack_use(session_email)
+free_uses_left = 0
+else:
+ip = _get_client_ip()
+cookie_used = _get_cookie_tries_used()
+ip_used = _shadow_count(ip)
+effective_used = max(cookie_used, ip_used)
+_shadow_increment(ip)
+free_uses_left = _free_tries_remaining_after_this(effective_used)
+
+doctrine_active = DOCTRINE_MODE and _doctrine_sheets_available()
+
+if doctrine_active:
+try:
+sheets = _load_doctrine_sheets()
+base_rows = sheets.get(SHEET_BASE_SYMBOLS, [])
+behavior_rows = sheets.get(SHEET_BEHAVIOR_RULES, [])
+state_rows = sheets.get(SHEET_SIZE_STATE_RULES, [])
+location_rows = sheets.get(SHEET_LOCATION_RULES, [])
+override_rows = sheets.get(SHEET_OVERRIDE_RULES, [])
+template_rows = sheets.get(SHEET_OUTPUT_TEMPLATES, [])
+
+base_matches = _match_base_symbols_doctrine(dream, base_rows, top_k=3)
+behaviors = _detect_rule_hits(dream, behavior_rows, "behavior")
+states = _detect_rule_hits(dream, state_rows, "state")
+locations = _detect_rule_hits(dream, location_rows, "location")
+override_hit = _apply_override_rules(
+base_matches=base_matches,
+behaviors=behaviors,
+states=states,
+locations=locations,
+dream=dream,
+override_rows=override_rows,
+)
+
+receipt_id = f"JTS-{secrets.token_hex(4).upper()}"
+seal = _compute_seal_from_symbol_count(len(base_matches))
+
+if not base_matches and not override_hit:
+payload = {
+"engine_mode": "doctrine",
+"access": "paid" if is_paid else "free",
+"is_paid": bool(is_paid),
+"free_uses_left": free_uses_left,
+"dream_pack": {
+"active": bool(dream_pack_status_after["active"]),
+"uses_remaining": int(dream_pack_status_after["uses_remaining"]),
+"expires_at": dream_pack_status_after["expires_at"],
+},
+"seal": seal,
+"brain": {
+"behaviors": [b["name"] for b in behaviors],
+"states": [s["name"] for s in states],
+"locations": [l["name"] for l in locations],
+"template_type": "default",
+},
+"receipt": {
+"id": receipt_id,
+"top_symbols": [],
+"share_phrase": "I decoded my dream on Jamaican True Stories.",
+},
+"interpretation": {
+"spiritual_meaning": "No matching doctrine symbols were found for the exact words in this dream.",
+"effects_in_physical_realm": "Tip: use clear dream symbols or phrases that exist in your doctrine system.",
+"what_to_do": "Add 1–2 more key symbols or phrases and try again.",
+},
+"full_interpretation": "",
+}
+_log("TOP SYMBOLS RETURNED:", [])
+_log("INTERPRET RESPONSE MODE:", "doctrine_no_matches")
+resp = make_response(jsonify(payload))
+else:
+built = _build_doctrine_interpretation(
+dream=dream,
+base_matches=base_matches,
+behaviors=behaviors,
+states=states,
+locations=locations,
+override_hit=override_hit,
+templates=template_rows,
+)
+
+top_symbols = built["top_symbols"]
+share_phrase = (
+f"My dream had symbols like: {', '.join(top_symbols[:3])}. I decoded it on Jamaican True Stories."
+if top_symbols else
+"I decoded my dream on Jamaican True Stories."
+)
+
+payload = {
+"engine_mode": "doctrine",
+"access": "paid" if is_paid else "free",
+"is_paid": bool(is_paid),
+"free_uses_left": free_uses_left,
+"dream_pack": {
+"active": bool(dream_pack_status_after["active"]),
+"uses_remaining": int(dream_pack_status_after["uses_remaining"]),
+"expires_at": dream_pack_status_after["expires_at"],
+},
+"seal": seal,
+"brain": {
+"behaviors": [b["name"] for b in behaviors],
+"states": [s["name"] for s in states],
+"locations": [l["name"] for l in locations],
+"top_symbol_categories": [
+{
+"symbol": _get_base_symbol_input(row),
+"category": _get_base_symbol_category(row)
+}
+for row, _sc, _hit in base_matches
+],
+"override_applied": built["override_applied"],
+"override_name": built["override_name"],
+"template_type": built.get("template_type", "default"),
+},
+"interpretation": built["interpretation"],
+"full_interpretation": built["full_interpretation"],
+"receipt": {
+"id": receipt_id,
+"top_symbols": top_symbols,
+"share_phrase": share_phrase,
+},
+}
+
+_log("TOP SYMBOLS RETURNED:", top_symbols)
+_log("MATCHED BEHAVIORS:", [b["name"] for b in behaviors])
+_log("MATCHED STATES:", [s["name"] for s in states])
+_log("MATCHED LOCATIONS:", [l["name"] for l in locations])
+_log("OVERRIDE:", override_hit)
+_log("TEMPLATE TYPE:", built.get("template_type", "default"))
+_log("INTERPRET RESPONSE MODE:", "doctrine_matched")
+resp = make_response(jsonify(payload))
+
+except Exception as e:
+return jsonify({
+"error": "Doctrine engine failed",
+"details": str(e),
+}), 500
+
+else:
+try:
+legacy_rows = _load_legacy_sheet_rows()
+except Exception as e:
+return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
+
+matches = _match_symbols_legacy(dream, legacy_rows, top_k=3)
+receipt_id = f"JTS-{secrets.token_hex(4).upper()}"
+seal = _compute_seal_from_symbol_count(len(matches))
+
+if not matches:
+payload = {
+"engine_mode": "legacy",
+"access": "paid" if is_paid else "free",
+"is_paid": bool(is_paid),
+"free_uses_left": free_uses_left,
+"dream_pack": {
+"active": bool(dream_pack_status_after["active"]),
+"uses_remaining": int(dream_pack_status_after["uses_remaining"]),
+"expires_at": dream_pack_status_after["expires_at"],
+},
+"seal": seal,
+"brain": {},
+"receipt": {
+"id": receipt_id,
+"top_symbols": [],
+"share_phrase": "I decoded my dream on Jamaican True Stories.",
+},
+"interpretation": {
+"spiritual_meaning": "No matching symbols were found for the exact words in this dream.",
+"effects_in_physical_realm": "Tip: use clear symbol words or phrases that exist in your Symbols sheet.",
+"what_to_do": "Add 1–2 more key symbols or phrases and try again.",
+},
+"full_interpretation": "",
+}
+_log("TOP SYMBOLS RETURNED:", [])
+_log("INTERPRET RESPONSE MODE:", "legacy_no_matches")
+resp = make_response(jsonify(payload))
+else:
+built_legacy = _build_legacy_interpretation(matches)
+top_symbols = [_get_symbol_cell(row) for row, _sc, _hit in matches if _get_symbol_cell(row)]
+
+full_parts = [
+_sentence("This dream is revealing symbolic meaning through the matched symbols"),
+built_legacy["spiritual_meaning"],
+built_legacy["effects_in_physical_realm"],
+built_legacy["what_to_do"],
+_sentence("Dreams expose what needs attention so you can respond with wisdom"),
+]
+full_interpretation = "\n\n".join([x for x in full_parts if x and x.strip()])
+
+payload = {
+"engine_mode": "legacy",
+"access": "paid" if is_paid else "free",
+"is_paid": bool(is_paid),
+"free_uses_left": free_uses_left,
+"dream_pack": {
+"active": bool(dream_pack_status_after["active"]),
+"uses_remaining": int(dream_pack_status_after["uses_remaining"]),
+"expires_at": dream_pack_status_after["expires_at"],
+},
+"seal": seal,
+"brain": {},
+"interpretation": built_legacy,
+"full_interpretation": full_interpretation,
+"receipt": {
+"id": receipt_id,
+"top_symbols": top_symbols,
+"share_phrase": f"My dream had symbols like: {', '.join(top_symbols[:3])}. I decoded it on Jamaican True Stories.",
+},
+}
+
+_log("TOP SYMBOLS RETURNED:", top_symbols)
+_log("INTERPRET RESPONSE MODE:", "legacy_matched")
+resp = make_response(jsonify(payload))
+
+if not is_paid and not has_active_dream_pack:
+cookie_used = _get_cookie_tries_used()
+resp.set_cookie(
+COOKIE_NAME,
+str(cookie_used + 1),
+max_age=COOKIE_MAX_AGE,
+samesite=COOKIE_SAMESITE,
+secure=COOKIE_SECURE,
+)
+
+return resp
+
+
+@app.route("/track", methods=["POST", "OPTIONS"])
+def track():
+if request.method == "OPTIONS":
+return _preflight_ok()
+
+payload = request.get_json(silent=True) or {}
+event_name = payload.get("event") or payload.get("event_type") or "unknown"
+return jsonify({
+"ok": True,
+"event": event_name,
+"session_email": _get_session_email(),
+"session_premium": _is_premium_session(),
+"dream_pack": _get_dream_pack_status(_get_session_email()),
+})
+
+
+# ============================================================
+# Admin routes
+# ============================================================
+@app.route("/admin", methods=["GET"])
+def admin():
+auth_fail = _require_admin()
+if auth_fail:
+return auth_fail
+return Response(ADMIN_HTML, mimetype="text/html")
+
+
+@app.route("/admin/upsert", methods=["POST", "OPTIONS"])
+def admin_upsert():
+if request.method == "OPTIONS":
+return _preflight_ok()
+
+auth_fail = _require_admin()
+if auth_fail:
+return jsonify({"ok": False, "error": "Forbidden"}), 403
+
+payload = request.get_json(silent=True) or {}
+try:
+result = _admin_upsert_to_sheet(payload)
+return jsonify(result)
+except Exception as e:
+return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ============================================================
+# Debug routes
+# ============================================================
+@app.route("/debug/config", methods=["GET"])
+def debug_config():
+if not DEBUG_MATCH:
+return jsonify({"error": "Debug disabled"}), 403
+
+return jsonify({
+"spreadsheet_id": SPREADSHEET_ID,
+"worksheet_name": WORKSHEET_NAME,
+"cache_ttl_seconds": CACHE_TTL_SECONDS,
+"allowed_origins": allowed_origins,
+"admin_configured": bool(ADMIN_KEY),
+"free_quota": FREE_TRIES,
+"shadow_window_hours": SHADOW_WINDOW_HOURS,
+"stripe_has_key": bool(STRIPE_SECRET_KEY),
+"stripe_has_price": bool(DEFAULT_STRIPE_PRICE_ID),
+"webhook_configured": bool(STRIPE_WEBHOOK_SECRET),
+"price_dream_pack_set": bool(PRICE_DREAM_PACK),
+"dream_pack_uses": DREAM_PACK_USES,
+"dream_pack_hours": DREAM_PACK_HOURS,
+"counts_file": str(USAGE_COUNTS_PATH),
+"subscribers_file": str(SUBSCRIBERS_PATH),
+"cookie_samesite": COOKIE_SAMESITE,
+"return_url": RETURN_URL,
+"session_premium": _is_premium_session(),
+"session_email": _get_session_email(),
+"session_dream_pack": _get_dream_pack_status(_get_session_email()),
+"keyword_guard_enabled": KEYWORD_GUARD_ENABLED,
+"doctrine_mode_enabled": DOCTRINE_MODE,
+"doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
+})
+
+
+@app.route("/debug/sheet", methods=["GET"])
+def debug_sheet():
+if not DEBUG_MATCH:
+return jsonify({"error": "Debug disabled"}), 403
+
+rows = _load_legacy_sheet_rows(force=True)
+headers = _LEGACY_CACHE.get("headers", [])
+sample = rows[0] if rows else {}
+
+return jsonify({
+"worksheet": WORKSHEET_NAME,
+"row_count": len(rows),
+"headers_seen": headers,
+"sample_keys": list(sample.keys()),
+"sample_symbol_cell": _get_symbol_cell(sample),
+"sample_spiritual_meaning": _get_spiritual_meaning_cell(sample),
+"sample_effects": _get_effects_cell(sample),
+"sample_what_to_do": _get_what_to_do_cell(sample),
+"sample_keywords": _get_keywords_cell(sample),
+"sample_keywords_split": _split_keywords(_get_keywords_cell(sample)),
+})
+
+
+@app.route("/debug/doctrine", methods=["GET"])
+def debug_doctrine():
+if not DEBUG_MATCH:
+return jsonify({"error": "Debug disabled"}), 403
+
+try:
+sheets = _load_doctrine_sheets(force=True)
+headers = _DOCTRINE_CACHE.get("headers", {})
+summary = {}
+
+for name in DOCTRINE_SHEET_NAMES:
+rows = sheets.get(name, [])
+sample = rows[0] if rows else {}
+summary[name] = {
+"row_count": len(rows),
+"headers_seen": headers.get(name, []),
+"sample_keys": list(sample.keys()) if sample else [],
+"sample_row": sample,
+}
+
+return jsonify({
+"doctrine_mode_enabled": DOCTRINE_MODE,
+"doctrine_sheets_available": _doctrine_sheets_available(),
+"sheets": summary,
+})
+except Exception as e:
+return jsonify({"error": "Doctrine debug failed", "details": str(e)}), 500
+
+
+if __name__ == "__main__":
+app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)

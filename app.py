@@ -1,39 +1,15 @@
 # app.py — Jamaican True Stories Dream Interpreter
-# Final production version
+# Full production version with layered doctrine engine
 #
 # Features:
 # - Stripe subscription access
-# - $1 dream pack access
+# - Dream pack access
 # - Free tier with cookie + IP shadow gate
-# - Doctrine engine (multi-sheet)
+# - Doctrine engine (BaseSymbols, BehaviorRules, SizeStateRules, LocationRules, OverrideRules, OutputTemplates)
+# - Dynamic template selection
 # - Legacy single-sheet fallback
 # - Admin upsert tool
 # - Debug endpoints
-#
-# Required env vars:
-# - FLASK_SECRET_KEY
-# - RETURN_URL
-# - ALLOWED_ORIGINS
-# - SPREADSHEET_ID
-# - GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE
-# - STRIPE_SECRET_KEY
-# - STRIPE_WEBHOOK_SECRET
-# - PRICE_WEEKLY and/or PRICE_MONTHLY
-# - PRICE_DREAM_PACK
-# - ADMIN_KEY (or JTS_ADMIN_KEY / ADMIN_TOKEN / JTS_ADMIN)
-#
-# Optional env vars:
-# - WORKSHEET_NAME=Sheet1
-# - FREE_QUOTA=3
-# - FREE_TRIES_COOKIE=jts_free_tries_used
-# - SHADOW_WINDOW_HOURS=72
-# - DREAM_PACK_USES=3
-# - DREAM_PACK_HOURS=72
-# - CACHE_TTL_SECONDS=120
-# - DEBUG_MATCH=1
-# - DOCTRINE_MODE=1
-# - NARRATIVE_ENABLED=1
-# - NARRATIVE_MAX_SYMBOLS=3
 
 import os
 import json
@@ -74,7 +50,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "").strip() or secrets.token_hex(32)
 app.config["SESSION_COOKIE_SAMESITE"] = "None"
 app.config["SESSION_COOKIE_SECURE"] = True
-app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # 64 KB request cap
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
 
 DEFAULT_ALLOWED = [
     "https://jamaicantruestories.com",
@@ -301,14 +277,6 @@ def _title_case_symbol(sym: str) -> str:
     if not sym:
         return ""
     return sym[:1].upper() + sym[1:]
-
-
-def _format_label_value(symbol: str, text: str) -> str:
-    symbol = _title_case_symbol(symbol)
-    text = _clean_sentence(text)
-    if not symbol or not text:
-        return ""
-    return f"{symbol}: {text}"
 
 
 def _dedupe_preserve_order(items: List[str]) -> List[str]:
@@ -647,6 +615,13 @@ def _build_action_sentence(
     return _sentence(joined)
 
 
+def _render_template_text(template_text: str, context: Dict[str, str]) -> str:
+    text = template_text or ""
+    for key, value in context.items():
+        text = text.replace("{" + key + "}", _strip_trailing_punct(value or ""))
+    return _sentence(text)
+
+
 # ============================================================
 # File utilities
 # ============================================================
@@ -852,16 +827,11 @@ def _mark_dream_pack_purchase(email: str, uses: int = DREAM_PACK_USES, hours: in
 def _get_dream_pack_status(email: str) -> Dict[str, Any]:
     email_n = (email or "").strip().lower()
     if not email_n:
-        return {
-            "active": False,
-            "uses_remaining": 0,
-            "expires_at": "",
-        }
+        return {"active": False, "uses_remaining": 0, "expires_at": ""}
 
     subs = _load_subscribers()
     rec = subs.get(email_n, {}) if isinstance(subs.get(email_n, {}), dict) else {}
 
-    uses_remaining = 0
     try:
         uses_remaining = int(rec.get("dream_pack_uses_remaining", 0) or 0)
     except Exception:
@@ -884,11 +854,7 @@ def _get_dream_pack_status(email: str) -> Dict[str, Any]:
 def _consume_dream_pack_use(email: str) -> Dict[str, Any]:
     email_n = (email or "").strip().lower()
     if not email_n:
-        return {
-            "active": False,
-            "uses_remaining": 0,
-            "expires_at": "",
-        }
+        return {"active": False, "uses_remaining": 0, "expires_at": ""}
 
     subs = _load_subscribers()
     rec = subs.get(email_n, {}) if isinstance(subs.get(email_n, {}), dict) else {}
@@ -905,9 +871,8 @@ def _consume_dream_pack_use(email: str) -> Dict[str, Any]:
     subs[email_n] = rec
     _save_subscribers(subs)
 
-    active_after = uses_remaining > 0 and bool(current["expires_at"])
     return {
-        "active": active_after,
+        "active": uses_remaining > 0 and bool(current["expires_at"]),
         "uses_remaining": uses_remaining,
         "expires_at": current["expires_at"],
     }
@@ -1020,7 +985,6 @@ def _worksheet_to_rows(ws) -> Tuple[List[str], List[Dict[str, str]]]:
             headers.append(f"{nh}__{count+1}")
 
     rows: List[Dict[str, str]] = []
-
     for r in values[1:]:
         if len(r) < len(headers):
             r = r + [""] * (len(headers) - len(r))
@@ -1060,7 +1024,6 @@ def _load_doctrine_sheets(force: bool = False) -> Dict[str, List[Dict]]:
         return _DOCTRINE_CACHE["sheets"]
 
     sh = _get_spreadsheet()
-
     sheets_data: Dict[str, List[Dict]] = {}
     headers_map: Dict[str, List[str]] = {}
 
@@ -1093,10 +1056,7 @@ def _doctrine_sheets_available() -> bool:
 # Legacy field getters
 # ============================================================
 def _get_symbol_cell(row: Dict) -> str:
-    return _row_get(
-        row,
-        "input", "symbol", "symbols", "input symbol", "dream symbol", "symbol name"
-    )
+    return _row_get(row, "input", "symbol", "symbols", "input symbol", "dream symbol", "symbol name")
 
 
 def _get_spiritual_meaning_cell(row: Dict) -> str:
@@ -1318,13 +1278,19 @@ def _get_behavior_name(row: Dict) -> str:
 
 
 def _get_behavior_meaning_modifier(row: Dict) -> str:
-    return _row_get(row, "meaning_modifier", "meaning modifier", "effect", "effects")
+    return _row_get(
+        row,
+        "meaning_modifier", "meaning modifier",
+        "maning_modifier", "maning modifier",
+        "effect", "effects"
+    )
 
 
 def _get_behavior_physical_modifier(row: Dict) -> str:
     return _row_get(
         row,
         "physical_modifier", "physical modifier",
+        "physicare_modifier", "physicare modifier",
         "physical_effect", "physical effects",
         "effect", "effects"
     )
@@ -1384,7 +1350,7 @@ def _get_output_template(rows: List[Dict], template_type: str, fallback: str) ->
 
 
 # ============================================================
-# Doctrine Engine detection
+# Doctrine engine detection
 # ============================================================
 def _match_base_symbols_doctrine(
     dream: str,
@@ -1528,7 +1494,6 @@ def _detect_rule_hits(
             continue
         seen_names.add(name_key)
 
-        priority_val = 0
         try:
             priority_val = int(str(_row_get(row, priority_field) or "0").strip())
         except Exception:
@@ -1550,17 +1515,8 @@ def _detect_rule_hits(
 # ============================================================
 # Doctrine overrides
 # ============================================================
-def _override_match_ok(override_val: str, actual_vals: List[str]) -> bool:
-    override_val_n = _normalize_text(override_val)
-    if not override_val_n:
-        return True
-    actual_norm = {_normalize_text(x) for x in actual_vals if x}
-    return override_val_n in actual_norm
-
-
-def _parse_simple_condition(condition: str) -> Dict[str, List[str]]:
-    tokens = [_normalize_text(x) for x in re.split(r"\+", condition or "") if _normalize_text(x)]
-    return {"tokens": tokens}
+def _parse_simple_condition(condition: str) -> List[str]:
+    return [_normalize_text(x) for x in re.split(r"\+", condition or "") if _normalize_text(x)]
 
 
 def _apply_override_rules(
@@ -1571,87 +1527,120 @@ def _apply_override_rules(
     dream: str,
     override_rows: List[Dict],
 ) -> Optional[Dict[str, Any]]:
-    if not base_matches:
-        return None
-
     symbol_names = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
     behavior_names = [x["name"] for x in behaviors]
     state_names = [x["name"] for x in states]
     location_names = [x["name"] for x in locations]
 
-    best: Optional[Dict[str, Any]] = None
-    best_priority = -10**9
+    combined = set()
+    combined.update({_normalize_text(x) for x in symbol_names if x})
+    combined.update({_normalize_text(x) for x in behavior_names if x})
+    combined.update({_normalize_text(x) for x in state_names if x})
+    combined.update({_normalize_text(x) for x in location_names if x})
 
-    all_values_norm = {
-        "symbols": {_normalize_text(x) for x in symbol_names if x},
-        "behaviors": {_normalize_text(x) for x in behavior_names if x},
-        "states": {_normalize_text(x) for x in state_names if x},
-        "locations": {_normalize_text(x) for x in location_names if x},
-        "dream": _normalize_text(dream),
-    }
+    dream_norm = _normalize_text(dream)
+    best: Optional[Dict[str, Any]] = None
+    best_score = -10**9
 
     for row in override_rows:
         if not _row_is_active(row):
             continue
 
-        override_name = _row_get(row, "override_name")
         condition = _row_get(row, "condition")
-        symbol_match = _row_get(row, "symbol_match")
-        behavior_match = _row_get(row, "behavior_match")
-        state_match = _row_get(row, "state_match")
-        location_match = _row_get(row, "location_match")
-        context_match = _row_get(row, "context_match")
+        if not condition:
+            continue
 
-        is_match = False
+        tokens = _parse_simple_condition(condition)
+        if not tokens:
+            continue
 
-        if override_name or symbol_match or behavior_match or state_match or location_match or context_match:
-            if _override_match_ok(symbol_match, symbol_names) and \
-               _override_match_ok(behavior_match, behavior_names) and \
-               _override_match_ok(state_match, state_names) and \
-               _override_match_ok(location_match, location_names):
-                if context_match:
-                    is_match = _contains_phrase(all_values_norm["dream"], context_match)
-                else:
-                    is_match = True
+        matched = True
+        specificity = 0
 
-        elif condition:
-            parsed = _parse_simple_condition(condition)
-            tokens = parsed["tokens"]
-            combined = set()
-            combined.update(all_values_norm["symbols"])
-            combined.update(all_values_norm["behaviors"])
-            combined.update(all_values_norm["states"])
-            combined.update(all_values_norm["locations"])
-            if tokens and all(t in combined for t in tokens):
-                is_match = True
+        for token in tokens:
+            if token in combined:
+                specificity += 3
+                continue
+            if _contains_phrase(dream_norm, token):
+                specificity += 2
+                continue
+            matched = False
+            break
 
-        if not is_match:
+        if not matched:
             continue
 
         try:
-            pr = int(str(_row_get(row, "priority") or "0").strip())
+            priority = int(str(_row_get(row, "priority") or "0").strip())
         except Exception:
-            pr = 0
+            priority = 0
 
-        if pr > best_priority:
-            best_priority = pr
+        score = (priority * 100) + specificity + len(tokens)
+
+        if score > best_score:
+            best_score = score
             best = row
 
     if not best:
         return None
 
-    spiritual = _row_get(best, "final_spiritual_meaning", "override_effect", "effect", "effects")
-    physical = _row_get(best, "final_physical_effects")
-    action = _row_get(best, "final_action")
-
     return {
         "override_name": _row_get(best, "override_name", "condition"),
-        "spiritual": spiritual,
-        "physical": physical,
-        "action": action,
-        "priority": best_priority,
+        "spiritual": _row_get(best, "final_spiritual_meaning", "override_effect", "effect", "effects"),
+        "physical": _row_get(best, "final_physical_effects"),
+        "action": _row_get(best, "final_action"),
+        "priority": int(str(_row_get(best, "priority") or "0").strip() or "0"),
         "row": best,
     }
+
+
+# ============================================================
+# Template selection
+# ============================================================
+def _choose_template_type(
+    override_hit: Optional[Dict[str, Any]],
+    behaviors: List[Dict[str, Any]],
+    states: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+    interpretation: Dict[str, str],
+) -> str:
+    if override_hit:
+        name = _normalize_text(override_hit.get("override_name", ""))
+        spiritual = _normalize_text(override_hit.get("spiritual", ""))
+        combined = f"{name} {spiritual}"
+
+        if any(x in combined for x in ["death", "grave", "falling down", "teeth falling out", "death omen"]):
+            return "death_omen"
+        if any(x in combined for x in ["monitor", "watch", "spy"]):
+            return "monitoring"
+        if any(x in combined for x in ["escape", "deliver", "freedom", "victory"]):
+            return "deliverance"
+        if any(x in combined for x in ["clean", "wash", "purif", "release"]):
+            return "cleansing"
+        if any(x in combined for x in ["promotion", "elevation", "lifted", "favor"]):
+            return "promotion"
+        if any(x in combined for x in ["warning", "danger", "attack", "disgrace"]):
+            return "warning"
+
+    behavior_names = {_normalize_text(x["name"]) for x in behaviors}
+    state_names = {_normalize_text(x["name"]) for x in states}
+    location_names = {_normalize_text(x["name"]) for x in locations}
+    interp_text = _normalize_text(" ".join(interpretation.values()))
+
+    if {"being attacked", "attacking", "being chased", "chasing", "fighting"} & behavior_names:
+        return "warfare"
+    if {"escaping", "crossing", "finding"} & behavior_names:
+        return "breakthrough"
+    if {"dirty", "murky", "broken", "bleeding", "dark"} & state_names:
+        return "warning"
+    if {"graveyard", "prison", "darkness"} & location_names:
+        return "warning"
+    if any(x in interp_text for x in ["monitoring spirit", "being watched", "spiritual spy"]):
+        return "monitoring"
+    if any(x in interp_text for x in ["cleansing", "washed", "release"]):
+        return "cleansing"
+
+    return "default"
 
 
 # ============================================================
@@ -1672,21 +1661,6 @@ def _build_doctrine_interpretation(
 ) -> Dict[str, Any]:
     top_symbols = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
 
-    opening_tpl = _get_output_template(
-        templates,
-        "opening",
-        "This dream is revealing a spiritual condition, not predicting physical harm."
-    )
-    closing_tpl = _get_output_template(
-        templates,
-        "closing",
-        "Dreams expose what needs attention so you can respond with wisdom."
-    )
-
-    spiritual_lines: List[str] = []
-    physical_lines: List[str] = []
-    action_lines: List[str] = []
-
     behavior_mod = _join_nonempty([_get_behavior_meaning_modifier(x["row"]) for x in behaviors], " ")
     behavior_phys_mod = _join_nonempty([_get_behavior_physical_modifier(x["row"]) for x in behaviors], " ")
     behavior_action_mod = _join_nonempty([_get_behavior_action_modifier(x["row"]) for x in behaviors], " ")
@@ -1702,6 +1676,10 @@ def _build_doctrine_interpretation(
     override_spiritual = _strip_trailing_punct((override_hit or {}).get("spiritual", ""))
     override_physical = _strip_trailing_punct((override_hit or {}).get("physical", ""))
     override_action = _strip_trailing_punct((override_hit or {}).get("action", ""))
+
+    spiritual_lines: List[str] = []
+    physical_lines: List[str] = []
+    action_lines: List[str] = []
 
     if override_hit and not base_matches:
         spiritual_text = _sentence(override_spiritual or "A special doctrine condition applies to this dream.")
@@ -1719,88 +1697,103 @@ def _build_doctrine_interpretation(
             location_action_mod=location_action_mod,
             override_action=override_action,
         )
+    else:
+        for row, _sc, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
+            symbol = _get_base_symbol_input(row)
+            base_meaning = _get_base_symbol_meaning(row)
+            base_effects = _get_base_symbol_effects(row)
+            base_action = _get_base_symbol_action(row)
 
-        full_interpretation = "\n\n".join([
-            _sentence(opening_tpl),
-            spiritual_text,
-            physical_text,
-            action_text,
-            _sentence(closing_tpl),
-        ])
+            spiritual_text_i = _build_spiritual_meaning_paragraph(
+                symbol=symbol,
+                base_meaning=base_meaning,
+                behavior_mod=behavior_mod,
+                state_mod=state_mod,
+                location_mod=location_mod,
+                override_spiritual=override_spiritual,
+            )
+            physical_text_i = _build_physical_effect_sentence(
+                base_effects=base_effects,
+                behavior_phys_mod=behavior_phys_mod,
+                state_phys_mod=state_phys_mod,
+                location_phys_mod=location_phys_mod,
+                override_physical=override_physical,
+            )
+            action_text_i = _build_action_sentence(
+                base_action=base_action,
+                behavior_action_mod=behavior_action_mod,
+                state_action_mod=state_action_mod,
+                location_action_mod=location_action_mod,
+                override_action=override_action,
+            )
 
-        return {
-            "interpretation": {
-                "spiritual_meaning": spiritual_text,
-                "effects_in_physical_realm": physical_text,
-                "what_to_do": action_text,
-            },
-            "full_interpretation": full_interpretation,
-            "top_symbols": top_symbols,
-            "override_applied": True,
-            "override_name": (override_hit or {}).get("override_name", ""),
-        }
+            if spiritual_text_i:
+                spiritual_lines.append(spiritual_text_i)
+            if physical_text_i:
+                physical_lines.append(physical_text_i)
+            if action_text_i:
+                action_lines.append(action_text_i)
 
-    for row, _sc, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
-        symbol = _get_base_symbol_input(row)
-        base_meaning = _get_base_symbol_meaning(row)
-        base_effects = _get_base_symbol_effects(row)
-        base_action = _get_base_symbol_action(row)
+        spiritual_text = _merge_natural_paragraphs(spiritual_lines) or "No clear spiritual meaning was generated."
+        physical_text = _merge_natural_paragraphs(physical_lines) or "No clear physical effects were generated."
+        action_text = _merge_natural_paragraphs(action_lines) or "Pray for wisdom and confirmation."
 
-        spiritual_text = _build_spiritual_meaning_paragraph(
-            symbol=symbol,
-            base_meaning=base_meaning,
-            behavior_mod=behavior_mod,
-            state_mod=state_mod,
-            location_mod=location_mod,
-            override_spiritual=override_spiritual,
-        )
+    interpretation = {
+        "spiritual_meaning": spiritual_text,
+        "effects_in_physical_realm": physical_text,
+        "what_to_do": action_text,
+    }
 
-        physical_text = _build_physical_effect_sentence(
-            base_effects=base_effects,
-            behavior_phys_mod=behavior_phys_mod,
-            state_phys_mod=state_phys_mod,
-            location_phys_mod=location_phys_mod,
-            override_physical=override_physical,
-        )
+    template_type = _choose_template_type(
+        override_hit=override_hit,
+        behaviors=behaviors,
+        states=states,
+        locations=locations,
+        interpretation=interpretation,
+    )
 
-        action_text = _build_action_sentence(
-            base_action=base_action,
-            behavior_action_mod=behavior_action_mod,
-            state_action_mod=state_action_mod,
-            location_action_mod=location_action_mod,
-            override_action=override_action,
-        )
+    opening_tpl = _get_output_template(
+        templates,
+        "opening",
+        "This dream is revealing a spiritual condition that requires discernment, not panic."
+    )
+    closing_tpl = _get_output_template(
+        templates,
+        "closing",
+        "Dreams expose what needs attention so you can respond with wisdom, prayer, and obedience."
+    )
+    main_tpl = _get_output_template(
+        templates,
+        template_type,
+        "{symbol} represents {meaning}. The behavior shows {behavior_effect}. The condition shows {state_effect}. The location points to {location_effect}."
+    )
 
-        if spiritual_text:
-            spiritual_lines.append(spiritual_text)
-        if physical_text:
-            physical_lines.append(physical_text)
-        if action_text:
-            action_lines.append(action_text)
+    context = {
+        "symbol": ", ".join(top_symbols[:1]) if top_symbols else "This dream",
+        "meaning": interpretation["spiritual_meaning"],
+        "behavior_effect": _join_nonempty([_get_behavior_meaning_modifier(x["row"]) for x in behaviors], ", "),
+        "state_effect": _join_nonempty([_get_state_meaning_modifier(x["row"]) for x in states], ", "),
+        "location_effect": _join_nonempty([_get_location_life_area_meaning(x["row"]) for x in locations], ", "),
+    }
 
-    spiritual_joined = _merge_natural_paragraphs(spiritual_lines) or "No clear spiritual meaning was generated."
-    physical_joined = _merge_natural_paragraphs(physical_lines) or "No clear physical effects were generated."
-    action_joined = _merge_natural_paragraphs(action_lines) or "Pray for wisdom and confirmation."
+    rendered_main = _render_template_text(main_tpl, context)
 
     full_parts = [
         _sentence(opening_tpl),
-        spiritual_joined,
-        physical_joined,
-        action_joined,
+        rendered_main,
+        interpretation["effects_in_physical_realm"],
+        interpretation["what_to_do"],
         _sentence(closing_tpl),
     ]
     full_interpretation = "\n\n".join([p for p in full_parts if p and p.strip()])
 
     return {
-        "interpretation": {
-            "spiritual_meaning": spiritual_joined,
-            "effects_in_physical_realm": physical_joined,
-            "what_to_do": action_joined,
-        },
+        "interpretation": interpretation,
         "full_interpretation": full_interpretation,
         "top_symbols": top_symbols,
         "override_applied": bool(override_hit),
         "override_name": (override_hit or {}).get("override_name", ""),
+        "template_type": template_type,
     }
 
 
@@ -2612,6 +2605,7 @@ def interpret():
                         "behaviors": [b["name"] for b in behaviors],
                         "states": [s["name"] for s in states],
                         "locations": [l["name"] for l in locations],
+                        "template_type": "default",
                     },
                     "receipt": {
                         "id": receipt_id,
@@ -2670,6 +2664,7 @@ def interpret():
                         ],
                         "override_applied": built["override_applied"],
                         "override_name": built["override_name"],
+                        "template_type": built.get("template_type", "default"),
                     },
                     "interpretation": built["interpretation"],
                     "full_interpretation": built["full_interpretation"],
@@ -2685,6 +2680,7 @@ def interpret():
                 _log("MATCHED STATES:", [s["name"] for s in states])
                 _log("MATCHED LOCATIONS:", [l["name"] for l in locations])
                 _log("OVERRIDE:", override_hit)
+                _log("TEMPLATE TYPE:", built.get("template_type", "default"))
                 _log("INTERPRET RESPONSE MODE:", "doctrine_matched")
                 resp = make_response(jsonify(payload))
 

@@ -20,446 +20,1449 @@
 
   <style>
     :root{
-      --bg:#0b0b0e;
-      --panel:#121218;
-      --ink:#e9e9ef;
-      --muted:#b7b7c2;
+      --bg0:#020203;
+      --bg1:#050509;
+      --bg2:#0b0a10;
       --gold:#d4af37;
-      --gold-2:#b8921e;
-      --red:#f87171;
-      --edge:#2b2730;
+      --gold2:#f3e28a;
+      --text:#f5e7c6;
+      --muted:rgba(245,231,198,0.82);
+      --line:rgba(212,175,55,0.35);
+      --line-soft:rgba(212,175,55,0.22);
+      --card:rgba(0,0,0,0.88);
+      --card2:rgba(8,8,10,0.92);
+      --shadow:rgba(0,0,0,0.85);
+      --danger:#ffb3b3;
+      --success:#9ae6b4;
+      --info:#c9dcff;
+      --radius:18px;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%}
+
+    html { -webkit-text-size-adjust:100%; }
+    * { box-sizing:border-box; }
+
     body{
       margin:0;
+      min-height:100svh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px 16px 40px;
       background:
-        radial-gradient(1200px 600px at 10% -10%, rgba(212,175,55,.07), transparent 60%),
-        var(--bg);
-      color:var(--ink);
-      font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;
-      display:flex; align-items:center; justify-content:center;
-      padding:32px;
+        radial-gradient(circle at top, #1d1725 0, #050509 52%, #020203 100%);
+      position:relative;
+      overflow-x:hidden;
+      color:var(--text);
+      font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      text-rendering:optimizeLegibility;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
     }
 
-    .card{
-      width:min(880px,100%);
+    body::before{
+      content:"";
+      position:absolute;
+      inset:-40%;
       background:
-        linear-gradient(180deg, rgba(212,175,55,.05), transparent 160px),
-        var(--panel);
-      border:1px solid rgba(212,175,55,.18);
+        radial-gradient(circle at 12% 0%, rgba(244,232,180,.23) 0, transparent 55%),
+        radial-gradient(circle at 88% 100%, rgba(114,95,180,.33) 0, transparent 60%);
+      opacity:.95;
+      pointer-events:none;
+    }
+
+    .jts-shell{
+      position:relative;
+      z-index:1;
+      width:100%;
+      max-width:1040px;
+      border-radius:24px;
+      border:1px solid rgba(212,175,55,0.48);
+      box-shadow:
+        0 0 30px rgba(212,175,55,0.17) inset,
+        0 24px 56px rgba(0,0,0,0.92);
+      background:
+        linear-gradient(180deg, rgba(255,215,128,0.06), transparent),
+        radial-gradient(circle at top, #1a1410 0, #050509 55%);
+      padding:clamp(16px, 4vw, 28px);
+    }
+
+    .jts-app-card{
+      max-width:790px;
+      margin:0 auto;
+      padding:clamp(16px, 3vw, 22px);
       border-radius:20px;
-      box-shadow:0 10px 30px rgba(0,0,0,.45);
-      padding:28px 24px 22px;
-      position:relative; overflow:hidden;
-    }
-    .card::before{
-      content:""; position:absolute; inset:0; pointer-events:none; opacity:.18;
-      background-image:
-        radial-gradient(rgba(255,255,255,.09) 1px, transparent 1.2px),
-        radial-gradient(rgba(255,255,255,.06) 1px, transparent 1.2px);
-      background-size:3px 3px,5px 5px; background-position:0 0, 10px 8px;
+      background:var(--card);
+      border:1px solid rgba(212,175,55,0.34);
+      box-shadow:0 20px 45px var(--shadow);
+      color:#f5f5f5;
     }
 
-    .brand{display:flex; align-items:center; gap:14px; margin-bottom:12px; position:relative; z-index:1;}
-    .logo{
-      width:56px; height:56px; border-radius:50%;
-      object-fit:cover; background:#0e0e14;
-      border:1px solid rgba(212,175,55,.35);
-      box-shadow: inset 0 0 0 1px rgba(212,175,55,.14), 0 0 18px rgba(212,175,55,.18);
+    .jts-center{ text-align:center; }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:14px;
+      margin-bottom:10px;
+      flex-wrap:wrap;
     }
-    .brand-text{display:flex; flex-direction:column}
-    h1{
-      font-family:Cinzel,serif; font-weight:700; letter-spacing:.5px;
-      margin:0; font-size:1.35rem;
+
+    .logo{
+      width:62px;
+      height:62px;
+      border-radius:50%;
+      object-fit:cover;
+      background:#0e0e14;
+      border:1px solid rgba(212,175,55,0.40);
+      box-shadow:
+        inset 0 0 0 1px rgba(212,175,55,.14),
+        0 0 18px rgba(212,175,55,.18);
+    }
+
+    .jts-pill{
+      display:inline-block;
+      padding:5px 10px;
+      border-radius:999px;
+      border:1px solid rgba(212,175,55,0.50);
+      font-size:0.72rem;
+      letter-spacing:0.12em;
+      text-transform:uppercase;
+      opacity:0.9;
+      color:var(--gold2);
+      background:rgba(255,255,255,0.02);
+    }
+
+    .jts-h1{
+      margin:12px 0 8px;
+      font-family:Cinzel,serif;
+      font-size:clamp(1.35rem, 2.8vw, 2.15rem);
+      line-height:1.12;
+      letter-spacing:0.04em;
+      text-align:center;
+      color:var(--gold2);
+      text-transform:uppercase;
       text-shadow:0 0 16px rgba(212,175,55,.18);
     }
-    .sub{color:var(--muted); margin:6px 0 22px; font-size:.95rem}
 
-    label.mini{color:var(--muted); font-size:.85rem}
-    textarea{
-      width:100%; min-height:140px;
-      background:#0e0e14; color:var(--ink);
-      border:1px solid rgba(212,175,55,.2); border-radius:14px;
-      padding:14px 14px 42px 14px;
-      outline:none; resize:vertical; caret-color:var(--gold);
-      box-shadow:inset 0 0 0 1px rgba(212,175,55,.06);
-    }
-    .controls{display:flex; gap:12px; align-items:center; justify-content:space-between; margin-top:10px;}
-    .mini{color:var(--muted); font-size:.85rem}
-
-    .btn{
-      appearance:none; border:none; border-radius:999px; padding:12px 18px; font-weight:600; cursor:pointer;
-      background:linear-gradient(180deg, var(--gold), var(--gold-2)); color:#0b0b0e;
-      box-shadow:0 6px 18px rgba(212,175,55,.25);
-    }
-    .btn:disabled{opacity:.6; cursor:not-allowed; box-shadow:none}
-
-    .samples{margin-top:6px; display:flex; flex-wrap:wrap; gap:8px}
-    .chip{
-      border:1px solid rgba(212,175,55,.22); color:var(--ink);
-      padding:6px 10px; border-radius:999px; font-size:.85rem; cursor:pointer;
-      background:#0b0b11;
+    .jts-lede{
+      margin:0 auto 12px;
+      max-width:60ch;
+      text-align:center;
+      font-size:0.97rem;
+      line-height:1.68;
+      color:var(--muted);
     }
 
-    .result{margin-top:18px; border:1px solid rgba(212,175,55,.18); border-radius:16px; background:#0f0f15; padding:16px;}
-    .result h3{margin:0 0 8px; font-family:Cinzel,serif; font-size:1.05rem; color:var(--gold)}
-    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.9rem; color:#dcdcf4}
-    .err{color:var(--red)}
-    .footer{margin-top:14px; color:var(--muted); font-size:.85rem}
-    a{color:var(--gold)}
-
-    .section-title{
-      font-weight:600;
-      color:var(--gold);
-      margin-top:10px;
-      margin-bottom:6px;
-      font-size:.95rem;
+    .jts-proof-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      justify-content:center;
+      margin:12px 0 14px;
     }
 
-    .block{
-      padding:12px;
+    .jts-proof-pill{
+      padding:7px 11px;
+      border-radius:999px;
+      border:1px solid rgba(212,175,55,0.24);
+      background:rgba(255,255,255,0.03);
+      font-size:0.78rem;
+      color:var(--text);
+      opacity:0.92;
+    }
+
+    .jts-mini-note{
+      margin:0 auto 14px;
+      max-width:56ch;
+      text-align:center;
+      font-size:0.83rem;
+      line-height:1.6;
+      color:rgba(245,231,198,0.86);
+      opacity:0.88;
+    }
+
+    .jts-status-bar{
+      margin:12px auto 14px;
+      padding:11px 13px;
       border-radius:14px;
-      border:1px solid rgba(212,175,55,.16);
-      background:rgba(0,0,0,.35);
+      border:1px solid rgba(212,175,55,0.28);
+      background:rgba(0,0,0,0.42);
+      text-align:center;
+      font-size:0.85rem;
+      line-height:1.55;
+      color:var(--muted);
     }
-    .block + .block{ margin-top:10px; }
 
-    /* IMPORTANT: This makes \n show as clean line breaks */
-    .prelines{ white-space: pre-line; }
+    .jts-status-bar strong{ color:var(--gold2); }
 
-    /* Full Interpretation UI */
-    .toggle-btn{
+    .jts-entry-panel{
+      margin-top:14px;
+      padding:14px;
+      border-radius:16px;
+      border:1px solid rgba(212,175,55,0.22);
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.18));
+    }
+
+    .jts-panel-title{
+      margin:0 0 10px;
+      text-align:center;
+      font-size:0.86rem;
+      font-weight:900;
+      text-transform:uppercase;
+      letter-spacing:0.08em;
+      color:var(--gold2);
+      opacity:0.95;
+    }
+
+    .jts-field-wrap{
+      margin:0 0 14px;
+    }
+
+    .jts-label{
+      display:block;
+      font-size:0.92rem;
+      margin-bottom:6px;
+      opacity:0.92;
+      color:var(--text);
+    }
+
+    .jts-input,
+    .jts-textarea{
+      width:100%;
+      border-radius:12px;
+      background:#050505;
+      border:1px solid rgba(212,175,55,0.30);
+      color:#f9f9f9;
+      box-shadow:inset 0 0 12px rgba(0,0,0,0.65);
+      outline:none;
+    }
+
+    .jts-input{
+      padding:13px 14px;
+      font-size:0.98rem;
+      line-height:1.4;
+    }
+
+    .jts-input::placeholder,
+    .jts-textarea::placeholder{
+      color:rgba(245,231,198,0.42);
+    }
+
+    .jts-field-note{
+      margin:6px 2px 0;
+      font-size:0.76rem;
+      line-height:1.5;
+      color:var(--muted);
+      opacity:0.76;
+    }
+
+    .jts-textarea{
+      min-height:160px;
+      height:24vh;
+      max-height:340px;
+      padding:12px 14px;
+      resize:vertical;
+      font-size:0.98rem;
+      line-height:1.58;
+      caret-color:var(--gold);
+    }
+
+    .jts-meta-row{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:10px;
+      margin-top:8px;
+      margin-bottom:6px;
+    }
+
+    .jts-char{
+      font-size:0.75rem;
+      opacity:0.72;
+      white-space:nowrap;
+    }
+
+    .jts-samples{
+      text-align:right;
+      font-size:0.72rem;
+      opacity:0.84;
+      line-height:1.5;
+    }
+
+    .jts-samples button{
+      border:0;
+      background:transparent;
+      color:#f9e08b;
+      text-decoration:underline;
+      font-size:0.72rem;
+      cursor:pointer;
+      padding:0 2px;
+    }
+
+    .jts-steps-row{
+      display:flex;
+      flex-wrap:wrap;
+      gap:6px;
+      margin:12px 0 12px;
+      font-size:0.76rem;
+      opacity:0.92;
+      justify-content:center;
+    }
+
+    .jts-step-pill{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(212,175,55,0.35);
+      background:rgba(0,0,0,0.45);
+    }
+
+    .jts-actions-row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
       margin-top:12px;
+    }
+
+    .jts-secondary-btn{
+      flex:1 1 220px;
+      padding:12px 14px;
+      border-radius:999px;
+      border:1px solid rgba(212,175,55,0.55);
+      background:rgba(0,0,0,0.55);
+      color:var(--gold2);
+      font-weight:900;
+      font-size:0.92rem;
+      text-transform:uppercase;
+      letter-spacing:0.06em;
+      cursor:pointer;
+      transition:transform .08s ease, filter .12s ease;
+    }
+
+    .jts-secondary-btn:hover{ filter:brightness(1.06); }
+    .jts-secondary-btn:active{ transform:scale(0.99); }
+
+    .jts-primary-btn{
+      width:100%;
+      margin-top:12px;
+      padding:14px 16px;
+      background:linear-gradient(90deg, var(--gold), var(--gold2));
+      color:#111;
+      border:0;
+      border-radius:999px;
+      font-weight:900;
+      font-size:1rem;
+      letter-spacing:0.03em;
+      text-transform:uppercase;
+      cursor:pointer;
+      box-shadow:0 10px 25px rgba(0,0,0,0.72);
+    }
+
+    .jts-interpret-btn{ animation:jtsPulse 2.8s ease-in-out infinite; }
+
+    @keyframes jtsPulse {
+      0%   { transform:translateY(0) scale(1); box-shadow:0 10px 25px rgba(0,0,0,0.7); }
+      50%  { transform:translateY(-1px) scale(1.02); box-shadow:0 16px 30px rgba(0,0,0,0.85); }
+      100% { transform:translateY(0) scale(1); box-shadow:0 10px 25px rgba(0,0,0,0.7); }
+    }
+
+    .jts-subhint{
+      margin-top:8px;
+      font-size:0.80rem;
+      text-align:center;
+      opacity:0.84;
+      color:var(--muted);
+    }
+
+    .jts-paywall-btn{
+      width:100%;
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      width:100%;
-      gap:8px;
+      padding:12px 14px;
       border-radius:999px;
-      padding:10px 14px;
-      font-size:.9rem;
-      border:1px solid rgba(212,175,55,.7);
-      background:transparent;
-      color:var(--ink);
+      border:1px solid rgba(212,175,55,0.70);
+      background:linear-gradient(90deg, rgba(212,175,55,0.15), rgba(243,226,138,0.08));
+      color:var(--gold2);
+      text-decoration:none;
+      font-weight:900;
+      font-size:0.92rem;
+      text-transform:uppercase;
+      letter-spacing:0.06em;
+      box-shadow:0 10px 22px rgba(0,0,0,0.55);
+      transition:transform .08s ease, filter .12s ease;
       cursor:pointer;
     }
-    .toggle-btn:hover{
-      border-color: rgba(212,175,55,.9);
-      box-shadow: 0 0 0 3px rgba(212,175,55,.08);
-    }
-    .full-box{
-      margin-top:10px;
-      padding:14px;
+
+    .jts-paywall-btn:hover{ filter:brightness(1.06); }
+    .jts-paywall-btn:active{ transform:scale(0.99); }
+
+    .jts-upgrade-strip{
+      display:none;
+      margin-top:12px;
+      padding:12px 12px;
       border-radius:14px;
-      border:1px solid rgba(212,175,55,.22);
-      background:rgba(0,0,0,.45);
-      line-height:1.6;
+      border:1px solid rgba(212,175,55,0.34);
+      background:rgba(212,175,55,0.08);
     }
-    .full-hint{
+
+    .jts-upgrade-strip strong{ color:var(--gold2); }
+
+    .jts-upgrade-strip p{
+      margin:0;
+      font-size:0.86rem;
+      line-height:1.55;
+      opacity:0.94;
+    }
+
+    .jts-result{
+      margin-top:22px;
+      padding:0;
+      border-radius:14px;
+      display:none;
+      line-height:1.65;
+      font-size:0.96rem;
+      background:transparent;
+      border:0;
+    }
+
+    .jts-result-shell{
+      border-radius:14px;
+      overflow:hidden;
+      border:1px solid rgba(212,175,55,0.48);
+      background:rgba(0,0,0,0.65);
+      box-shadow:0 0 22px rgba(0,0,0,0.8) inset;
+    }
+
+    .jts-result-head{
+      padding:12px 14px 10px;
+      border-bottom:1px solid rgba(212,175,55,0.34);
+      background:linear-gradient(90deg, rgba(212,175,55,0.18), transparent);
+    }
+
+    .jts-result-title{
+      margin:0 0 2px;
+      font-size:1.1rem;
+      font-family:Cinzel,serif;
+      color:#f9e08b;
+      letter-spacing:0.08em;
+      text-transform:uppercase;
+    }
+
+    .jts-result-sub{
+      margin:0 0 2px;
+      font-size:0.82rem;
+      opacity:0.85;
+    }
+
+    .jts-result-status{
+      margin:2px 0 0;
+      font-size:0.78rem;
+      opacity:0.88;
+    }
+
+    .jts-result-grid{
+      padding:12px 14px 12px;
+      display:grid;
+      grid-template-columns:1fr;
+      gap:10px;
+      font-size:0.92rem;
+    }
+
+    .jts-card{
+      border-radius:12px;
+      padding:12px;
+      background:rgba(0,0,0,0.56);
+      border:1px solid rgba(212,175,55,0.28);
+    }
+
+    .jts-card-blue{
+      background:rgba(8,10,16,0.9);
+      border-color:rgba(132,168,212,0.36);
+    }
+
+    .jts-card-green{
+      background:rgba(9,16,10,0.9);
+      border-color:rgba(161,212,132,0.36);
+    }
+
+    .jts-card-soft{
+      background:rgba(12,10,7,0.9);
+      border-color:rgba(212,175,55,0.42);
+    }
+
+    .jts-card-info{
+      background:rgba(8,12,16,0.88);
+      border-color:rgba(140,190,255,0.28);
+    }
+
+    .jts-card-label{
+      font-size:0.8rem;
+      letter-spacing:0.12em;
+      text-transform:uppercase;
+      margin-bottom:6px;
+      opacity:0.92;
+      color:#f9e08b;
+    }
+
+    .jts-card-blue .jts-card-label{ color:#c9dcff; }
+    .jts-card-green .jts-card-label{ color:#d7f5c0; }
+
+    .jts-card p,
+    .jts-card div{
+      margin:0;
+      line-height:1.7;
+      white-space:pre-wrap;
+    }
+
+    .jts-toggle-btn{
+      width:100%;
+      margin-top:10px;
+      padding:11px 12px;
+      background:rgba(0,0,0,0.6);
+      color:var(--gold2);
+      border-radius:999px;
+      border:1px solid rgba(212,175,55,0.8);
+      font-weight:900;
+      font-size:0.92rem;
+      text-transform:uppercase;
+      letter-spacing:0.06em;
+      cursor:pointer;
+      box-shadow:0 4px 10px rgba(0,0,0,0.6);
+    }
+
+    .jts-full-box{
+      margin-top:10px;
+      border-radius:14px;
+      border:1px solid rgba(212,175,55,0.32);
+      background:rgba(0,0,0,0.6);
+      padding:14px;
+      line-height:1.72;
+      font-size:0.95rem;
+      color:rgba(245,231,198,0.96);
+      white-space:pre-wrap;
+      display:none;
+    }
+
+    .jts-full-hint{
       margin-top:8px;
-      opacity:.8;
+      font-size:0.78rem;
+      opacity:0.78;
+      text-align:center;
+    }
+
+    .jts-divider{
+      height:1px;
+      background:linear-gradient(90deg, transparent, rgba(212,175,55,0.35), transparent);
+      margin:16px 0 12px;
+    }
+
+    .jts-faq{
+      max-width:760px;
+      margin:0 auto;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid rgba(212,175,55,0.20);
+      background:rgba(0,0,0,0.55);
+      color:rgba(245,231,198,0.92);
+    }
+
+    .jts-faq h2{
+      margin:0 0 8px;
+      font-size:0.95rem;
+      letter-spacing:0.10em;
+      text-transform:uppercase;
+      color:var(--gold2);
+      font-family:Cinzel,serif;
+    }
+
+    .jts-faq details{
+      border-top:1px solid rgba(212,175,55,0.16);
+      padding:10px 0;
+    }
+
+    .jts-faq details:first-of-type{
+      border-top:0;
+      padding-top:6px;
+    }
+
+    .jts-faq summary{
+      cursor:pointer;
+      font-weight:900;
+      color:var(--gold2);
+      list-style:none;
+      outline:none;
+    }
+
+    .jts-faq summary::-webkit-details-marker{ display:none; }
+
+    .jts-faq p{
+      margin:8px 0 0;
+      line-height:1.65;
+      font-size:0.9rem;
+      opacity:0.95;
+    }
+
+    .jts-foot-note{
+      margin-top:14px;
+      font-size:0.78rem;
+      text-align:center;
+      opacity:0.72;
+    }
+
+    .jts-brand-note{
+      margin-top:10px;
+      font-size:0.78rem;
+      text-align:center;
+      opacity:0.60;
+      letter-spacing:0.04em;
+      text-transform:uppercase;
+    }
+
+    .jts-health{
+      margin-top:12px;
+      text-align:center;
+      font-size:0.82rem;
+      color:var(--muted);
+    }
+
+    .jts-health a{
+      color:var(--gold2);
+      text-decoration:none;
+    }
+
+    button:focus-visible,
+    a:focus-visible,
+    summary:focus-visible,
+    textarea:focus-visible,
+    input:focus-visible{
+      outline:2px solid rgba(243,226,138,0.85);
+      outline-offset:2px;
+      border-radius:10px;
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      .jts-interpret-btn{ animation:none !important; }
+      *{ scroll-behavior:auto !important; }
+    }
+
+    @media (max-width: 640px){
+      body{ padding:16px 12px 28px; }
+      .jts-shell{ padding:14px; border-radius:18px; }
+      .jts-app-card{ border-radius:16px; }
+      .jts-h1{ letter-spacing:0.03em; }
+      .jts-lede{ font-size:0.94rem; }
+      .jts-mini-note{ font-size:0.80rem; }
+      .jts-steps-row{ gap:6px; }
+      .jts-step-pill{ width:100%; text-align:center; }
+      .jts-actions-row{ gap:8px; }
+      .jts-secondary-btn{ flex:1 1 100%; }
+      .jts-primary-btn,
+      .jts-paywall-btn,
+      .jts-toggle-btn{ letter-spacing:0.05em; }
+      .jts-meta-row{
+        flex-direction:column;
+        align-items:flex-start;
+      }
+      .jts-samples{
+        text-align:left;
+      }
     }
   </style>
 </head>
 
 <body>
-  <main class="card">
-    <div class="brand">
-      <img class="logo" src="https://cdn.shopify.com/s/files/1/0740/7245/7431/files/transparent_jts_logo.png?v=1749773424" alt="Jamaican True Stories logo">
-      <div class="brand-text">
-        <h1>Jamaican True Stories — Dream Interpreter</h1>
-        <div class="sub">Type your dream below. We’ll search your meanings and return a clear, gentle interpretation.</div>
-      </div>
-    </div>
-
-    <label for="dream" class="mini">Your dream</label>
-    <textarea id="dream" placeholder="Example: I was riding a bicycle…"></textarea>
-
-    <div class="controls">
-      <div class="mini" id="count">0 characters</div>
-      <button id="go" class="btn">Interpret Dream</button>
-    </div>
-
-    <div class="samples mini">
-      Try:
-      <span class="chip">“teeth falling out”</span>
-      <span class="chip">“snake bite on my hand”</span>
-      <span class="chip">“running late for an exam”</span>
-      <span class="chip">“flying over the sea at night”</span>
-    </div>
-
-    <section id="out" class="result" style="display:none">
-      <h3>Interpretation</h3>
-
-      <!-- Quick Decode -->
-      <div id="interp"></div>
-
-      <!-- Full Interpretation -->
-      <div id="fullWrap" style="display:none;">
-        <button id="toggleFull" type="button" class="toggle-btn">View Full Interpretation</button>
-        <div id="fullBox" class="full-box block prelines" style="display:none;"></div>
-        <div class="mini full-hint">This section turns your doctrine results into a readable paragraph without adding new meaning.</div>
+  <div class="jts-shell">
+    <div id="dream-app" class="jts-app-card">
+      <div class="brand">
+        <img
+          class="logo"
+          src="https://cdn.shopify.com/s/files/1/0740/7245/7431/files/transparent_jts_logo.png?v=1749773424"
+          alt="Jamaican True Stories logo"
+        >
       </div>
 
-      <div class="mini" style="margin-top:10px">
-        Status: <span class="mono" id="method">—</span>
-        <span id="usesWrap" style="display:none"> • Free uses left: <span class="mono" id="uses">—</span></span>
+      <div class="jts-center">
+        <span class="jts-pill">Production • Jamaican Symbol Doctrine</span>
       </div>
-    </section>
 
-    <!-- Build stamp -->
-    <div class="footer">
-      Health: <a href="/health" target="_blank">/health</a>
-      <span style="margin-left:10px; opacity:.6;">Build 2.9.6 (Hybrid Gate)</span>
+      <h1 class="jts-h1">Jamaican Dream Interpreter</h1>
+
+      <p class="jts-lede">
+        Decode one dream at a time using <strong>Jamaican cultural symbolism</strong>,
+        <strong>Caribbean spiritual framing</strong>, and <strong>biblical wisdom</strong>,
+        then receive clear meaning, likely effects, and what to do next.
+      </p>
+
+      <div class="jts-proof-row">
+        <span class="jts-proof-pill">3 free interpretations</span>
+        <span class="jts-proof-pill">Readable summary mode</span>
+        <span class="jts-proof-pill">Dream Pack or subscription</span>
+      </div>
+
+      <p class="jts-mini-note">
+        Best results: include the ending, your emotions, and 3-7 main symbols such as animals, water,
+        houses, roads, family members, teeth, falling, flying, or chase scenes.
+      </p>
+
+      <div id="access-status" class="jts-status-bar">
+        <strong>Access status:</strong> Enter your email and dream to begin.
+      </div>
+
+      <div class="jts-entry-panel">
+        <p class="jts-panel-title">Start your interpretation</p>
+
+        <div class="jts-field-wrap">
+          <label for="dream-email" class="jts-label">Your email</label>
+          <input
+            id="dream-email"
+            class="jts-input"
+            type="email"
+            inputmode="email"
+            autocomplete="email"
+            placeholder="you@example.com"
+          />
+          <p class="jts-field-note">
+            Required for Dream Pack checkout, access recovery, and future receipt linking.
+          </p>
+        </div>
+
+        <p id="free-remaining" style="text-align:center;font-size:0.82rem;opacity:0.86;margin:0 0 10px;"></p>
+
+        <div class="jts-steps-row" aria-label="How to use the Jamaican Dream Interpreter">
+          <span class="jts-step-pill"><strong>Step 1:</strong> Enter your email</span>
+          <span class="jts-step-pill"><strong>Step 2:</strong> Write one dream only</span>
+          <span class="jts-step-pill"><strong>Step 3:</strong> Add symbols + ending</span>
+          <span class="jts-step-pill"><strong>Step 4:</strong> Tap Interpret Dream</span>
+        </div>
+
+        <div class="jts-field-wrap">
+          <label for="dream-input" class="jts-label">Your dream</label>
+          <textarea
+            id="dream-input"
+            class="jts-textarea"
+            placeholder="Example: I was running on a dark road and something was chasing me. I felt fear. I woke up before it caught me. Ending: I escaped."
+          ></textarea>
+        </div>
+
+        <div class="jts-meta-row">
+          <small id="char-count" class="jts-char">0 characters</small>
+
+          <div class="jts-samples">
+            <span style="margin-right:6px;">Quick examples:</span>
+            <button
+              type="button"
+              class="sample-dream"
+              data-dream="I was running on a dark road and something was chasing me. I felt fear. I woke up before it caught me. Ending: I escaped."
+            >Chased</button>
+            <button
+              type="button"
+              class="sample-dream"
+              data-dream="I was looking in a mirror and my teeth were falling out one by one. I felt embarrassed and helpless. Ending: I woke up shaking."
+            >Teeth</button>
+            <button
+              type="button"
+              class="sample-dream"
+              data-dream="I was trying to fly over a dark sea but I could not land. I felt trapped and anxious. Ending: I dropped and woke up."
+            >Flying</button>
+          </div>
+        </div>
+
+        <div class="jts-actions-row">
+          <button type="button" id="insert-template" class="jts-secondary-btn">Use Dream Template</button>
+          <button type="button" id="clear-dream" class="jts-secondary-btn">Clear</button>
+        </div>
+
+        <button id="interpret-btn" class="jts-primary-btn jts-interpret-btn">Interpret Dream</button>
+
+        <p id="soft-paywall-hint" class="jts-subhint">
+          Start with 3 free interpretations. Enter your email so your access and receipts stay linked to you.
+        </p>
+      </div>
+
+      <div id="result" class="jts-result"></div>
+
+      <div id="upgrade-strip" class="jts-upgrade-strip">
+        <p>
+          <strong>Need more access?</strong> Continue with a Dream Pack for a few more interpretations,
+          or unlock the subscription for ongoing access.
+        </p>
+        <button id="upgrade-cta" class="jts-paywall-btn" style="margin-top:10px;">View Access Options</button>
+      </div>
+
+      <div id="full-wrap" style="display:none;margin-top:10px;">
+        <button type="button" id="toggle-full" class="jts-toggle-btn">Readable Summary Mode</button>
+        <div id="full-box" class="jts-full-box"></div>
+        <div class="jts-full-hint">
+          This turns your structured doctrine output into a readable summary without changing the meaning.
+        </div>
+      </div>
+
+      <button id="share-app-bottom" class="jts-paywall-btn" style="margin-top:12px; display:none;">
+        Share This App
+      </button>
+
+      <div class="jts-divider"></div>
+
+      <div class="jts-faq" aria-label="Jamaican Dream Interpretation FAQs">
+        <h2>FAQs</h2>
+
+        <details>
+          <summary>Is this a generic dream dictionary?</summary>
+          <p>
+            No. It uses Jamaican cultural symbolism plus structured doctrine logic, then frames next steps in readable language.
+          </p>
+        </details>
+
+        <details>
+          <summary>How do I write my dream for accuracy?</summary>
+          <p>
+            Enter one dream only. Include the ending, your emotions, and 3-7 key symbols. The template button above makes this easier.
+          </p>
+        </details>
+
+        <details>
+          <summary>Why do I need to enter my email?</summary>
+          <p>
+            Your email helps link your access, Dream Pack checkout, and future receipt or account recovery flow. It also prevents checkout errors.
+          </p>
+        </details>
+
+        <details>
+          <summary>Is this therapy or medical advice?</summary>
+          <p>
+            No. It is cultural and educational. If you are dealing with severe anxiety, trauma, or persistent sleep issues, consider a licensed professional.
+          </p>
+        </details>
+
+        <details>
+          <summary>Is it free?</summary>
+          <p>
+            Yes. Your first 3 interpretations are free. After that, you can continue with a Dream Pack or subscription.
+          </p>
+        </details>
+      </div>
+
+      <p class="jts-foot-note">
+        <strong>Note:</strong> Cultural and educational only. Access options appear after the free limit is reached.
+      </p>
+
+      <p class="jts-brand-note">
+        Jamaican True Stories • Dream Interpreter • Production Doctrine Build
+      </p>
+
+      <div class="jts-health">
+        Health: <a href="/health" target="_blank" rel="noopener noreferrer">/health</a>
+      </div>
     </div>
-  </main>
+  </div>
 
   <script>
-    // ---------------------------
-    // BASIC USER TRACKING (v1)
-    // ---------------------------
-    function safeRandomId() {
-      if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-      return Math.random().toString(16).slice(2) + Date.now().toString(16);
-    }
-
-    function getAnonymousId() {
-      let id = localStorage.getItem("anon_user_id");
-      if (!id) {
-        id = "anon_" + safeRandomId();
-        localStorage.setItem("anon_user_id", id);
-      }
-      return id;
-    }
-
-    async function track(event_type, metadata = {}) {
-      try {
-        const payload = { user_id: getAnonymousId(), event: event_type, metadata };
-        await fetch("/track", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(payload),
-          // ✅ REQUIRED: allow cookies/session across Shopify -> backend
-          credentials: "include"
-        });
-      } catch (e) {
-        console.warn("Tracking failed:", e);
-      }
-    }
-
-    track("visit", { path: window.location.pathname, referrer: document.referrer || "" });
-
-    // ---------------------------
-    // HELPERS (XSS-safe rendering)
-    // ---------------------------
-    function escapeHtml(str) {
-      return String(str || "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    }
-
-    // ---------------------------
-    // UI ELEMENTS
-    // ---------------------------
-    const txt = document.getElementById("dream");
-    const btn = document.getElementById("go");
-    const out = document.getElementById("out");
-    const interp = document.getElementById("interp");
-    const methodEl = document.getElementById("method");
-    const usesWrap = document.getElementById("usesWrap");
-    const usesEl = document.getElementById("uses");
-    const count = document.getElementById("count");
-
-    // Full Interpretation elements
-    const fullWrap = document.getElementById("fullWrap");
-    const toggleFull = document.getElementById("toggleFull");
-    const fullBox = document.getElementById("fullBox");
-
-    function resetFullInterpretationUI() {
-      if (!fullWrap || !toggleFull || !fullBox) return;
-      fullWrap.style.display = "none";
-      fullBox.style.display = "none";
-      fullBox.textContent = "";
-      toggleFull.textContent = "View Full Interpretation";
-    }
-
-    function setFullInterpretation(text) {
-      if (!fullWrap || !toggleFull || !fullBox) return;
-      const val = String(text || "").trim();
-      if (!val) {
-        resetFullInterpretationUI();
-        return;
-      }
-      fullWrap.style.display = "block";
-      fullBox.style.display = "none";
-      fullBox.textContent = val;
-      toggleFull.textContent = "View Full Interpretation";
-    }
-
-    if (toggleFull && fullBox) {
-      toggleFull.addEventListener("click", () => {
-        const open = fullBox.style.display === "block";
-        fullBox.style.display = open ? "none" : "block";
-        toggleFull.textContent = open ? "View Full Interpretation" : "Hide Full Interpretation";
-      });
-    }
-
-    // ---------------------------
-    // INPUT BEHAVIOR
-    // ---------------------------
-    txt.addEventListener("input", () => {
-      count.textContent = `${txt.value.length} characters`;
-    });
-
-    document.querySelectorAll(".chip").forEach(c =>
-      c.addEventListener("click", () => {
-        txt.value = c.textContent.replace(/^“|”$/g, "");
-        txt.dispatchEvent(new Event("input"));
-      })
-    );
-
-    // ---------------------------
-    // MAIN RUN
-    // ---------------------------
-    async function run() {
-      const dream = txt.value.trim();
-      if (!dream) { txt.focus(); return; }
-
-      track("dream_submitted", { chars: dream.length });
-
-      btn.disabled = true;
-      btn.textContent = "Interpreting…";
-      out.style.display = "none";
-      interp.textContent = "";
-      methodEl.textContent = "—";
-      usesWrap.style.display = "none";
-      resetFullInterpretationUI();
-
-      try {
-        const res = await fetch("/interpret", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: dream }),
-          // ✅ REQUIRED: allow cookies/session across Shopify -> backend
-          credentials: "include"
-        });
-
-        let data = {};
-        const raw = await res.text();
-        try { data = JSON.parse(raw); } catch { data = { error: raw || "Unknown error" }; }
-
-        // ✅ HYBRID GATE: redirect on free-limit (HTTP 402)
-        if (res.status === 402 && (data.redirect || data.blocked)) {
-          track("paywall_viewed", { reason: data.reason || "free_limit_reached" });
-          window.location.href = data.redirect || "/upgrade";
-          return;
-        }
-
-        if (!res.ok) {
-          throw new Error(data.error || data.message || `Request failed (${res.status})`);
-        }
-
-        out.style.display = "block";
-
-        track("interpretation_generated", {
-          pro: Boolean(data.pro) || Boolean(data.is_paid) || data.access === "paid",
-          top_symbols_count: (data.receipt && Array.isArray(data.receipt.top_symbols)) ? data.receipt.top_symbols.length : 0
-        });
-
-        const i = data.interpretation || {};
-        const spiritual = String(i.spiritual_meaning || "").trim();
-        const effects = String(i.effects_in_physical_realm || i.effects_in_the_physical_realm || "").trim();
-        const wtd = String(i.what_to_do || "").trim();
-
-        let html = "";
-
-        if (spiritual) {
-          html += `
-            <div class="section">
-              <div class="section-title">Spiritual Meaning</div>
-              <div class="block prelines">${escapeHtml(spiritual)}</div>
-            </div>
-          `;
-        }
-
-        if (effects) {
-          html += `
-            <div class="section">
-              <div class="section-title">Effects in the Physical Realm</div>
-              <div class="block prelines">${escapeHtml(effects)}</div>
-            </div>
-          `;
-        }
-
-        if (wtd) {
-          html += `
-            <div class="section">
-              <div class="section-title">What to Do</div>
-              <div class="block prelines">${escapeHtml(wtd)}</div>
-            </div>
-          `;
-        }
-
-        const receiptSymbols = (data.receipt && Array.isArray(data.receipt.top_symbols)) ? data.receipt.top_symbols : [];
-        if (receiptSymbols.length) {
-          html += `
-            <div class="mini" style="margin-top:10px;opacity:.85;">
-              Symbols matched: <span class="mono">${escapeHtml(receiptSymbols.join(", "))}</span>
-            </div>
-          `;
-        }
-
-        const seal = data.seal || null;
-        if (seal) {
-          html += `
-            <div class="mini" style="margin-top:10px;opacity:.85;">
-              Seal: <span class="mono">${escapeHtml(`${seal.status} • ${seal.type} • Risk: ${seal.risk}`)}</span>
-            </div>
-          `;
-        }
-
-        if (data.disclaimer) {
-          html += `<div class="mini" style="margin-top:10px;opacity:.7;"><em>${escapeHtml(data.disclaimer)}</em></div>`;
-        }
-
-        if (!html) html = `<span class="err">No interpretation returned.</span>`;
-        interp.innerHTML = html;
-
-        setFullInterpretation(data.full_interpretation);
-
-        const isPro = Boolean(data.pro) || Boolean(data.is_paid) || data.access === "paid";
-        if (isPro) {
-          methodEl.textContent = "PRO — Full interpretation unlocked";
-          usesWrap.style.display = "none";
+    (function () {
+      function onReady(fn) {
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", fn);
         } else {
-          methodEl.textContent = "Free tier interpretation";
-          if (typeof data.free_uses_left === "number") {
-            usesWrap.style.display = "inline";
-            usesEl.textContent = String(data.free_uses_left);
+          fn();
+        }
+      }
+
+      function esc(s) {
+        return String(s ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function getOrCreateUserId() {
+        const key = "jts_user_id";
+        let id = localStorage.getItem(key);
+        if (id && id.length >= 8) return id;
+        id = "u_" + Math.random().toString(16).slice(2) + Date.now().toString(16);
+        localStorage.setItem(key, id);
+        return id;
+      }
+
+      function normalizeEmail(email) {
+        return String(email || "").trim().toLowerCase();
+      }
+
+      function isValidEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
+      }
+
+      function getSavedEmail() {
+        return normalizeEmail(localStorage.getItem("jts_email") || "");
+      }
+
+      function saveEmail(email) {
+        const clean = normalizeEmail(email);
+        if (clean) {
+          localStorage.setItem("jts_email", clean);
+        }
+      }
+
+      async function track(apiBase, event, metadata) {
+        try {
+          await fetch(`${apiBase}/track`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              user_id: getOrCreateUserId(),
+              event,
+              metadata: metadata || {}
+            }),
+            credentials: "include"
+          });
+        } catch (e) {}
+      }
+
+      async function readResponse(res) {
+        const ct = (res.headers.get("content-type") || "").toLowerCase();
+        if (ct.includes("application/json")) {
+          try { return await res.json(); } catch (e) { return null; }
+        }
+        try { return await res.text(); } catch (e) { return null; }
+      }
+
+      function formatExpiry(isoString) {
+        if (!isoString) return "";
+        try {
+          const dt = new Date(isoString);
+          if (isNaN(dt.getTime())) return "";
+          return dt.toLocaleString();
+        } catch (e) {
+          return "";
+        }
+      }
+
+      function buildPayload(dream, userId, email) {
+        return {
+          text: dream,
+          user_id: userId,
+          email: normalizeEmail(email)
+        };
+      }
+
+      function normalizeEffectsText(interp) {
+        if (!interp) return "";
+        return interp.effects_in_physical_realm || interp.effects_in_the_physical_realm || "";
+      }
+
+      function normalizeInterpretationValue(value) {
+        return String(value || "").trim();
+      }
+
+      onReady(function () {
+        const API_BASE = "";
+
+        const interpretBtn = document.getElementById("interpret-btn");
+        const resultBox = document.getElementById("result");
+        const dreamInput = document.getElementById("dream-input");
+        const emailInput = document.getElementById("dream-email");
+        const charCountEl = document.getElementById("char-count");
+        const freeRemainingEl = document.getElementById("free-remaining");
+        const accessStatusEl = document.getElementById("access-status");
+        const insertTemplate = document.getElementById("insert-template");
+        const clearDream = document.getElementById("clear-dream");
+        const softPaywallHint = document.getElementById("soft-paywall-hint");
+        const shareBottom = document.getElementById("share-app-bottom");
+        const fullWrap = document.getElementById("full-wrap");
+        const toggleFull = document.getElementById("toggle-full");
+        const fullBox = document.getElementById("full-box");
+        const upgradeStrip = document.getElementById("upgrade-strip");
+        const upgradeCta = document.getElementById("upgrade-cta");
+
+        if (!interpretBtn || !resultBox || !dreamInput || !emailInput) return;
+
+        const userId = getOrCreateUserId();
+
+        const savedEmail = getSavedEmail();
+        if (savedEmail) {
+          emailInput.value = savedEmail;
+        }
+
+        emailInput.addEventListener("blur", function () {
+          const clean = normalizeEmail(emailInput.value);
+          if (clean) saveEmail(clean);
+        });
+
+        track(API_BASE, "page_view", {
+          page: "dream-interpreter",
+          url: location.href.split("#")[0],
+          user_id: userId
+        });
+
+        let inputStarted = false;
+
+        function updateCharCount() {
+          const len = dreamInput.value.trim().length;
+          if (charCountEl) {
+            charCountEl.textContent = len + " character" + (len === 1 ? "" : "s");
+          }
+
+          if (!inputStarted && len >= 10) {
+            inputStarted = true;
+            track(API_BASE, "input_started", { user_id: userId });
           }
         }
 
-      } catch (e) {
-        out.style.display = "block";
-        interp.innerHTML = `<span class="err">${escapeHtml(e && e.message ? e.message : "Network error. Please try again.")}</span>`;
-        methodEl.textContent = "—";
-        usesWrap.style.display = "none";
-        resetFullInterpretationUI();
-        track("error", { type: "network_or_server_error", message: (e && e.message) ? e.message : "" });
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Interpret Dream";
-      }
-    }
+        function setHintTextFromData(data) {
+          if (!softPaywallHint) return;
 
-    btn.addEventListener("click", run);
-    txt.addEventListener("keydown", (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") run();
-    });
+          const isPaid = !!(data && (data.is_paid === true || data.access === "paid"));
+          const dreamPack = data && data.dream_pack ? data.dream_pack : null;
+
+          if (isPaid) {
+            softPaywallHint.textContent = "Subscription active. Full access is currently available.";
+            return;
+          }
+
+          if (dreamPack && dreamPack.active) {
+            const uses = typeof dreamPack.uses_remaining === "number" ? dreamPack.uses_remaining : 0;
+            softPaywallHint.textContent = `Dream Pack active. ${uses} interpretation${uses === 1 ? "" : "s"} remaining.`;
+            return;
+          }
+
+          softPaywallHint.textContent = "Start with 3 free interpretations. Enter your email so your access and receipts stay linked to you.";
+        }
+
+        function renderAccessStatus(barEl, data) {
+          if (!barEl) return;
+
+          const isPaid = !!(data && (data.is_paid === true || data.access === "paid"));
+          const dreamPack = data && data.dream_pack ? data.dream_pack : null;
+          const freeLeft = (data && typeof data.free_uses_left === "number") ? data.free_uses_left : null;
+
+          if (isPaid) {
+            barEl.innerHTML = "<strong>Access status:</strong> Subscription active. Unlimited interpretations available.";
+            return;
+          }
+
+          if (dreamPack && dreamPack.active) {
+            const uses = typeof dreamPack.uses_remaining === "number" ? dreamPack.uses_remaining : 0;
+            const expiry = formatExpiry(dreamPack.expires_at);
+            barEl.innerHTML = `<strong>Access status:</strong> Dream Pack active • ${uses} use${uses === 1 ? "" : "s"} remaining${expiry ? ` • expires ${esc(expiry)}` : ""}`;
+            return;
+          }
+
+          if (freeLeft !== null) {
+            barEl.innerHTML = `<strong>Access status:</strong> Free mode • ${freeLeft} free use${freeLeft === 1 ? "" : "s"} remaining`;
+            return;
+          }
+
+          barEl.innerHTML = "<strong>Access status:</strong> Enter your email and dream to begin.";
+        }
+
+        function renderFreeStatus(el, data) {
+          if (!el) return;
+
+          const isPaid = !!(data && (data.is_paid === true || data.access === "paid"));
+          const dreamPack = data && data.dream_pack ? data.dream_pack : null;
+
+          if (isPaid) {
+            el.textContent = "Subscription active. Unlimited interpretations available.";
+            return;
+          }
+
+          if (dreamPack && dreamPack.active) {
+            const uses = typeof dreamPack.uses_remaining === "number" ? dreamPack.uses_remaining : 0;
+            el.textContent = `Dream Pack active • ${uses} use${uses === 1 ? "" : "s"} remaining`;
+            return;
+          }
+
+          const left = (data && typeof data.free_uses_left === "number") ? data.free_uses_left : null;
+          if (left === null) {
+            el.textContent = "Enter your email and dream to begin.";
+            return;
+          }
+
+          const used = Math.max(0, 3 - left);
+          el.textContent = `Free decodes: ${used}/3 used • ${left} left`;
+        }
+
+        function requireEmailOrStop() {
+          const email = normalizeEmail(emailInput.value);
+
+          if (!email) {
+            alert("Please enter your email first.");
+            emailInput.focus();
+            return null;
+          }
+
+          if (!isValidEmail(email)) {
+            alert("Please enter a valid email address.");
+            emailInput.focus();
+            return null;
+          }
+
+          saveEmail(email);
+          return email;
+        }
+
+        function goUpgrade() {
+          const email = requireEmailOrStop();
+          if (!email) return;
+
+          track(API_BASE, "upgrade_cta_clicked", {
+            user_id: userId,
+            email_present: true
+          });
+
+          window.location.href = "/upgrade?email=" + encodeURIComponent(email);
+        }
+
+        function setLoading(on) {
+          interpretBtn.disabled = !!on;
+          interpretBtn.innerText = on ? "Interpreting..." : "Interpret Dream";
+        }
+
+        function setLoadingAndFocus(on) {
+          setLoading(on);
+          if (!on) interpretBtn.focus();
+        }
+
+        function showProcessing() {
+          resultBox.style.display = "block";
+          resultBox.innerHTML = '<div class="jts-result-shell"><div class="jts-result-grid"><div class="jts-card"><p style="opacity:0.85;">Processing your dream...</p></div></div></div>';
+
+          if (fullWrap) fullWrap.style.display = "none";
+          if (fullBox) fullBox.style.display = "none";
+          if (toggleFull) toggleFull.textContent = "Readable Summary Mode";
+          if (upgradeStrip) upgradeStrip.style.display = "none";
+          if (shareBottom) shareBottom.style.display = "none";
+        }
+
+        function showFullInterpretation(fullText) {
+          if (!fullWrap || !toggleFull || !fullBox) return;
+
+          const t = String(fullText || "").trim();
+          if (!t) {
+            fullWrap.style.display = "none";
+            fullBox.style.display = "none";
+            toggleFull.textContent = "Readable Summary Mode";
+            fullBox.textContent = "";
+            return;
+          }
+
+          fullWrap.style.display = "block";
+          fullBox.style.display = "none";
+          toggleFull.textContent = "Readable Summary Mode";
+          fullBox.textContent = t;
+        }
+
+        async function shareApp() {
+          const shareText = "Try this Jamaican Dream Interpreter. Structured cultural and spiritual dream meanings in plain language.";
+          const shareUrl = location.href.split("#")[0];
+
+          track(API_BASE, "share_clicked", { user_id: userId });
+
+          if (navigator.share) {
+            try {
+              await navigator.share({
+                title: "Jamaican Dream Interpreter",
+                text: shareText,
+                url: shareUrl
+              });
+              return;
+            } catch (err) {}
+          }
+
+          try {
+            await navigator.clipboard.writeText(shareText + " " + shareUrl);
+            alert("Link copied!");
+          } catch (e) {}
+        }
+
+        if (upgradeCta) {
+          upgradeCta.addEventListener("click", goUpgrade);
+        }
+
+        if (shareBottom) {
+          shareBottom.addEventListener("click", shareApp);
+        }
+
+        if (toggleFull && fullBox) {
+          toggleFull.addEventListener("click", function () {
+            const open = fullBox.style.display === "block";
+            fullBox.style.display = open ? "none" : "block";
+            toggleFull.textContent = open ? "Readable Summary Mode" : "Hide Summary";
+            track(API_BASE, "full_toggled", {
+              user_id: userId,
+              open: !open
+            });
+          });
+        }
+
+        dreamInput.addEventListener("input", updateCharCount);
+        updateCharCount();
+
+        if (insertTemplate) {
+          insertTemplate.addEventListener("click", function () {
+            const tpl =
+`Dream (1-3 sentences):
+[What happened?]
+
+Symbols (3-7):
+- 
+- 
+- 
+
+Emotion:
+[What did you feel?]
+
+Ending:
+[How did it end? Escape? Caught? Woke up?]`;
+            dreamInput.value = tpl;
+            dreamInput.focus();
+            updateCharCount();
+            track(API_BASE, "template_inserted", { user_id: userId });
+          });
+        }
+
+        if (clearDream) {
+          clearDream.addEventListener("click", function () {
+            dreamInput.value = "";
+            dreamInput.focus();
+            updateCharCount();
+            track(API_BASE, "input_cleared", { user_id: userId });
+          });
+        }
+
+        document.querySelectorAll(".sample-dream").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            const txt = (btn.getAttribute("data-dream") || "").trim();
+            dreamInput.value = txt;
+            dreamInput.focus();
+            dreamInput.setSelectionRange(dreamInput.value.length, dreamInput.value.length);
+            updateCharCount();
+            track(API_BASE, "sample_dream_clicked", {
+              sample: txt.slice(0, 50),
+              user_id: userId
+            });
+          });
+        });
+
+        renderFreeStatus(freeRemainingEl, null);
+        renderAccessStatus(accessStatusEl, null);
+        setHintTextFromData(null);
+
+        function renderResult(data) {
+          const interp = (data && data.interpretation) ? data.interpretation : {};
+          const seal = (data && data.seal) ? data.seal : null;
+          const receipt = (data && data.receipt) ? data.receipt : null;
+          const dreamPack = data && data.dream_pack ? data.dream_pack : null;
+
+          renderFreeStatus(freeRemainingEl, data);
+          renderAccessStatus(accessStatusEl, data);
+          setHintTextFromData(data);
+
+          const isPaid = !!(data && (data.is_paid === true || data.access === "paid"));
+          const freeLeft = (data && typeof data.free_uses_left === "number") ? data.free_uses_left : null;
+          const dreamPackActive = !!(dreamPack && dreamPack.active);
+
+          let statusLine = "";
+          if (isPaid) {
+            statusLine = "Subscription active. Unlimited interpretations available.";
+          } else if (dreamPackActive) {
+            const uses = typeof dreamPack.uses_remaining === "number" ? dreamPack.uses_remaining : 0;
+            statusLine = `Dream Pack active. ${uses} use${uses === 1 ? "" : "s"} remaining.`;
+          } else if (freeLeft !== null) {
+            statusLine = `Free uses left: ${freeLeft}`;
+          }
+
+          const effectsText = normalizeEffectsText(interp);
+
+          let metaBlocks = "";
+
+          if (seal && (seal.status || seal.type || seal.risk)) {
+            metaBlocks += `
+              <div class="jts-card jts-card-soft">
+                <div class="jts-card-label">Seal of the Dream</div>
+                <p>Status: <strong>${esc(seal.status || "N/A")}</strong> • Type: <strong>${esc(seal.type || "N/A")}</strong> • Risk: <strong>${esc(seal.risk || "N/A")}</strong></p>
+              </div>
+            `;
+          }
+
+          if (receipt) {
+            const topSymbols = Array.isArray(receipt.top_symbols) ? receipt.top_symbols : [];
+            const sharePhrase = receipt.share_phrase || "";
+
+            metaBlocks += `
+              <div class="jts-card">
+                <div class="jts-card-label">Dream Receipt</div>
+                <div style="font-size:0.85rem;opacity:0.9;">Receipt ID: <strong>${esc(receipt.id || "N/A")}</strong></div>
+                ${topSymbols.length ? `<div style="margin-top:8px;font-size:0.88rem;line-height:1.55;"><strong>Top symbols:</strong> ${esc(topSymbols.join(", "))}</div>` : ""}
+                ${sharePhrase ? `
+                  <div style="margin-top:10px;padding:10px;border-radius:10px;border:1px solid rgba(212,175,55,0.25);background:rgba(212,175,55,0.08);">
+                    <div style="font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;opacity:0.85;margin-bottom:6px;color:#f3e28a;">Share Phrase</div>
+                    <div style="font-size:0.88rem;line-height:1.55;opacity:0.95;">${esc(sharePhrase)}</div>
+                  </div>
+                ` : ""}
+              </div>
+            `;
+          }
+
+          if (dreamPackActive) {
+            const expiry = formatExpiry(dreamPack.expires_at);
+            metaBlocks += `
+              <div class="jts-card jts-card-info">
+                <div class="jts-card-label">Dream Pack</div>
+                <p>Uses remaining: <strong>${esc(String(dreamPack.uses_remaining || 0))}</strong>${expiry ? ` • Expires: <strong>${esc(expiry)}</strong>` : ""}</p>
+              </div>
+            `;
+          }
+
+          resultBox.style.display = "block";
+          resultBox.innerHTML = `
+            <div class="jts-result-shell">
+              <div class="jts-result-head">
+                <h2 class="jts-result-title">Interpretation Overview</h2>
+                <p class="jts-result-sub">Here is the structured reading: meaning, likely real-world effects, and what to do next.</p>
+                <p class="jts-result-status">${esc(statusLine)}</p>
+              </div>
+
+              <div class="jts-result-grid">
+                ${metaBlocks}
+
+                <div class="jts-card jts-card-soft">
+                  <div class="jts-card-label">Spiritual Meaning</div>
+                  <p>${esc(normalizeInterpretationValue(interp.spiritual_meaning))}</p>
+                </div>
+
+                <div class="jts-card jts-card-blue">
+                  <div class="jts-card-label">Effects in the Physical Realm</div>
+                  <p>${esc(normalizeInterpretationValue(effectsText))}</p>
+                </div>
+
+                <div class="jts-card jts-card-green">
+                  <div class="jts-card-label">What to Do</div>
+                  <p>${esc(normalizeInterpretationValue(interp.what_to_do))}</p>
+                </div>
+              </div>
+            </div>
+          `;
+
+          if (shareBottom) shareBottom.style.display = "block";
+          showFullInterpretation(data && data.full_interpretation);
+
+          if (upgradeStrip) {
+            if (isPaid || dreamPackActive || (typeof freeLeft === "number" && freeLeft > 0)) {
+              upgradeStrip.style.display = "none";
+            } else {
+              upgradeStrip.style.display = "block";
+            }
+          }
+
+          track(API_BASE, "result_viewed", {
+            user_id: userId,
+            access: data.access || "",
+            is_paid: !!data.is_paid,
+            free_uses_left: (typeof data.free_uses_left === "number") ? data.free_uses_left : null,
+            dream_pack_active: dreamPackActive,
+            dream_pack_uses_remaining: dreamPack && typeof dreamPack.uses_remaining === "number" ? dreamPack.uses_remaining : null,
+            has_receipt: !!data.receipt,
+            has_seal: !!data.seal,
+            has_full: !!(data.full_interpretation && String(data.full_interpretation).trim()),
+            engine_mode: data.engine_mode || ""
+          });
+        }
+
+        function renderHardError(title, details) {
+          resultBox.style.display = "block";
+          resultBox.innerHTML = `
+            <div class="jts-result-shell">
+              <div class="jts-result-grid">
+                <div class="jts-card" style="border-color:rgba(255,179,179,0.25);">
+                  <p style="margin:0 0 8px; color:#ffb3b3;"><strong>${esc(title)}</strong></p>
+                  <pre style="white-space:pre-wrap;background:rgba(0,0,0,0.35);border:1px solid rgba(255,179,179,0.25);padding:10px;border-radius:10px;margin:0;">${esc(details)}</pre>
+                </div>
+              </div>
+            </div>
+          `;
+          showFullInterpretation("");
+          if (upgradeStrip) upgradeStrip.style.display = "none";
+          if (shareBottom) shareBottom.style.display = "none";
+        }
+
+        interpretBtn.onclick = async function () {
+          const dream = dreamInput.value.trim();
+          const email = requireEmailOrStop();
+          if (!email) return;
+
+          if (!dream) {
+            alert("Please type your dream first.");
+            dreamInput.focus();
+            return;
+          }
+
+          track(API_BASE, "interpret_clicked", {
+            user_id: userId,
+            dream_len: dream.length,
+            email_present: true
+          });
+
+          setLoadingAndFocus(true);
+          showProcessing();
+
+          try {
+            const res = await fetch(`/interpret`, {
+              method: "POST",
+              mode: "cors",
+              credentials: "include",
+              headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+              },
+              body: JSON.stringify(buildPayload(dream, userId, email))
+            });
+
+            const parsed = await readResponse(res);
+
+            if (res.status === 402) {
+              const data402 = (parsed && typeof parsed === "object") ? parsed : {};
+              const redirectTo = data402.redirect || "/upgrade";
+
+              track(API_BASE, "paywall_redirect", {
+                user_id: userId,
+                reason: data402.reason || "free_limit_reached",
+                message: data402.message || "",
+                dream_pack_available: !!data402.dream_pack_available,
+                email_present: true
+              });
+
+              const absolute = redirectTo.startsWith("http")
+                ? redirectTo
+                : redirectTo;
+
+              const joiner = absolute.includes("?") ? "&" : "?";
+              window.location.href = absolute + joiner + "email=" + encodeURIComponent(email);
+              return;
+            }
+
+            if (!res.ok) {
+              const body = (typeof parsed === "string")
+                ? parsed
+                : JSON.stringify(parsed, null, 2);
+              throw new Error(`HTTP ${res.status} ${res.statusText}\n${body || "(empty response body)"}`);
+            }
+
+            const data = parsed || {};
+            renderResult(data);
+
+          } catch (err) {
+            renderHardError(
+              "Something went wrong calling the interpreter API.",
+              (err && err.message) ? err.message : String(err)
+            );
+          } finally {
+            setLoadingAndFocus(false);
+          }
+        };
+      });
+    })();
   </script>
 </body>
 </html>

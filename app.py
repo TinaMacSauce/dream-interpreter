@@ -56,7 +56,10 @@ CORS(
 )
 
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "").strip()
-RETURN_URL = os.getenv("RETURN_URL", "https://jamaicantruestories.com/pages/dream-interpreter").strip()
+RETURN_URL = os.getenv(
+    "RETURN_URL",
+    "https://jamaicantruestories.com/pages/dream-interpreter",
+).strip()
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
 
 ADMIN_KEY = (
@@ -74,15 +77,24 @@ SCOPES = [
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", os.getenv("SHEET_CACHE_TTL", "120")))
 DEBUG_MATCH = os.getenv("DEBUG_MATCH", "").strip().lower() in {"1", "true", "yes", "on"}
 
-NARRATIVE_ENABLED = os.getenv("NARRATIVE_ENABLED", "1").strip().lower() not in {"0", "false", "no", "off"}
+NARRATIVE_ENABLED = os.getenv("NARRATIVE_ENABLED", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 NARRATIVE_MAX_SYMBOLS = int(os.getenv("NARRATIVE_MAX_SYMBOLS", "3"))
 
-DOCTRINE_MODE = os.getenv("DOCTRINE_MODE", "1").strip().lower() not in {"0", "false", "no", "off"}
+DOCTRINE_MODE = os.getenv("DOCTRINE_MODE", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+    "off",
+}
 KEYWORD_GUARD_ENABLED = True
 
 MAX_DREAM_LENGTH = int(os.getenv("MAX_DREAM_LENGTH", "2500"))
 MIN_DREAM_LENGTH = int(os.getenv("MIN_DREAM_LENGTH", "5"))
-
 MAX_RULE_HITS_PER_LAYER = int(os.getenv("MAX_RULE_HITS_PER_LAYER", "4"))
 
 
@@ -181,7 +193,7 @@ STOP_WORDS = {
     "so",
     "the", "they", "this", "that", "these", "those", "to",
     "was", "we", "were", "with",
-    "you", "your"
+    "you", "your",
 }
 
 
@@ -266,21 +278,6 @@ def _title_case_symbol(sym: str) -> str:
     if not sym:
         return ""
     return sym[:1].upper() + sym[1:]
-
-
-def _dedupe_preserve_order(items: List[str]) -> List[str]:
-    seen = set()
-    out = []
-    for x in items:
-        x = _clean_sentence(x)
-        if not x:
-            continue
-        key = x.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(x)
-    return out
 
 
 def _safe_debug_payload_preview(data: Dict[str, Any], max_len: int = 500) -> Dict[str, Any]:
@@ -535,10 +532,9 @@ def _build_spiritual_meaning_paragraph(
     behavior_mod: str,
     state_mod: str,
     location_mod: str,
-    override_spiritual: str = "",
 ) -> str:
     symbol_name = _title_case_symbol(symbol)
-    core = _strip_trailing_punct(override_spiritual or base_meaning)
+    core = _strip_trailing_punct(base_meaning)
 
     parts = []
 
@@ -778,20 +774,6 @@ def _save_subscribers(data: Dict[str, Any]):
     _write_json_file_atomic(SUBSCRIBERS_PATH, data)
 
 
-def _mark_subscriber(email: str, is_active: bool, stripe_customer_id: str = ""):
-    if not email:
-        return
-    email_n = email.strip().lower()
-    subs = _load_subscribers()
-    rec = subs.get(email_n, {}) if isinstance(subs.get(email_n, {}), dict) else {}
-    rec["email"] = email_n
-    rec["is_active"] = bool(is_active)
-    rec["stripe_customer_id"] = stripe_customer_id
-    rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
-    subs[email_n] = rec
-    _save_subscribers(subs)
-
-
 def _parse_iso_z(dt_str: str) -> Optional[datetime]:
     try:
         if not dt_str:
@@ -806,7 +788,26 @@ def _set_buyer_session(email: str):
     if not email_n:
         return
     session["subscriber_email"] = email_n
+    session["premium"] = False
     session["buyer_set_at"] = datetime.utcnow().isoformat() + "Z"
+
+
+def _mark_subscriber(email: str, is_active: bool, stripe_customer_id: str = ""):
+    if not email:
+        return
+
+    email_n = email.strip().lower()
+    subs = _load_subscribers()
+    rec = subs.get(email_n, {}) if isinstance(subs.get(email_n, {}), dict) else {}
+
+    rec["email"] = email_n
+    rec["is_active"] = bool(is_active)
+    if stripe_customer_id:
+        rec["stripe_customer_id"] = stripe_customer_id
+    rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
+
+    subs[email_n] = rec
+    _save_subscribers(subs)
 
 
 def _mark_dream_pack_purchase(email: str, uses: int = DREAM_PACK_USES, hours: int = DREAM_PACK_HOURS):
@@ -888,7 +889,7 @@ def _consume_dream_pack_use(email: str) -> Dict[str, Any]:
 
 
 # ============================================================
-# Stripe premium session
+# Access state helpers
 # ============================================================
 def _get_session_email() -> str:
     return (session.get("subscriber_email") or "").strip().lower()
@@ -904,7 +905,7 @@ def _set_premium_session(email: str):
     session["premium_set_at"] = datetime.utcnow().isoformat() + "Z"
 
 
-def _clear_premium_session():
+def _clear_access_session():
     session.pop("subscriber_email", None)
     session.pop("premium", None)
     session.pop("premium_set_at", None)
@@ -922,10 +923,10 @@ def _stripe_dream_pack_ok() -> bool:
 def _stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
     email = (email or "").strip().lower()
     if not _validate_email(email):
-        return (False, "")
+        return False, ""
 
     if not stripe or not STRIPE_SECRET_KEY:
-        return (False, "")
+        return False, ""
 
     stripe.api_key = STRIPE_SECRET_KEY
 
@@ -935,15 +936,33 @@ def _stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
             cid = c.get("id") or ""
             if not cid:
                 continue
+
             subs = stripe.Subscription.list(customer=cid, status="all", limit=10)
             for s in (subs.data or []):
                 status = (s.get("status") or "").lower()
                 if status in {"active", "trialing"}:
-                    return (True, cid)
-        return (False, "")
+                    return True, cid
+
+        return False, ""
     except Exception as e:
         _log("Stripe check error:", str(e))
-        return (False, "")
+        return False, ""
+
+
+def _has_active_access(email: str) -> Tuple[bool, Dict[str, Any]]:
+    if not _validate_email(email):
+        return False, {}
+
+    is_active, customer_id = _stripe_active_subscription_for_email(email)
+    if is_active:
+        _mark_subscriber(email, True, customer_id)
+        return True, {"type": "subscription", "customer_id": customer_id}
+
+    pack = _get_dream_pack_status(email)
+    if pack["active"]:
+        return True, {"type": "dream_pack", "details": pack}
+
+    return False, {}
 
 
 # ============================================================
@@ -991,7 +1010,7 @@ def _worksheet_to_rows(ws) -> Tuple[List[str], List[Dict[str, str]]]:
         if count == 0:
             headers.append(nh)
         else:
-            headers.append(f"{nh}__{count+1}")
+            headers.append(f"{nh}__{count + 1}")
 
     rows: List[Dict[str, str]] = []
     for r in values[1:]:
@@ -1073,7 +1092,7 @@ def _get_spiritual_meaning_cell(row: Dict) -> str:
         row,
         "spiritual meaning", "spiritual_meaning", "spiritual",
         "meaning", "base spiritual meaning", "base_spiritual_meaning",
-        "final spiritual meaning", "final_spiritual_meaning"
+        "final spiritual meaning", "final_spiritual_meaning",
     )
 
 
@@ -1083,7 +1102,7 @@ def _get_effects_cell(row: Dict) -> str:
         "effects in the physical realm", "effects_in_the_physical_realm",
         "physical effects", "physical_effects",
         "effects", "base physical effects", "base_physical_effects",
-        "final physical effects", "final_physical_effects"
+        "final physical effects", "final_physical_effects",
     )
 
 
@@ -1091,7 +1110,7 @@ def _get_what_to_do_cell(row: Dict) -> str:
     return _row_get(
         row,
         "what to do", "what_to_do", "action", "actions",
-        "base action", "base_action", "final action", "final_action"
+        "base action", "base_action", "final action", "final_action",
     )
 
 
@@ -1119,7 +1138,7 @@ def _symbol_length_penalty(symbol: str) -> int:
 def _score_row_strict(
     dream_norm: str,
     row: Dict,
-    used_spans: Optional[List[Tuple[int, int]]] = None
+    used_spans: Optional[List[Tuple[int, int]]] = None,
 ) -> Tuple[int, Optional[Dict[str, Any]]]:
     symbol_raw = _get_symbol_cell(row)
     if not symbol_raw:
@@ -1171,7 +1190,7 @@ def _score_row_strict(
 def _match_symbols_legacy(
     dream: str,
     rows: List[Dict],
-    top_k: int = 3
+    top_k: int = 3,
 ) -> List[Tuple[Dict, int, Optional[Dict[str, Any]]]]:
     dream_norm = _normalize_text(dream)
     if not dream_norm:
@@ -1246,7 +1265,7 @@ def _get_base_symbol_meaning(row: Dict) -> str:
     return _row_get(
         row,
         "base_spiritual_meaning", "base spiritual meaning",
-        "spiritual meaning", "meaning"
+        "spiritual meaning", "meaning",
     )
 
 
@@ -1254,14 +1273,14 @@ def _get_base_symbol_effects(row: Dict) -> str:
     return _row_get(
         row,
         "base_physical_effects", "base physical effects",
-        "physical effects", "effects"
+        "physical effects", "effects",
     )
 
 
 def _get_base_symbol_action(row: Dict) -> str:
     return _row_get(
         row,
-        "base_action", "base action", "action", "actions"
+        "base_action", "base action", "action", "actions",
     )
 
 
@@ -1282,7 +1301,7 @@ def _get_behavior_meaning_modifier(row: Dict) -> str:
         row,
         "meaning_modifier", "meaning modifier",
         "maning_modifier", "maning modifier",
-        "effect", "effects"
+        "effect", "effects",
     )
 
 
@@ -1292,7 +1311,7 @@ def _get_behavior_physical_modifier(row: Dict) -> str:
         "physical_modifier", "physical modifier",
         "physicare_modifier", "physicare modifier",
         "physical_effect", "physical effects",
-        "effect", "effects"
+        "effect", "effects",
     )
 
 
@@ -1313,7 +1332,7 @@ def _get_state_physical_modifier(row: Dict) -> str:
         row,
         "physical_modifier", "physical modifier",
         "physical_effect", "physical effects",
-        "effect", "effects"
+        "effect", "effects",
     )
 
 
@@ -1374,10 +1393,8 @@ def _category_priority(category: str) -> int:
 def _score_base_candidate(
     row: Dict,
     match_type: str,
-    token: str,
     symbol_raw: str,
 ) -> int:
-    base = 0
     if match_type == "symbol_phrase":
         base = 120
     elif match_type == "symbol":
@@ -1389,13 +1406,12 @@ def _score_base_candidate(
 
     category_bonus = _category_priority(_get_base_symbol_category(row))
     length_penalty = _symbol_length_penalty(symbol_raw)
-
     return base + category_bonus - length_penalty
 
 
 def _category_conflict_penalty(
     row: Dict,
-    already_selected: List[Tuple[Dict, int, Dict[str, Any]]]
+    already_selected: List[Tuple[Dict, int, Dict[str, Any]]],
 ) -> int:
     current_cat = _normalize_category(_get_base_symbol_category(row))
     if current_cat == "unknown":
@@ -1414,12 +1430,13 @@ def _ending_bonus_for_symbol(row: Dict, ending_text: str) -> int:
     if not symbol:
         return 0
 
+    ending_norm = _normalize_text(ending_text)
     symbol_n = _normalize_text(symbol)
-    if symbol_n and _contains_phrase(_normalize_text(ending_text), symbol_n):
+    if symbol_n and _contains_phrase(ending_norm, symbol_n):
         return 18
 
     for kw in _get_rule_keywords(row):
-        if _contains_phrase(_normalize_text(ending_text), kw):
+        if _contains_phrase(ending_norm, kw):
             return 10
     return 0
 
@@ -1448,7 +1465,7 @@ def _dedupe_rule_hits_by_best_row(hits: List[Dict[str, Any]]) -> List[Dict[str, 
 
 def _select_non_conflicting_rule_hits(
     hits: List[Dict[str, Any]],
-    max_hits: int = MAX_RULE_HITS_PER_LAYER
+    max_hits: int = MAX_RULE_HITS_PER_LAYER,
 ) -> List[Dict[str, Any]]:
     selected: List[Dict[str, Any]] = []
     seen_tokens = set()
@@ -1472,11 +1489,10 @@ def _select_non_conflicting_rule_hits(
 def _match_base_symbols_doctrine(
     dream: str,
     base_rows: List[Dict],
-    top_k: int = 3
+    top_k: int = 3,
 ) -> List[Tuple[Dict, int, Dict[str, Any]]]:
     dream_norm = _normalize_text(dream)
     ending_text = _extract_dream_ending_text(dream)
-    ending_norm = _normalize_text(ending_text)
 
     if not dream_norm:
         return []
@@ -1516,17 +1532,15 @@ def _match_base_symbols_doctrine(
             if not spans:
                 continue
 
-            span = spans[0]
-            score = _score_base_candidate(row, match_type, token, symbol_raw)
-            if ending_norm:
-                score += _ending_bonus_for_symbol(row, ending_text)
+            ending_bonus = _ending_bonus_for_symbol(row, ending_text)
+            score = _score_base_candidate(row, match_type, symbol_raw) + ending_bonus
 
             candidates.append((row, score, {
                 "type": match_type,
                 "token": token,
-                "span": span,
+                "span": spans[0],
                 "token_len": len(token),
-                "ending_bonus": _ending_bonus_for_symbol(row, ending_text),
+                "ending_bonus": ending_bonus,
             }))
             break
 
@@ -1570,7 +1584,7 @@ def _detect_rule_hits(
     dream: str,
     rows: List[Dict],
     kind: str,
-    priority_field: str = "priority"
+    priority_field: str = "priority",
 ) -> List[Dict[str, Any]]:
     dream_norm = _normalize_text(dream)
     ending_text = _extract_dream_ending_text(dream)
@@ -1596,7 +1610,11 @@ def _detect_rule_hits(
 
         rule_keywords = _get_rule_keywords(row)
         if not rule_keywords:
-            continue
+            name_fallback = _normalize_text(name)
+            if name_fallback:
+                rule_keywords = [name_fallback]
+            else:
+                continue
 
         matched_token = ""
         token_len = 0
@@ -1654,13 +1672,18 @@ def _override_context(
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    symbol_names = [_normalize_text(_get_base_symbol_input(row)) for row, _sc, _hit in base_matches if _get_base_symbol_input(row)]
-    categories = [_normalize_category(_get_base_symbol_category(row)) for row, _sc, _hit in base_matches]
+    symbol_names = [
+        _normalize_text(_get_base_symbol_input(row))
+        for row, _sc, _hit in base_matches
+        if _get_base_symbol_input(row)
+    ]
+    categories = [
+        _normalize_category(_get_base_symbol_category(row))
+        for row, _sc, _hit in base_matches
+    ]
     behavior_names = [_normalize_text(x["name"]) for x in behaviors if x.get("name")]
     state_names = [_normalize_text(x["name"]) for x in states if x.get("name")]
     location_names = [_normalize_text(x["name"]) for x in locations if x.get("name")]
-    dream_norm = _normalize_text(dream)
-    ending_norm = _normalize_text(_extract_dream_ending_text(dream))
 
     return {
         "symbol": set(symbol_names),
@@ -1668,15 +1691,19 @@ def _override_context(
         "behavior": set(behavior_names),
         "state": set(state_names),
         "location": set(location_names),
-        "text": dream_norm,
-        "ending": ending_norm,
+        "text": _normalize_text(dream),
+        "ending": _normalize_text(_extract_dream_ending_text(dream)),
     }
 
 
 def _parse_override_groups(condition: str) -> List[List[str]]:
     groups = []
     for raw_group in re.split(r"\|\|", condition or ""):
-        tokens = [_clean_sentence(x).strip() for x in re.split(r"\+", raw_group) if _clean_sentence(x).strip()]
+        tokens = [
+            _clean_sentence(x).strip()
+            for x in re.split(r"\+", raw_group)
+            if _clean_sentence(x).strip()
+        ]
         if tokens:
             groups.append(tokens)
     return groups
@@ -1727,6 +1754,7 @@ def _token_matches_context(token: str, ctx: Dict[str, Any]) -> Tuple[bool, int]:
         if raw_norm in ctx.get(field_name, set()):
             exists_plain = True
             break
+
     if not exists_plain:
         if _contains_phrase(ctx.get("text", ""), raw_norm) or _contains_phrase(ctx.get("ending", ""), raw_norm):
             exists_plain = True
@@ -1825,13 +1853,11 @@ def _compute_doctrine_seal(
     ending_text = _extract_dream_ending_text(dream)
     ending_norm = _normalize_text(ending_text)
 
-    top_symbol_names = [_normalize_text(_get_base_symbol_input(row)) for row, _sc, _hit in base_matches]
     behavior_names = {_normalize_text(x["name"]) for x in behaviors}
     state_names = {_normalize_text(x["name"]) for x in states}
     location_names = {_normalize_text(x["name"]) for x in locations}
 
     ending_hits = []
-
     for row, _sc, _hit in base_matches:
         symbol = _get_base_symbol_input(row)
         if symbol and _contains_phrase(ending_norm, symbol):
@@ -2017,21 +2043,20 @@ def _build_doctrine_interpretation(
                 behavior_mod=behavior_mod,
                 state_mod=state_mod,
                 location_mod=location_mod,
-                override_spiritual=override_spiritual,
             )
             physical_text_i = _build_physical_effect_sentence(
                 base_effects=base_effects,
                 behavior_phys_mod=behavior_phys_mod,
                 state_phys_mod=state_phys_mod,
                 location_phys_mod=location_phys_mod,
-                override_physical=override_physical,
+                override_physical="",
             )
             action_text_i = _build_action_sentence(
                 base_action=base_action,
                 behavior_action_mod=behavior_action_mod,
                 state_action_mod=state_action_mod,
                 location_action_mod=location_action_mod,
-                override_action=override_action,
+                override_action="",
             )
 
             if spiritual_text_i:
@@ -2044,6 +2069,24 @@ def _build_doctrine_interpretation(
         spiritual_text = _merge_natural_paragraphs(spiritual_lines) or "No clear spiritual meaning was generated."
         physical_text = _merge_natural_paragraphs(physical_lines) or "No clear physical effects were generated."
         action_text = _merge_natural_paragraphs(action_lines) or "Pray for wisdom and confirmation."
+
+        if override_spiritual:
+            spiritual_text = _merge_natural_paragraphs([
+                spiritual_text,
+                _sentence(f"This dream ultimately reveals: {override_spiritual}")
+            ])
+
+        if override_physical:
+            physical_text = _merge_natural_paragraphs([
+                physical_text,
+                _sentence(f"This may also point to: {override_physical}")
+            ])
+
+        if override_action:
+            action_text = _merge_natural_paragraphs([
+                action_text,
+                _sentence(override_action)
+            ])
 
     interpretation = {
         "spiritual_meaning": spiritual_text,
@@ -2063,17 +2106,18 @@ def _build_doctrine_interpretation(
     opening_tpl = _get_output_template(
         templates,
         "opening",
-        "This dream is revealing a spiritual condition that requires discernment, not panic."
+        "This dream is revealing a spiritual condition that requires discernment, not panic.",
     )
     closing_tpl = _get_output_template(
         templates,
         "closing",
-        "Dreams expose what needs attention so you can respond with wisdom, prayer, and obedience."
+        "Dreams expose what needs attention so you can respond with wisdom, prayer, and obedience.",
     )
     main_tpl = _get_output_template(
         templates,
         template_type,
-        "{symbol} represents {meaning}. The behavior shows {behavior_effect}. The condition shows {state_effect}. The location points to {location_effect}. The ending seals it as {seal_type}."
+        "{symbol} represents {meaning}. The behavior shows {behavior_effect}. The condition shows {state_effect}. "
+        "The location points to {location_effect}. The ending seals it as {seal_type}.",
     )
 
     context = {
@@ -2125,7 +2169,6 @@ def _build_legacy_interpretation(
             behavior_mod="",
             state_mod="",
             location_mod="",
-            override_spiritual="",
         )
         physical_text = _build_physical_effect_sentence(
             base_effects=base_effects,
@@ -2337,8 +2380,9 @@ def _admin_upsert_generic_sheet(sheet_name: str, payload: Dict[str, Any]) -> Dic
     lookup_value = ""
 
     for key in _sheet_primary_lookup_headers(sheet_name):
-        if col_map.get(_normalize_header(key)) and str(payload.get(key, "")).strip():
-            lookup_col = col_map[_normalize_header(key)]
+        nk = _normalize_header(key)
+        if col_map.get(nk) and str(payload.get(key, "")).strip():
+            lookup_col = col_map[nk]
             lookup_value = str(payload.get(key, "")).strip()
             break
 
@@ -2406,7 +2450,11 @@ def _admin_upsert_legacy_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     input_col = col_map.get("input") or col_map.get("symbol")
     spiritual_col = col_map.get("spiritual meaning") or col_map.get("spiritual_meaning") or col_map.get("spiritual")
-    effects_col = col_map.get("physical effects") or col_map.get("physical_effects") or col_map.get("effects in the physical realm")
+    effects_col = (
+        col_map.get("physical effects")
+        or col_map.get("physical_effects")
+        or col_map.get("effects in the physical realm")
+    )
     action_col = col_map.get("action") or col_map.get("what to do") or col_map.get("what_to_do")
     keywords_col = col_map.get("keywords")
 
@@ -2689,7 +2737,7 @@ def subscribe():
 
 @app.route("/logout", methods=["POST", "GET"])
 def logout():
-    _clear_premium_session()
+    _clear_access_session()
     return redirect(url_for("upgrade"), code=302)
 
 
@@ -2704,11 +2752,10 @@ def check_access():
     if not _validate_email(email):
         return jsonify({"ok": False, "error": "Please enter a valid email."}), 400
 
-    is_active, customer_id = _stripe_active_subscription_for_email(email)
-    if is_active:
-        _set_premium_session(email)
-        _mark_subscriber(email, True, customer_id)
+    access_ok, access_meta = _has_active_access(email)
 
+    if access_ok and access_meta.get("type") == "subscription":
+        _set_premium_session(email)
         resp = make_response(jsonify({
             "ok": True,
             "access": "active",
@@ -2717,14 +2764,13 @@ def check_access():
         resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
         return resp
 
-    dream_pack_status = _get_dream_pack_status(email)
-    if dream_pack_status["active"]:
+    if access_ok and access_meta.get("type") == "dream_pack":
         _set_buyer_session(email)
         resp = make_response(jsonify({
             "ok": True,
             "access": "dream_pack_active",
             "return_url": RETURN_URL,
-            "dream_pack": dream_pack_status,
+            "dream_pack": access_meta.get("details", {}),
         }))
         resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
         return resp
@@ -2732,7 +2778,7 @@ def check_access():
     return jsonify({
         "ok": False,
         "access": "inactive",
-        "message": "No active subscription or dream pack found for that email."
+        "message": "No active subscription or dream pack found for that email.",
     }), 402
 
 
@@ -2817,10 +2863,9 @@ def payment_success():
     email = (request.args.get("email") or "").strip().lower()
 
     if _validate_email(email):
-        is_active, customer_id = _stripe_active_subscription_for_email(email)
-        if is_active:
+        access_ok, access_meta = _has_active_access(email)
+        if access_ok and access_meta.get("type") == "subscription":
             _set_premium_session(email)
-            _mark_subscriber(email, True, customer_id)
 
     resp = Response(
         f"""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -2838,7 +2883,7 @@ def payment_success():
           setTimeout(()=>{{ window.location.href={json.dumps(RETURN_URL)}; }}, 1200);
         </script>
         </body></html>""",
-        mimetype="text/html"
+        mimetype="text/html",
     )
     resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
     return resp
@@ -2868,7 +2913,7 @@ def dream_pack_success():
           setTimeout(()=>{{ window.location.href={json.dumps(RETURN_URL)}; }}, 1200);
         </script>
         </body></html>""",
-        mimetype="text/html"
+        mimetype="text/html",
     )
     resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
     return resp
@@ -2880,7 +2925,6 @@ def stripe_webhook():
         return ("not configured", 400)
 
     stripe.api_key = STRIPE_SECRET_KEY
-
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature", "")
 
@@ -2889,12 +2933,14 @@ def stripe_webhook():
     except Exception:
         return ("bad signature", 400)
 
-    if event["type"] == "checkout.session.completed":
-        session_obj = event["data"]["object"]
-        email = (session_obj.get("customer_email") or "").strip().lower()
-        customer_id = session_obj.get("customer") or ""
-        mode = (session_obj.get("mode") or "").strip().lower()
-        metadata = session_obj.get("metadata") or {}
+    event_type = event.get("type", "")
+    data_obj = (event.get("data") or {}).get("object") or {}
+
+    if event_type == "checkout.session.completed":
+        email = (data_obj.get("customer_email") or "").strip().lower()
+        customer_id = data_obj.get("customer") or ""
+        mode = (data_obj.get("mode") or "").strip().lower()
+        metadata = data_obj.get("metadata") or {}
         purchase_type = (metadata.get("purchase_type") or "").strip().lower()
 
         if _validate_email(email) and mode == "subscription":
@@ -2903,13 +2949,41 @@ def stripe_webhook():
         if _validate_email(email) and mode == "payment" and purchase_type == "dream_pack":
             _mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
 
-    if event["type"] == "customer.subscription.deleted":
-        sub = event["data"]["object"]
-        customer_id = sub.get("customer") or ""
+    elif event_type == "customer.subscription.updated":
+        customer_id = data_obj.get("customer") or ""
+        status = (data_obj.get("status") or "").lower()
+        is_active = status in {"active", "trialing"}
+
         subs = _load_subscribers()
         changed = False
         for em, rec in subs.items():
-            if (rec or {}).get("stripe_customer_id") == customer_id and em:
+            if isinstance(rec, dict) and rec.get("stripe_customer_id") == customer_id and em:
+                rec["is_active"] = is_active
+                rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
+                subs[em] = rec
+                changed = True
+        if changed:
+            _save_subscribers(subs)
+
+    elif event_type == "customer.subscription.deleted":
+        customer_id = data_obj.get("customer") or ""
+        subs = _load_subscribers()
+        changed = False
+        for em, rec in subs.items():
+            if isinstance(rec, dict) and rec.get("stripe_customer_id") == customer_id and em:
+                rec["is_active"] = False
+                rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
+                subs[em] = rec
+                changed = True
+        if changed:
+            _save_subscribers(subs)
+
+    elif event_type == "invoice.payment_failed":
+        customer_id = data_obj.get("customer") or ""
+        subs = _load_subscribers()
+        changed = False
+        for em, rec in subs.items():
+            if isinstance(rec, dict) and rec.get("stripe_customer_id") == customer_id and em:
                 rec["is_active"] = False
                 rec["updated_at"] = datetime.utcnow().isoformat() + "Z"
                 subs[em] = rec
@@ -2928,22 +3002,31 @@ def interpret():
     data = request.get_json(silent=True) or {}
     dream = (data.get("dream") or data.get("text") or "").strip()
 
+    _log("RAW JSON RECEIVED:", _safe_debug_payload_preview(data))
+    _log("RAW DREAM RECEIVED:", repr(dream))
+    _log("REQUEST CONTENT-TYPE:", request.headers.get("Content-Type", ""))
+    _log("REQUEST ORIGIN:", request.headers.get("Origin", ""))
+    _log("REQUEST REFERER:", request.headers.get("Referer", ""))
+
     validation_error = _validate_dream_text(dream)
     if validation_error:
         return jsonify({"error": validation_error}), 400
 
-    is_paid = _is_premium_session()
     session_email = _get_session_email()
-    dream_pack_status_before = _get_dream_pack_status(session_email)
-    has_active_dream_pack = bool(dream_pack_status_before["active"])
+    access_ok, access_meta = _has_active_access(session_email)
+    access_type = access_meta.get("type", "")
+    is_paid = access_ok and access_type == "subscription"
 
-    if not is_paid:
+    dream_pack_status_before = _get_dream_pack_status(session_email)
+    has_active_dream_pack = access_ok and access_type == "dream_pack"
+
+    if not access_ok:
         ip = _get_client_ip()
         cookie_used = _get_cookie_tries_used()
         ip_used = _shadow_count(ip)
         effective_used = max(cookie_used, ip_used)
 
-        if (not has_active_dream_pack) and effective_used >= FREE_TRIES:
+        if effective_used >= FREE_TRIES:
             return jsonify({
                 "blocked": True,
                 "reason": "free_limit_reached",
@@ -2963,17 +3046,17 @@ def interpret():
     free_uses_left = 0
     dream_pack_status_after = dream_pack_status_before
 
-    if not is_paid:
-        if has_active_dream_pack:
-            dream_pack_status_after = _consume_dream_pack_use(session_email)
-            free_uses_left = 0
-        else:
-            ip = _get_client_ip()
-            cookie_used = _get_cookie_tries_used()
-            ip_used = _shadow_count(ip)
-            effective_used = max(cookie_used, ip_used)
-            _shadow_increment(ip)
-            free_uses_left = _free_tries_remaining_after_this(effective_used)
+    if not access_ok:
+        ip = _get_client_ip()
+        cookie_used = _get_cookie_tries_used()
+        ip_used = _shadow_count(ip)
+        effective_used = max(cookie_used, ip_used)
+        _shadow_increment(ip)
+        free_uses_left = _free_tries_remaining_after_this(effective_used)
+    elif has_active_dream_pack:
+        dream_pack_status_after = _consume_dream_pack_use(session_email)
+    else:
+        free_uses_left = 0
 
     doctrine_active = DOCTRINE_MODE and _doctrine_sheets_available()
 
@@ -2986,15 +3069,6 @@ def interpret():
             location_rows = sheets.get(SHEET_LOCATION_RULES, [])
             override_rows = sheets.get(SHEET_OVERRIDE_RULES, [])
             template_rows = sheets.get(SHEET_OUTPUT_TEMPLATES, [])
-
-            # Doctrine flow:
-            # 1. Main symbols
-            # 2. Behaviors
-            # 3. States
-            # 4. Locations
-            # 5. Ending seal
-            # 6. Overrides
-            # 7. Template rendering
 
             base_matches = _match_base_symbols_doctrine(dream, base_rows, top_k=3)
             behaviors = _detect_rule_hits(dream, behavior_rows, "behavior")
@@ -3022,7 +3096,7 @@ def interpret():
             if not base_matches and not override_hit:
                 payload = {
                     "engine_mode": "doctrine",
-                    "access": "paid" if is_paid else "free",
+                    "access": "paid" if is_paid else ("dream_pack" if has_active_dream_pack else "free"),
                     "is_paid": bool(is_paid),
                     "free_uses_left": free_uses_left,
                     "dream_pack": {
@@ -3072,7 +3146,7 @@ def interpret():
 
                 payload = {
                     "engine_mode": "doctrine",
-                    "access": "paid" if is_paid else "free",
+                    "access": "paid" if is_paid else ("dream_pack" if has_active_dream_pack else "free"),
                     "is_paid": bool(is_paid),
                     "free_uses_left": free_uses_left,
                     "dream_pack": {
@@ -3129,7 +3203,7 @@ def interpret():
         if not matches:
             payload = {
                 "engine_mode": "legacy",
-                "access": "paid" if is_paid else "free",
+                "access": "paid" if is_paid else ("dream_pack" if has_active_dream_pack else "free"),
                 "is_paid": bool(is_paid),
                 "free_uses_left": free_uses_left,
                 "dream_pack": {
@@ -3167,7 +3241,7 @@ def interpret():
 
             payload = {
                 "engine_mode": "legacy",
-                "access": "paid" if is_paid else "free",
+                "access": "paid" if is_paid else ("dream_pack" if has_active_dream_pack else "free"),
                 "is_paid": bool(is_paid),
                 "free_uses_left": free_uses_left,
                 "dream_pack": {
@@ -3188,12 +3262,20 @@ def interpret():
 
             resp = make_response(jsonify(payload))
 
-    if not is_paid and not has_active_dream_pack:
+    if not access_ok:
         cookie_used = _get_cookie_tries_used()
         resp.set_cookie(
             COOKIE_NAME,
             str(cookie_used + 1),
             max_age=COOKIE_MAX_AGE,
+            samesite=COOKIE_SAMESITE,
+            secure=COOKIE_SECURE,
+        )
+    else:
+        resp.set_cookie(
+            COOKIE_NAME,
+            "0",
+            max_age=0,
             samesite=COOKIE_SAMESITE,
             secure=COOKIE_SECURE,
         )
@@ -3334,4 +3416,9 @@ def debug_doctrine():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), debug=True)
+    debug_mode = os.getenv("FLASK_DEBUG", "0") == "1"
+    app.run(
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", "5000")),
+        debug=debug_mode,
+    )

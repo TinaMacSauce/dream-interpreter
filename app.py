@@ -183,6 +183,27 @@ def _normalize_text(s: str) -> str:
     return s
 
 
+def _normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def _extract_email_from_request() -> str:
+    data = request.get_json(silent=True) or {}
+    return _normalize_email(
+        data.get("email")
+        or request.args.get("email")
+        or request.form.get("email")
+        or session.get("subscriber_email")
+        or ""
+    )
+
+
+def _persist_email_to_session(email: str):
+    email_n = _normalize_email(email)
+    if _validate_email(email_n):
+        session["subscriber_email"] = email_n
+
+
 STOP_WORDS = {
     "a", "an", "and", "are", "as", "at",
     "be", "but", "by",
@@ -967,7 +988,7 @@ def _parse_iso_z(dt_str: str) -> Optional[datetime]:
 
 
 def _set_buyer_session(email: str):
-    email_n = (email or "").strip().lower()
+    email_n = _normalize_email(email)
     if not email_n:
         return
     session["subscriber_email"] = email_n
@@ -979,7 +1000,7 @@ def _mark_subscriber(email: str, is_active: bool, stripe_customer_id: str = ""):
     if not email:
         return
 
-    email_n = email.strip().lower()
+    email_n = _normalize_email(email)
     subs = _load_subscribers()
     rec = subs.get(email_n, {}) if isinstance(subs.get(email_n, {}), dict) else {}
 
@@ -997,7 +1018,7 @@ def _mark_dream_pack_purchase(email: str, uses: int = DREAM_PACK_USES, hours: in
     if not email:
         return
 
-    email_n = email.strip().lower()
+    email_n = _normalize_email(email)
     subs = _load_subscribers()
     rec = subs.get(email_n, {}) if isinstance(subs.get(email_n, {}), dict) else {}
 
@@ -1018,7 +1039,7 @@ def _mark_dream_pack_purchase(email: str, uses: int = DREAM_PACK_USES, hours: in
 
 
 def _get_dream_pack_status(email: str) -> Dict[str, Any]:
-    email_n = (email or "").strip().lower()
+    email_n = _normalize_email(email)
     if not email_n:
         return {"active": False, "uses_remaining": 0, "expires_at": ""}
 
@@ -1045,7 +1066,7 @@ def _get_dream_pack_status(email: str) -> Dict[str, Any]:
 
 
 def _consume_dream_pack_use(email: str) -> Dict[str, Any]:
-    email_n = (email or "").strip().lower()
+    email_n = _normalize_email(email)
     if not email_n:
         return {"active": False, "uses_remaining": 0, "expires_at": ""}
 
@@ -1075,7 +1096,7 @@ def _consume_dream_pack_use(email: str) -> Dict[str, Any]:
 # Access state helpers
 # ============================================================
 def _get_session_email() -> str:
-    return (session.get("subscriber_email") or "").strip().lower()
+    return _normalize_email(session.get("subscriber_email") or "")
 
 
 def _is_premium_session() -> bool:
@@ -1083,7 +1104,7 @@ def _is_premium_session() -> bool:
 
 
 def _set_premium_session(email: str):
-    session["subscriber_email"] = (email or "").strip().lower()
+    session["subscriber_email"] = _normalize_email(email)
     session["premium"] = True
     session["premium_set_at"] = datetime.utcnow().isoformat() + "Z"
 
@@ -1104,7 +1125,7 @@ def _stripe_dream_pack_ok() -> bool:
 
 
 def _stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
-    email = (email or "").strip().lower()
+    email = _normalize_email(email)
     if not _validate_email(email):
         return False, ""
 
@@ -1838,15 +1859,6 @@ def _detect_rule_hits(
 
 # ============================================================
 # Override logic
-# Supports:
-# - field=value
-# - field!=value
-# - plaintoken
-# - !plaintoken
-# - OR groups with ||
-# - AND within group using +
-# Valid fields:
-#   symbol, category, behavior, state, location, ending, text
 # ============================================================
 def _override_context(
     dream: str,
@@ -2665,6 +2677,14 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
 # Upgrade HTML
 # ============================================================
 def _upgrade_html_option_a() -> str:
+    pref_email = _get_session_email()
+    esc_email = (
+        pref_email.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2721,17 +2741,17 @@ def _upgrade_html_option_a() -> str:
         <div class="sub">Use the same email for unlocking after payment.</div>
 
         <label>Email</label>
-        <input id="email" type="email" placeholder="you@example.com" />
+        <input id="email" type="email" placeholder="you@example.com" value="{esc_email}" />
 
         <button class="btn2" id="unlock">Unlock Existing Access</button>
 
         <form id="checkoutForm" action="/create-checkout-session" method="POST">
-          <input type="hidden" name="email" id="emailHidden" value="" />
+          <input type="hidden" name="email" id="emailHidden" value="{esc_email}" />
           <button class="btn" type="submit">Start Subscription</button>
         </form>
 
         <form id="dreamPackForm" action="/create-dream-pack-checkout-session" method="POST">
-          <input type="hidden" name="email" id="emailHiddenPack" value="" />
+          <input type="hidden" name="email" id="emailHiddenPack" value="{esc_email}" />
           <button class="btn2" type="submit">Buy {DREAM_PACK_USES} Dreams</button>
         </form>
 
@@ -2860,8 +2880,12 @@ def healthz():
 
 @app.route("/upgrade", methods=["GET"])
 def upgrade():
+    email = _extract_email_from_request()
+    if _validate_email(email):
+        _persist_email_to_session(email)
+
     try:
-        return render_template("upgrade.html")
+        return render_template("upgrade.html", email=_get_session_email())
     except Exception:
         return Response(_upgrade_html_option_a(), mimetype="text/html")
 
@@ -2883,11 +2907,12 @@ def check_access():
         return _preflight_ok()
 
     data = request.get_json(silent=True) or {}
-    email = (data.get("email") or "").strip().lower()
+    email = _normalize_email(data.get("email") or "")
 
     if not _validate_email(email):
         return jsonify({"ok": False, "error": "Please enter a valid email."}), 400
 
+    _persist_email_to_session(email)
     access_ok, access_meta = _has_active_access(email)
 
     if access_ok and access_meta.get("type") == "subscription":
@@ -2926,16 +2951,12 @@ def create_checkout_session():
             500,
         )
 
-    email = ""
-    if request.form and request.form.get("email"):
-        email = (request.form.get("email") or "").strip().lower()
-    else:
-        data = request.get_json(silent=True) or {}
-        email = (data.get("email") or "").strip().lower()
+    email = _extract_email_from_request()
 
     if not _validate_email(email):
         return make_response("Missing email. Please enter a valid email on the upgrade page.", 400)
 
+    _persist_email_to_session(email)
     stripe.api_key = STRIPE_SECRET_KEY
 
     try:
@@ -2948,14 +2969,14 @@ def create_checkout_session():
                 "email": email,
             },
             success_url=url_for("payment_success", _external=True) + f"?email={email}",
-            cancel_url=url_for("upgrade", _external=True),
+            cancel_url=url_for("upgrade", _external=True) + f"?email={email}",
         )
         return redirect(checkout.url, code=303)
     except Exception as e:
         return make_response(f"Stripe error: {str(e)}", 500)
 
 
-@app.route("/create-dream-pack-checkout-session", methods=["POST"])
+@app.route("/create-dream-pack-checkout-session", methods=["POST", "GET"])
 def create_dream_pack_checkout_session():
     if not _stripe_dream_pack_ok():
         return make_response(
@@ -2963,16 +2984,12 @@ def create_dream_pack_checkout_session():
             500,
         )
 
-    email = ""
-    if request.form and request.form.get("email"):
-        email = (request.form.get("email") or "").strip().lower()
-    else:
-        data = request.get_json(silent=True) or {}
-        email = (data.get("email") or "").strip().lower()
+    email = _extract_email_from_request()
 
     if not _validate_email(email):
         return make_response("Missing email for dream pack checkout.", 400)
 
+    _persist_email_to_session(email)
     stripe.api_key = STRIPE_SECRET_KEY
 
     try:
@@ -2987,18 +3004,24 @@ def create_dream_pack_checkout_session():
                 "email": email,
             },
             success_url=url_for("dream_pack_success", _external=True) + f"?email={email}",
-            cancel_url=url_for("upgrade", _external=True),
+            cancel_url=url_for("upgrade", _external=True) + f"?email={email}",
         )
         return redirect(checkout.url, code=303)
     except Exception as e:
         return make_response(f"Stripe dream pack error: {str(e)}", 500)
 
 
+@app.route("/create-dream-pack-checkout", methods=["POST", "GET"])
+def create_dream_pack_checkout_alias():
+    return create_dream_pack_checkout_session()
+
+
 @app.route("/payment-success", methods=["GET"])
 def payment_success():
-    email = (request.args.get("email") or "").strip().lower()
+    email = _normalize_email(request.args.get("email") or "")
 
     if _validate_email(email):
+        _persist_email_to_session(email)
         access_ok, access_meta = _has_active_access(email)
         if access_ok and access_meta.get("type") == "subscription":
             _set_premium_session(email)
@@ -3027,9 +3050,10 @@ def payment_success():
 
 @app.route("/dream-pack-success", methods=["GET"])
 def dream_pack_success():
-    email = (request.args.get("email") or "").strip().lower()
+    email = _normalize_email(request.args.get("email") or "")
 
     if _validate_email(email):
+        _persist_email_to_session(email)
         _set_buyer_session(email)
         _mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
 
@@ -3073,10 +3097,14 @@ def stripe_webhook():
     data_obj = (event.get("data") or {}).get("object") or {}
 
     if event_type == "checkout.session.completed":
-        email = (data_obj.get("customer_email") or "").strip().lower()
+        metadata = data_obj.get("metadata") or {}
+        email = _normalize_email(
+            metadata.get("email")
+            or data_obj.get("customer_email")
+            or ""
+        )
         customer_id = data_obj.get("customer") or ""
         mode = (data_obj.get("mode") or "").strip().lower()
-        metadata = data_obj.get("metadata") or {}
         purchase_type = (metadata.get("purchase_type") or "").strip().lower()
 
         if _validate_email(email) and mode == "subscription":
@@ -3148,6 +3176,10 @@ def interpret():
     if validation_error:
         return jsonify({"error": validation_error}), 400
 
+    request_email = _extract_email_from_request()
+    if _validate_email(request_email):
+        _persist_email_to_session(request_email)
+
     session_email = _get_session_email()
     access_ok, access_meta = _has_active_access(session_email)
     access_type = access_meta.get("type", "")
@@ -3171,6 +3203,7 @@ def interpret():
                 "free_uses_left": 0,
                 "access": "blocked",
                 "is_paid": False,
+                "email": session_email,
                 "dream_pack_available": bool(PRICE_DREAM_PACK),
                 "dream_pack": {
                     "active": False,
@@ -3234,6 +3267,7 @@ def interpret():
                     "engine_mode": "doctrine",
                     "access": "paid" if is_paid else ("dream_pack" if has_active_dream_pack else "free"),
                     "is_paid": bool(is_paid),
+                    "email": session_email,
                     "free_uses_left": free_uses_left,
                     "dream_pack": {
                         "active": bool(dream_pack_status_after["active"]),
@@ -3284,6 +3318,7 @@ def interpret():
                     "engine_mode": "doctrine",
                     "access": "paid" if is_paid else ("dream_pack" if has_active_dream_pack else "free"),
                     "is_paid": bool(is_paid),
+                    "email": session_email,
                     "free_uses_left": free_uses_left,
                     "dream_pack": {
                         "active": bool(dream_pack_status_after["active"]),
@@ -3341,6 +3376,7 @@ def interpret():
                 "engine_mode": "legacy",
                 "access": "paid" if is_paid else ("dream_pack" if has_active_dream_pack else "free"),
                 "is_paid": bool(is_paid),
+                "email": session_email,
                 "free_uses_left": free_uses_left,
                 "dream_pack": {
                     "active": bool(dream_pack_status_after["active"]),
@@ -3379,6 +3415,7 @@ def interpret():
                 "engine_mode": "legacy",
                 "access": "paid" if is_paid else ("dream_pack" if has_active_dream_pack else "free"),
                 "is_paid": bool(is_paid),
+                "email": session_email,
                 "free_uses_left": free_uses_left,
                 "dream_pack": {
                     "active": bool(dream_pack_status_after["active"]),

@@ -107,6 +107,7 @@ SHEET_SIZE_STATE_RULES = os.getenv("SHEET_SIZE_STATE_RULES", "SizeStateRules").s
 SHEET_LOCATION_RULES = os.getenv("SHEET_LOCATION_RULES", "LocationRules").strip()
 SHEET_OVERRIDE_RULES = os.getenv("SHEET_OVERRIDE_RULES", "OverrideRules").strip()
 SHEET_OUTPUT_TEMPLATES = os.getenv("SHEET_OUTPUT_TEMPLATES", "OutputTemplates").strip()
+SHEET_DREAM_JOURNAL = os.getenv("SHEET_DREAM_JOURNAL", "DreamJournal").strip()
 
 DOCTRINE_SHEET_NAMES = [
     SHEET_BASE_SYMBOLS,
@@ -547,107 +548,6 @@ def _elite_location_sentence(text: str) -> str:
     return _sentence(f"This points to {text}")
 
 
-def _build_spiritual_meaning_paragraph(
-    symbol: str,
-    base_meaning: str,
-    behavior_mod: str,
-    state_mod: str,
-    location_mod: str,
-) -> str:
-    symbol_name = _title_case_symbol(symbol)
-    core = _strip_trailing_punct(base_meaning)
-
-    parts = []
-
-    if core:
-        parts.append(_sentence(f"{symbol_name} represents {core}"))
-
-    if behavior_mod:
-        parts.append(_elite_behavior_sentence(behavior_mod))
-
-    if state_mod:
-        parts.append(_elite_state_sentence(state_mod))
-
-    if location_mod:
-        parts.append(_elite_location_sentence(location_mod))
-
-    return " ".join([p for p in parts if p]).strip()
-
-
-def _build_physical_effect_sentence(
-    base_effects: str,
-    behavior_phys_mod: str,
-    state_phys_mod: str,
-    location_phys_mod: str,
-    override_physical: str = "",
-) -> str:
-    parts = []
-
-    if override_physical:
-        parts.append(_normalize_effect_phrase(override_physical))
-    if base_effects:
-        parts.append(_normalize_effect_phrase(base_effects))
-    if behavior_phys_mod:
-        parts.append(_normalize_effect_phrase(behavior_phys_mod))
-    if state_phys_mod:
-        parts.append(_normalize_effect_phrase(state_phys_mod))
-    if location_phys_mod:
-        parts.append(_normalize_effect_phrase(location_phys_mod))
-
-    joined = _join_phrases_natural(parts)
-    if not joined:
-        return "No clear physical effects were generated."
-
-    return _sentence(f"This may manifest as {joined}")
-
-
-def _build_action_sentence(
-    base_action: str,
-    behavior_action_mod: str,
-    state_action_mod: str,
-    location_action_mod: str,
-    override_action: str = "",
-) -> str:
-    parts = []
-
-    if override_action:
-        parts.append(_normalize_action_phrase(override_action))
-    if base_action:
-        parts.append(_normalize_action_phrase(base_action))
-    if behavior_action_mod:
-        parts.append(_normalize_action_phrase(behavior_action_mod))
-    if state_action_mod:
-        parts.append(_normalize_action_phrase(state_action_mod))
-    if location_action_mod:
-        parts.append(_normalize_action_phrase(location_action_mod))
-
-    cleaned_parts = []
-    seen = set()
-
-    for p in parts:
-        p = _clean_sentence(p)
-        if not p:
-            continue
-        key = p.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        cleaned_parts.append(p)
-
-    joined = " ".join(cleaned_parts).strip()
-    if not joined:
-        return "Pray for wisdom and confirmation."
-
-    return _sentence(joined)
-
-
-def _render_template_text(template_text: str, context: Dict[str, str]) -> str:
-    text = template_text or ""
-    for key, value in context.items():
-        text = text.replace("{" + key + "}", _strip_trailing_punct(value or ""))
-    return _sentence(text)
-
-
 def _compress_phrase_list(parts: List[str]) -> List[str]:
     out = []
     seen = set()
@@ -829,6 +729,13 @@ def _build_final_summary_paragraph(
     ))
 
     return _merge_natural_paragraphs(parts)
+
+
+def _render_template_text(template_text: str, context: Dict[str, str]) -> str:
+    text = template_text or ""
+    for key, value in context.items():
+        text = text.replace("{" + key + "}", _strip_trailing_punct(value or ""))
+    return _sentence(text)
 
 
 # ============================================================
@@ -1196,6 +1103,11 @@ def _get_spreadsheet():
     return gc.open_by_key(SPREADSHEET_ID)
 
 
+def _get_journal_worksheet():
+    sh = _get_spreadsheet()
+    return sh.worksheet(SHEET_DREAM_JOURNAL)
+
+
 def _worksheet_to_rows(ws) -> Tuple[List[str], List[Dict[str, str]]]:
     values = ws.get_all_values()
     if not values or len(values) < 1:
@@ -1282,6 +1194,44 @@ def _doctrine_sheets_available() -> bool:
         return len(sheets.get(SHEET_BASE_SYMBOLS, [])) > 0
     except Exception:
         return False
+
+
+# ============================================================
+# Dream Journal helpers
+# ============================================================
+def _append_dream_journal_entry(payload: Dict[str, Any]) -> Dict[str, Any]:
+    ws = _get_journal_worksheet()
+
+    entry_id = payload.get("entry_id") or f"DJ-{secrets.token_hex(6).upper()}"
+    created_at = datetime.utcnow().isoformat() + "Z"
+
+    row = [
+        entry_id,
+        created_at,
+        _normalize_email(payload.get("email") or ""),
+        (payload.get("dream_text") or "").strip(),
+        (payload.get("spiritual_meaning") or "").strip(),
+        (payload.get("effects_in_physical_realm") or "").strip(),
+        (payload.get("what_to_do") or "").strip(),
+        (payload.get("full_interpretation") or "").strip(),
+        (payload.get("receipt_id") or "").strip(),
+        ", ".join(payload.get("top_symbols") or []),
+        (payload.get("seal_status") or "").strip(),
+        (payload.get("seal_type") or "").strip(),
+        (payload.get("seal_risk") or "").strip(),
+        (payload.get("engine_mode") or "").strip(),
+        (payload.get("access_type") or "").strip(),
+        (payload.get("is_saved") or "yes").strip(),
+        (payload.get("notes") or "").strip(),
+    ]
+
+    ws.append_row(row, value_input_option="RAW")
+
+    return {
+        "ok": True,
+        "entry_id": entry_id,
+        "created_at": created_at,
+    }
 
 
 # ============================================================
@@ -2173,10 +2123,6 @@ def _choose_template_type(
 # ============================================================
 # Doctrine interpretation builder
 # ============================================================
-def _join_nonempty(parts: List[str], sep: str = " ") -> str:
-    return sep.join([_strip_trailing_punct(x) for x in parts if x and _strip_trailing_punct(x)]).strip()
-
-
 def _build_doctrine_interpretation(
     dream: str,
     base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
@@ -2674,7 +2620,7 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ============================================================
-# Upgrade HTML
+# Upgrade HTML fallback
 # ============================================================
 def _upgrade_html_option_a() -> str:
     pref_email = _get_session_email()
@@ -2824,10 +2770,18 @@ def home():
 @app.route("/health", methods=["GET"])
 def health():
     doctrine_available = False
+    journal_available = False
+
     try:
         doctrine_available = _doctrine_sheets_available()
     except Exception:
         doctrine_available = False
+
+    try:
+        _get_journal_worksheet()
+        journal_available = True
+    except Exception:
+        journal_available = False
 
     return jsonify({
         "ok": True,
@@ -2853,6 +2807,8 @@ def health():
         "doctrine_mode_enabled": DOCTRINE_MODE,
         "doctrine_sheets_available": doctrine_available,
         "doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
+        "dream_journal_sheet": SHEET_DREAM_JOURNAL,
+        "dream_journal_available": journal_available,
         "admin_configured": bool(ADMIN_KEY),
         "free_quota": FREE_TRIES,
         "shadow_window_hours": SHADOW_WINDOW_HOURS,
@@ -3456,6 +3412,100 @@ def interpret():
     return resp
 
 
+@app.route("/journal/save", methods=["POST", "OPTIONS"])
+def journal_save():
+    if request.method == "OPTIONS":
+        return _preflight_ok()
+
+    data = request.get_json(silent=True) or {}
+
+    email = _normalize_email(data.get("email") or "")
+    dream_text = (data.get("dream_text") or "").strip()
+
+    if not _validate_email(email):
+        return jsonify({"ok": False, "error": "Valid email is required."}), 400
+
+    if not dream_text:
+        return jsonify({"ok": False, "error": "Dream text is required."}), 400
+
+    try:
+        _persist_email_to_session(email)
+        result = _append_dream_journal_entry({
+            "email": email,
+            "dream_text": dream_text,
+            "spiritual_meaning": data.get("spiritual_meaning", ""),
+            "effects_in_physical_realm": data.get("effects_in_physical_realm", ""),
+            "what_to_do": data.get("what_to_do", ""),
+            "full_interpretation": data.get("full_interpretation", ""),
+            "receipt_id": data.get("receipt_id", ""),
+            "top_symbols": data.get("top_symbols", []),
+            "seal_status": data.get("seal_status", ""),
+            "seal_type": data.get("seal_type", ""),
+            "seal_risk": data.get("seal_risk", ""),
+            "engine_mode": data.get("engine_mode", ""),
+            "access_type": data.get("access_type", ""),
+            "is_saved": "yes",
+            "notes": data.get("notes", ""),
+        })
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/journal/history", methods=["GET", "OPTIONS"])
+def journal_history():
+    if request.method == "OPTIONS":
+        return _preflight_ok()
+
+    email = _normalize_email(request.args.get("email") or "")
+
+    if not _validate_email(email):
+        return jsonify({"ok": False, "error": "Valid email is required."}), 400
+
+    try:
+        _persist_email_to_session(email)
+        ws = _get_journal_worksheet()
+        rows = ws.get_all_records()
+
+        matches = []
+        for row in rows:
+            row_email = _normalize_email(row.get("email") or "")
+            if row_email != email:
+                continue
+
+            top_symbols_raw = (row.get("top_symbols") or "").strip()
+            top_symbols = [x.strip() for x in top_symbols_raw.split(",") if x.strip()]
+
+            matches.append({
+                "entry_id": row.get("entry_id", ""),
+                "created_at": row.get("created_at", ""),
+                "email": row_email,
+                "dream_text": row.get("dream_text", ""),
+                "spiritual_meaning": row.get("spiritual_meaning", ""),
+                "effects_in_physical_realm": row.get("effects_in_physical_realm", ""),
+                "what_to_do": row.get("what_to_do", ""),
+                "full_interpretation": row.get("full_interpretation", ""),
+                "receipt_id": row.get("receipt_id", ""),
+                "top_symbols": top_symbols,
+                "seal_status": row.get("seal_status", ""),
+                "seal_type": row.get("seal_type", ""),
+                "seal_risk": row.get("seal_risk", ""),
+                "engine_mode": row.get("engine_mode", ""),
+                "access_type": row.get("access_type", ""),
+                "notes": row.get("notes", ""),
+            })
+
+        matches.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+
+        return jsonify({
+            "ok": True,
+            "email": email,
+            "entries": matches[:50],
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/track", methods=["POST", "OPTIONS"])
 def track():
     if request.method == "OPTIONS":
@@ -3532,6 +3582,7 @@ def debug_config():
         "keyword_guard_enabled": KEYWORD_GUARD_ENABLED,
         "doctrine_mode_enabled": DOCTRINE_MODE,
         "doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
+        "dream_journal_sheet": SHEET_DREAM_JOURNAL,
         "max_rule_hits_per_layer": MAX_RULE_HITS_PER_LAYER,
     })
 
@@ -3579,10 +3630,24 @@ def debug_doctrine():
                 "sample_row": sample,
             }
 
+        journal_info = {}
+        try:
+            ws = _get_journal_worksheet()
+            j_headers, j_rows = _worksheet_to_rows(ws)
+            journal_info = {
+                "worksheet": SHEET_DREAM_JOURNAL,
+                "row_count": len(j_rows),
+                "headers_seen": j_headers,
+                "sample_row": j_rows[0] if j_rows else {},
+            }
+        except Exception as je:
+            journal_info = {"error": str(je)}
+
         return jsonify({
             "doctrine_mode_enabled": DOCTRINE_MODE,
             "doctrine_sheets_available": _doctrine_sheets_available(),
             "sheets": summary,
+            "journal": journal_info,
         })
     except Exception as e:
         return jsonify({"error": "Doctrine debug failed", "details": str(e)}), 500

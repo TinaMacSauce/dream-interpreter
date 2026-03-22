@@ -43,6 +43,7 @@ DEFAULT_ALLOWED = [
     "https://jamaicantruestories.com",
     "https://www.jamaicantruestories.com",
     "https://interpreter.jamaicantruestories.com",
+    "https://plqwhd-jm.myshopify.com",
 ]
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "")
 allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()] or DEFAULT_ALLOWED
@@ -527,27 +528,6 @@ def _merge_natural_paragraphs(parts: List[str]) -> str:
     return "\n".join(cleaned).strip()
 
 
-def _elite_behavior_sentence(text: str) -> str:
-    text = _strip_trailing_punct(text)
-    if not text:
-        return ""
-    return _sentence(f"This suggests {text}")
-
-
-def _elite_state_sentence(text: str) -> str:
-    text = _strip_trailing_punct(text)
-    if not text:
-        return ""
-    return _sentence(f"This indicates {text}")
-
-
-def _elite_location_sentence(text: str) -> str:
-    text = _strip_trailing_punct(text)
-    if not text:
-        return ""
-    return _sentence(f"This points to {text}")
-
-
 def _compress_phrase_list(parts: List[str]) -> List[str]:
     out = []
     seen = set()
@@ -574,168 +554,6 @@ def _human_join(parts: List[str]) -> str:
     if len(parts) == 2:
         return f"{parts[0]} and {parts[1]}"
     return ", ".join(parts[:-1]) + f", and {parts[-1]}"
-
-
-def _summarize_symbol_meanings(
-    base_matches: List[Tuple[Dict, int, Dict[str, Any]]]
-) -> str:
-    items = []
-
-    for row, _score, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
-        symbol = _get_base_symbol_input(row)
-        meaning = _get_base_symbol_meaning(row)
-
-        symbol = _strip_trailing_punct(symbol)
-        meaning = _strip_trailing_punct(meaning)
-
-        if symbol and meaning:
-            items.append(f"{symbol} points to {meaning}")
-        elif symbol:
-            items.append(symbol)
-
-    joined = _human_join(items)
-    if not joined:
-        return ""
-
-    return _sentence(joined)
-
-
-def _build_core_message(
-    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
-    override_hit: Optional[Dict[str, Any]],
-    seal: Dict[str, Any],
-) -> str:
-    override_spiritual = _strip_trailing_punct((override_hit or {}).get("spiritual", ""))
-    symbol_summary = _summarize_symbol_meanings(base_matches)
-    seal_type = _strip_trailing_punct(seal.get("type", ""))
-    seal_message = _strip_trailing_punct(seal.get("message", ""))
-
-    parts = []
-
-    if override_spiritual:
-        parts.append(_sentence(f"The strongest message in this dream is {override_spiritual}"))
-
-    if symbol_summary:
-        parts.append(_sentence(symbol_summary))
-
-    if seal_type:
-        parts.append(_sentence(f"The ending seals this as {seal_type.lower()}"))
-
-    if seal_message:
-        parts.append(_sentence(seal_message))
-
-    return _merge_natural_paragraphs(parts)
-
-
-def _build_layered_support_paragraph(
-    behaviors: List[Dict[str, Any]],
-    states: List[Dict[str, Any]],
-    locations: List[Dict[str, Any]],
-) -> str:
-    behavior_parts = _compress_phrase_list([
-        _get_behavior_meaning_modifier(x["row"]) for x in behaviors
-    ])
-    state_parts = _compress_phrase_list([
-        _get_state_meaning_modifier(x["row"]) for x in states
-    ])
-    location_parts = _compress_phrase_list([
-        _get_location_life_area_meaning(x["row"]) for x in locations
-    ])
-
-    lines = []
-
-    if behavior_parts:
-        lines.append(_sentence(f"The actions in the dream suggest {_human_join(behavior_parts)}"))
-
-    if state_parts:
-        lines.append(_sentence(f"The condition of what appeared points to {_human_join(state_parts)}"))
-
-    if location_parts:
-        lines.append(_sentence(f"The setting connects this message to {_human_join(location_parts)}"))
-
-    return _merge_natural_paragraphs(lines)
-
-
-def _build_real_world_impact_paragraph(
-    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
-    behaviors: List[Dict[str, Any]],
-    states: List[Dict[str, Any]],
-    locations: List[Dict[str, Any]],
-    override_hit: Optional[Dict[str, Any]],
-) -> str:
-    effect_parts = []
-
-    for row, _score, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
-        effect_parts.append(_get_base_symbol_effects(row))
-
-    effect_parts.extend([_get_behavior_physical_modifier(x["row"]) for x in behaviors])
-    effect_parts.extend([_get_state_physical_modifier(x["row"]) for x in states])
-    effect_parts.extend([_get_location_physical_area_meaning(x["row"]) for x in locations])
-
-    if override_hit:
-        effect_parts.append((override_hit or {}).get("physical", ""))
-
-    effect_parts = _compress_phrase_list([_normalize_effect_phrase(x) for x in effect_parts if x])
-
-    if not effect_parts:
-        return "No clear physical effects were generated."
-
-    joined = _human_join(effect_parts)
-    return _sentence(f"In practical terms, this may show up as {joined}")
-
-
-def _build_action_guidance_paragraph(
-    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
-    behaviors: List[Dict[str, Any]],
-    states: List[Dict[str, Any]],
-    locations: List[Dict[str, Any]],
-    override_hit: Optional[Dict[str, Any]],
-) -> str:
-    action_parts = []
-
-    for row, _score, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
-        action_parts.append(_get_base_symbol_action(row))
-
-    action_parts.extend([_get_behavior_action_modifier(x["row"]) for x in behaviors])
-    action_parts.extend([_get_state_action_modifier(x["row"]) for x in states])
-    action_parts.extend([_get_location_action_modifier(x["row"]) for x in locations])
-
-    if override_hit:
-        action_parts.append((override_hit or {}).get("action", ""))
-
-    action_parts = _compress_phrase_list([_normalize_action_phrase(x) for x in action_parts if x])
-
-    if not action_parts:
-        return "Pray for wisdom and confirmation."
-
-    joined = " ".join(action_parts).strip()
-    return _sentence(joined)
-
-
-def _build_final_summary_paragraph(
-    interpretation: Dict[str, str],
-    seal: Dict[str, Any],
-) -> str:
-    seal_type = _strip_trailing_punct(seal.get("type", ""))
-    risk = _strip_trailing_punct(seal.get("risk", ""))
-
-    parts = []
-
-    if seal_type and risk:
-        parts.append(_sentence(f"Overall, this is a {seal_type.lower()} message with {risk.lower()} risk"))
-
-    parts.append(_sentence(
-        "Do not react in panic. Take the message seriously, stay spiritually grounded, and respond with discipline"
-    ))
-
-    return _merge_natural_paragraphs(parts)
-
-
-def _render_template_text(template_text: str, context: Dict[str, str]) -> str:
-    text = template_text or ""
-    for key, value in context.items():
-        text = text.replace("{" + key + "}", _strip_trailing_punct(value or ""))
-    return _sentence(text)
 
 
 # ============================================================
@@ -1199,11 +1017,53 @@ def _doctrine_sheets_available() -> bool:
 # ============================================================
 # Dream Journal helpers
 # ============================================================
+def _journal_required_headers() -> List[str]:
+    return [
+        "entry_id",
+        "created_at",
+        "email",
+        "dream_text",
+        "spiritual_meaning",
+        "effects_in_physical_realm",
+        "what_to_do",
+        "full_interpretation",
+        "receipt_id",
+        "top_symbols",
+        "seal_status",
+        "seal_type",
+        "seal_risk",
+        "engine_mode",
+        "access_type",
+        "is_saved",
+        "notes",
+    ]
+
+
+def _ensure_journal_header_row():
+    ws = _get_journal_worksheet()
+    current = ws.row_values(1)
+    wanted = _journal_required_headers()
+    current_norm = [_normalize_header(x) for x in current]
+
+    if not current:
+        ws.update("A1:Q1", [wanted], value_input_option="RAW")
+        return
+
+    if current_norm[: len(wanted)] != wanted:
+        # Only force-write when the existing first row does not match expected structure.
+        ws.update("A1:Q1", [wanted], value_input_option="RAW")
+
+
 def _append_dream_journal_entry(payload: Dict[str, Any]) -> Dict[str, Any]:
+    _ensure_journal_header_row()
     ws = _get_journal_worksheet()
 
     entry_id = payload.get("entry_id") or f"DJ-{secrets.token_hex(6).upper()}"
     created_at = datetime.utcnow().isoformat() + "Z"
+
+    top_symbols = payload.get("top_symbols") or []
+    if not isinstance(top_symbols, list):
+        top_symbols = []
 
     row = [
         entry_id,
@@ -1215,7 +1075,7 @@ def _append_dream_journal_entry(payload: Dict[str, Any]) -> Dict[str, Any]:
         (payload.get("what_to_do") or "").strip(),
         (payload.get("full_interpretation") or "").strip(),
         (payload.get("receipt_id") or "").strip(),
-        ", ".join(payload.get("top_symbols") or []),
+        ", ".join([str(x).strip() for x in top_symbols if str(x).strip()]),
         (payload.get("seal_status") or "").strip(),
         (payload.get("seal_type") or "").strip(),
         (payload.get("seal_risk") or "").strip(),
@@ -1226,7 +1086,6 @@ def _append_dream_journal_entry(payload: Dict[str, Any]) -> Dict[str, Any]:
     ]
 
     ws.append_row(row, value_input_option="RAW")
-
     return {
         "ok": True,
         "entry_id": entry_id,
@@ -2121,8 +1980,170 @@ def _choose_template_type(
 
 
 # ============================================================
-# Doctrine interpretation builder
+# Interpretation builders
 # ============================================================
+def _summarize_symbol_meanings(
+    base_matches: List[Tuple[Dict, int, Dict[str, Any]]]
+) -> str:
+    items = []
+
+    for row, _score, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
+        symbol = _get_base_symbol_input(row)
+        meaning = _get_base_symbol_meaning(row)
+
+        symbol = _strip_trailing_punct(symbol)
+        meaning = _strip_trailing_punct(meaning)
+
+        if symbol and meaning:
+            items.append(f"{symbol} points to {meaning}")
+        elif symbol:
+            items.append(symbol)
+
+    joined = _human_join(items)
+    if not joined:
+        return ""
+
+    return _sentence(joined)
+
+
+def _build_core_message(
+    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
+    override_hit: Optional[Dict[str, Any]],
+    seal: Dict[str, Any],
+) -> str:
+    override_spiritual = _strip_trailing_punct((override_hit or {}).get("spiritual", ""))
+    symbol_summary = _summarize_symbol_meanings(base_matches)
+    seal_type = _strip_trailing_punct(seal.get("type", ""))
+    seal_message = _strip_trailing_punct(seal.get("message", ""))
+
+    parts = []
+
+    if override_spiritual:
+        parts.append(_sentence(f"The strongest message in this dream is {override_spiritual}"))
+
+    if symbol_summary:
+        parts.append(_sentence(symbol_summary))
+
+    if seal_type:
+        parts.append(_sentence(f"The ending seals this as {seal_type.lower()}"))
+
+    if seal_message:
+        parts.append(_sentence(seal_message))
+
+    return _merge_natural_paragraphs(parts)
+
+
+def _build_layered_support_paragraph(
+    behaviors: List[Dict[str, Any]],
+    states: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+) -> str:
+    behavior_parts = _compress_phrase_list([
+        _get_behavior_meaning_modifier(x["row"]) for x in behaviors
+    ])
+    state_parts = _compress_phrase_list([
+        _get_state_meaning_modifier(x["row"]) for x in states
+    ])
+    location_parts = _compress_phrase_list([
+        _get_location_life_area_meaning(x["row"]) for x in locations
+    ])
+
+    lines = []
+
+    if behavior_parts:
+        lines.append(_sentence(f"The actions in the dream suggest {_human_join(behavior_parts)}"))
+
+    if state_parts:
+        lines.append(_sentence(f"The condition of what appeared points to {_human_join(state_parts)}"))
+
+    if location_parts:
+        lines.append(_sentence(f"The setting connects this message to {_human_join(location_parts)}"))
+
+    return _merge_natural_paragraphs(lines)
+
+
+def _build_real_world_impact_paragraph(
+    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
+    behaviors: List[Dict[str, Any]],
+    states: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+    override_hit: Optional[Dict[str, Any]],
+) -> str:
+    effect_parts = []
+
+    for row, _score, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
+        effect_parts.append(_get_base_symbol_effects(row))
+
+    effect_parts.extend([_get_behavior_physical_modifier(x["row"]) for x in behaviors])
+    effect_parts.extend([_get_state_physical_modifier(x["row"]) for x in states])
+    effect_parts.extend([_get_location_physical_area_meaning(x["row"]) for x in locations])
+
+    if override_hit:
+        effect_parts.append((override_hit or {}).get("physical", ""))
+
+    effect_parts = _compress_phrase_list([_normalize_effect_phrase(x) for x in effect_parts if x])
+
+    if not effect_parts:
+        return "No clear physical effects were generated."
+
+    joined = _human_join(effect_parts)
+    return _sentence(f"In practical terms, this may show up as {joined}")
+
+
+def _build_action_guidance_paragraph(
+    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
+    behaviors: List[Dict[str, Any]],
+    states: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+    override_hit: Optional[Dict[str, Any]],
+) -> str:
+    action_parts = []
+
+    for row, _score, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
+        action_parts.append(_get_base_symbol_action(row))
+
+    action_parts.extend([_get_behavior_action_modifier(x["row"]) for x in behaviors])
+    action_parts.extend([_get_state_action_modifier(x["row"]) for x in states])
+    action_parts.extend([_get_location_action_modifier(x["row"]) for x in locations])
+
+    if override_hit:
+        action_parts.append((override_hit or {}).get("action", ""))
+
+    action_parts = _compress_phrase_list([_normalize_action_phrase(x) for x in action_parts if x])
+
+    if not action_parts:
+        return "Pray for wisdom and confirmation."
+
+    joined = " ".join(action_parts).strip()
+    return _sentence(joined)
+
+
+def _build_final_summary_paragraph(
+    interpretation: Dict[str, str],
+    seal: Dict[str, Any],
+) -> str:
+    seal_type = _strip_trailing_punct(seal.get("type", ""))
+    risk = _strip_trailing_punct(seal.get("risk", ""))
+
+    parts = []
+
+    if seal_type and risk:
+        parts.append(_sentence(f"Overall, this is a {seal_type.lower()} message with {risk.lower()} risk"))
+
+    parts.append(_sentence(
+        "Do not react in panic. Take the message seriously, stay spiritually grounded, and respond with discipline"
+    ))
+
+    return _merge_natural_paragraphs(parts)
+
+
+def _render_template_text(template_text: str, context: Dict[str, str]) -> str:
+    text = template_text or ""
+    for key, value in context.items():
+        text = text.replace("{" + key + "}", _strip_trailing_punct(value or ""))
+    return _sentence(text)
+
+
 def _build_doctrine_interpretation(
     dream: str,
     base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
@@ -2778,7 +2799,7 @@ def health():
         doctrine_available = False
 
     try:
-        _get_journal_worksheet()
+        _ensure_journal_header_row()
         journal_available = True
     except Exception:
         journal_available = False
@@ -3308,7 +3329,6 @@ def interpret():
                         "share_phrase": share_phrase,
                     },
                 }
-
                 resp = make_response(jsonify(payload))
 
         except Exception as e:
@@ -3388,7 +3408,6 @@ def interpret():
                     "share_phrase": f"My dream had symbols like: {', '.join(top_symbols[:3])}. I decoded it on Jamaican True Stories.",
                 },
             }
-
             resp = make_response(jsonify(payload))
 
     if not access_ok:
@@ -3464,6 +3483,7 @@ def journal_history():
 
     try:
         _persist_email_to_session(email)
+        _ensure_journal_header_row()
         ws = _get_journal_worksheet()
         rows = ws.get_all_records()
 
@@ -3632,6 +3652,7 @@ def debug_doctrine():
 
         journal_info = {}
         try:
+            _ensure_journal_header_row()
             ws = _get_journal_worksheet()
             j_headers, j_rows = _worksheet_to_rows(ws)
             journal_info = {

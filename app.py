@@ -99,7 +99,7 @@ KEYWORD_GUARD_ENABLED = True
 MAX_DREAM_LENGTH = int(os.getenv("MAX_DREAM_LENGTH", "2500"))
 MIN_DREAM_LENGTH = int(os.getenv("MIN_DREAM_LENGTH", "5"))
 MAX_RULE_HITS_PER_LAYER = int(os.getenv("MAX_RULE_HITS_PER_LAYER", "4"))
-
+BASE_MATCH_TOP_K = int(os.getenv("BASE_MATCH_TOP_K", "3"))
 
 # ============================================================
 # Doctrine sheet names
@@ -108,6 +108,7 @@ SHEET_BASE_SYMBOLS = os.getenv("SHEET_BASE_SYMBOLS", "BaseSymbols").strip()
 SHEET_BEHAVIOR_RULES = os.getenv("SHEET_BEHAVIOR_RULES", "BehaviorRules").strip()
 SHEET_SIZE_STATE_RULES = os.getenv("SHEET_SIZE_STATE_RULES", "SizeStateRules").strip()
 SHEET_LOCATION_RULES = os.getenv("SHEET_LOCATION_RULES", "LocationRules").strip()
+SHEET_RELATIONSHIP_RULES = os.getenv("SHEET_RELATIONSHIP_RULES", "RelationshipRules").strip()
 SHEET_OVERRIDE_RULES = os.getenv("SHEET_OVERRIDE_RULES", "OverrideRules").strip()
 SHEET_OUTPUT_TEMPLATES = os.getenv("SHEET_OUTPUT_TEMPLATES", "OutputTemplates").strip()
 SHEET_DREAM_JOURNAL = os.getenv("SHEET_DREAM_JOURNAL", "DreamJournal").strip()
@@ -117,10 +118,103 @@ DOCTRINE_SHEET_NAMES = [
     SHEET_BEHAVIOR_RULES,
     SHEET_SIZE_STATE_RULES,
     SHEET_LOCATION_RULES,
+    SHEET_RELATIONSHIP_RULES,
     SHEET_OVERRIDE_RULES,
     SHEET_OUTPUT_TEMPLATES,
 ]
 
+# ============================================================
+# Expected headers for self-healing worksheets
+# ============================================================
+EXPECTED_HEADERS = {
+    WORKSHEET_NAME: [
+        "symbol",
+        "base_spiritual_meaning",
+        "base_physical_effects",
+        "base_action",
+        "keywords",
+        "category",
+        "active",
+    ],
+    SHEET_BASE_SYMBOLS: [
+        "symbol",
+        "category",
+        "base_spiritual_meaning",
+        "base_physical_effects",
+        "base_action",
+        "keywords",
+        "active",
+    ],
+    SHEET_BEHAVIOR_RULES: [
+        "behavior_name",
+        "keywords",
+        "meaning_modifier",
+        "physical_modifier",
+        "action_modifier",
+        "priority",
+        "active",
+    ],
+    SHEET_SIZE_STATE_RULES: [
+        "state_name",
+        "keywords",
+        "meaning_modifier",
+        "physical_modifier",
+        "action_modifier",
+        "priority",
+        "active",
+    ],
+    SHEET_LOCATION_RULES: [
+        "location_name",
+        "keywords",
+        "life_area_meaning",
+        "physical_area_meaning",
+        "action_modifier",
+        "priority",
+        "active",
+    ],
+    SHEET_RELATIONSHIP_RULES: [
+        "relationship_name",
+        "keywords",
+        "meaning_modifier",
+        "physical_modifier",
+        "action_modifier",
+        "priority",
+        "active",
+    ],
+    SHEET_OVERRIDE_RULES: [
+        "override_name",
+        "condition",
+        "final_spiritual_meaning",
+        "final_physical_effects",
+        "final_action",
+        "priority",
+        "active",
+    ],
+    SHEET_OUTPUT_TEMPLATES: [
+        "template_type",
+        "template_text",
+        "active",
+    ],
+    SHEET_DREAM_JOURNAL: [
+        "entry_id",
+        "created_at",
+        "email",
+        "dream_text",
+        "spiritual_meaning",
+        "effects_in_physical_realm",
+        "what_to_do",
+        "full_interpretation",
+        "receipt_id",
+        "top_symbols",
+        "seal_status",
+        "seal_type",
+        "seal_risk",
+        "engine_mode",
+        "access_type",
+        "is_saved",
+        "notes",
+    ],
+}
 
 # ============================================================
 # Hybrid Gate Settings
@@ -134,7 +228,6 @@ SUBSCRIBERS_FILE = os.getenv("SUBSCRIBERS_FILE", "/data/subscribers.json")
 
 USAGE_COUNTS_PATH = Path(COUNTS_FILE)
 SUBSCRIBERS_PATH = Path(SUBSCRIBERS_FILE)
-
 
 # ============================================================
 # Stripe Settings
@@ -150,14 +243,12 @@ PRICE_DREAM_PACK = os.getenv("PRICE_DREAM_PACK", "").strip()
 DREAM_PACK_USES = int(os.getenv("DREAM_PACK_USES", "3"))
 DREAM_PACK_HOURS = int(os.getenv("DREAM_PACK_HOURS", "72"))
 
-
 # ============================================================
 # Cookie settings
 # ============================================================
 COOKIE_SAMESITE = "None"
 COOKIE_SECURE = True
 COOKIE_MAX_AGE = 60 * 60 * 24 * 365
-
 
 # ============================================================
 # Caches
@@ -171,6 +262,11 @@ _DOCTRINE_CACHE: Dict[str, Any] = {"loaded_at": 0.0, "sheets": {}, "headers": {}
 # ============================================================
 def _preflight_ok():
     return make_response("", 204)
+
+
+def _log(*args):
+    if DEBUG_MATCH:
+        print(*args, flush=True)
 
 
 def _normalize_header(h: str) -> str:
@@ -274,11 +370,6 @@ def _sanitize_keywords_for_storage(keywords_raw: str) -> str:
     return ", ".join(_split_keywords(keywords_raw))
 
 
-def _log(*args):
-    if DEBUG_MATCH:
-        print(*args, flush=True)
-
-
 def _clean_sentence(s: str) -> str:
     if not s:
         return ""
@@ -301,6 +392,135 @@ def _ensure_terminal_punct(s: str) -> str:
     if s[-1] not in ".!?":
         s += "."
     return s
+
+
+def _capitalize_first(s: str) -> str:
+    s = _clean_sentence(s)
+    if not s:
+        return ""
+    return s[:1].upper() + s[1:]
+
+
+def _dedupe_words_soft(text: str) -> str:
+    text = _clean_sentence(text)
+    if not text:
+        return ""
+
+    words = text.split()
+    out = []
+    prev = ""
+
+    for w in words:
+        wl = w.lower().strip(".,;:!?")
+        if wl and wl == prev:
+            continue
+        out.append(w)
+        prev = wl
+
+    return " ".join(out)
+
+
+def _sentence(text: str) -> str:
+    text = _dedupe_words_soft(text)
+    text = _capitalize_first(text)
+    return _ensure_terminal_punct(text)
+
+
+def _clean_debug_like_phrase(text: str) -> str:
+    text = _clean_sentence(text)
+    if not text:
+        return ""
+
+    banned_starts = [
+        "logic layer",
+        "behavior detected",
+        "state detected",
+        "location detected",
+        "relationship detected",
+    ]
+    lower = text.lower()
+    for b in banned_starts:
+        if lower.startswith(b):
+            return ""
+    return text
+
+
+def _normalize_effect_phrase(text: str) -> str:
+    text = _strip_trailing_punct(text)
+    if not text:
+        return ""
+
+    lowered = text.lower()
+    replacements = {
+        "active attack": "an active attack",
+        "intensified": "heightened intensity",
+        "personal life": "your personal life",
+        "enemy or deception": "pressure through deception or opposition",
+    }
+    return replacements.get(lowered, text)
+
+
+def _normalize_action_phrase(text: str) -> str:
+    text = _strip_trailing_punct(text)
+    if not text:
+        return ""
+
+    lowered = text.lower()
+    if lowered.startswith("what to do:"):
+        text = text.split(":", 1)[-1].strip()
+        lowered = text.lower()
+
+    elite_map = {
+        "pray and be alert": "Stay prayerful and alert. Be mindful of spiritual influence around you",
+        "pray for wisdom and confirmation": "Pray for wisdom and confirmation. Stay spiritually grounded as clarity comes",
+        "pray": "Pray and remain spiritually steady",
+        "be alert": "Stay alert and guard what concerns you",
+    }
+    return elite_map.get(lowered, text)
+
+
+def _merge_natural_paragraphs(parts: List[str]) -> str:
+    cleaned = []
+    seen = set()
+
+    for p in parts:
+        p = _clean_debug_like_phrase(p)
+        p = _clean_sentence(p)
+        if not p:
+            continue
+        key = p.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(p)
+
+    return "\n".join(cleaned).strip()
+
+
+def _compress_phrase_list(parts: List[str]) -> List[str]:
+    out = []
+    seen = set()
+    for p in parts:
+        p = _strip_trailing_punct(p)
+        if not p:
+            continue
+        key = _normalize_text(p)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
+def _human_join(parts: List[str]) -> str:
+    parts = _compress_phrase_list(parts)
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0]
+    if len(parts) == 2:
+        return f"{parts[0]} and {parts[1]}"
+    return ", ".join(parts[:-1]) + f", and {parts[-1]}"
 
 
 def _safe_debug_payload_preview(data: Dict[str, Any], max_len: int = 500) -> Dict[str, Any]:
@@ -358,9 +578,11 @@ def _normalize_yes_no(v: str) -> bool:
 
 
 def _row_get(row: Dict, *keys: str) -> str:
+    normalized = {_normalize_header(k): v for k, v in row.items()}
     for key in keys:
-        if key in row and str(row.get(key, "")).strip():
-            return str(row.get(key, "")).strip()
+        nk = _normalize_header(key)
+        if nk in normalized and str(normalized.get(nk, "")).strip():
+            return str(normalized.get(nk, "")).strip()
     return ""
 
 
@@ -395,140 +617,9 @@ def _extract_dream_ending_text(dream: str) -> str:
     return " ".join(sentences[-2:]).strip()
 
 
-def _capitalize_first(s: str) -> str:
-    s = _clean_sentence(s)
-    if not s:
-        return ""
-    return s[:1].upper() + s[1:]
-
-
-def _dedupe_words_soft(text: str) -> str:
-    text = _clean_sentence(text)
-    if not text:
-        return ""
-
-    words = text.split()
-    out = []
-    prev = ""
-
-    for w in words:
-        wl = w.lower().strip(".,;:!?")
-        if wl and wl == prev:
-            continue
-        out.append(w)
-        prev = wl
-
-    return " ".join(out)
-
-
-def _sentence(text: str) -> str:
-    text = _dedupe_words_soft(text)
-    text = _capitalize_first(text)
-    return _ensure_terminal_punct(text)
-
-
-def _clean_debug_like_phrase(text: str) -> str:
-    text = _clean_sentence(text)
-    if not text:
-        return ""
-
-    banned_starts = [
-        "logic layer",
-        "behavior detected",
-        "state detected",
-        "location detected",
-    ]
-
-    lower = text.lower()
-    for b in banned_starts:
-        if lower.startswith(b):
-            return ""
-
-    return text
-
-
-def _normalize_effect_phrase(text: str) -> str:
-    text = _strip_trailing_punct(text)
-    if not text:
-        return ""
-
-    lowered = text.lower()
-    replacements = {
-        "active attack": "an active attack",
-        "intensified": "heightened intensity",
-        "personal life": "your personal life",
-        "enemy or deception": "pressure through deception or opposition",
-    }
-    return replacements.get(lowered, text)
-
-
-def _normalize_action_phrase(text: str) -> str:
-    text = _strip_trailing_punct(text)
-    if not text:
-        return ""
-
-    lowered = text.lower()
-
-    if lowered.startswith("what to do:"):
-        text = text.split(":", 1)[-1].strip()
-        lowered = text.lower()
-
-    elite_map = {
-        "pray and be alert": "Stay prayerful and alert. Be mindful of spiritual influence around you",
-        "pray for wisdom and confirmation": "Pray for wisdom and confirmation. Stay spiritually grounded as clarity comes",
-        "pray": "Pray and remain spiritually steady",
-        "be alert": "Stay alert and guard what concerns you",
-    }
-
-    return elite_map.get(lowered, text)
-
-
-def _merge_natural_paragraphs(parts: List[str]) -> str:
-    cleaned = []
-    seen = set()
-
-    for p in parts:
-        p = _clean_debug_like_phrase(p)
-        p = _clean_sentence(p)
-        if not p:
-            continue
-        key = p.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        cleaned.append(p)
-
-    return "\n".join(cleaned).strip()
-
-
-def _compress_phrase_list(parts: List[str]) -> List[str]:
-    out = []
-    seen = set()
-
-    for p in parts:
-        p = _strip_trailing_punct(p)
-        if not p:
-            continue
-        key = _normalize_text(p)
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        out.append(p)
-
-    return out
-
-
-def _human_join(parts: List[str]) -> str:
-    parts = _compress_phrase_list(parts)
-    if not parts:
-        return ""
-    if len(parts) == 1:
-        return parts[0]
-    if len(parts) == 2:
-        return f"{parts[0]} and {parts[1]}"
-    return ", ".join(parts[:-1]) + f", and {parts[-1]}"
-
-
+# ============================================================
+# File utilities
+# ============================================================
 def _read_json_file(path: Path, default: Any):
     try:
         if not path.exists():
@@ -886,16 +977,51 @@ def _get_spreadsheet():
     return gc.open_by_key(SPREADSHEET_ID)
 
 
-def _get_or_create_worksheet(sheet_name: str, rows: int = 1000, cols: int = 30):
+def _worksheet_exists(sh, sheet_name: str) -> bool:
+    try:
+        sh.worksheet(sheet_name)
+        return True
+    except Exception:
+        return False
+
+
+def _get_or_create_worksheet(sheet_name: str, rows: int = 2000, cols: int = 30):
     sh = _get_spreadsheet()
     try:
-        return sh.worksheet(sheet_name)
+        ws = sh.worksheet(sheet_name)
     except Exception:
-        return sh.add_worksheet(title=sheet_name, rows=rows, cols=cols)
+        ws = sh.add_worksheet(title=sheet_name, rows=rows, cols=cols)
+    _ensure_expected_headers(ws, sheet_name)
+    return ws
 
 
-def _get_journal_worksheet():
-    return _get_or_create_worksheet(SHEET_DREAM_JOURNAL, rows=2000, cols=20)
+def _ensure_expected_headers(ws, sheet_name: str):
+    wanted = EXPECTED_HEADERS.get(sheet_name)
+    if not wanted:
+        return
+
+    current = ws.row_values(1)
+    current_norm = [_normalize_header(x) for x in current]
+    wanted_norm = [_normalize_header(x) for x in wanted]
+
+    if not current:
+        end_col = chr(64 + min(len(wanted), 26))
+        ws.update(f"A1:{end_col}1", [wanted], value_input_option="RAW")
+        return
+
+    if current_norm[:len(wanted_norm)] != wanted_norm:
+        end_col = chr(64 + min(len(wanted), 26))
+        ws.update(f"A1:{end_col}1", [wanted], value_input_option="RAW")
+
+
+def _ensure_core_worksheets():
+    sh = _get_spreadsheet()
+    for name in list(EXPECTED_HEADERS.keys()):
+        try:
+            ws = sh.worksheet(name)
+        except Exception:
+            ws = sh.add_worksheet(title=name, rows=2000, cols=30)
+        _ensure_expected_headers(ws, name)
 
 
 def _worksheet_to_rows(ws) -> Tuple[List[str], List[Dict[str, str]]]:
@@ -938,8 +1064,7 @@ def _load_legacy_sheet_rows(force: bool = False) -> List[Dict]:
     if (not force) and _LEGACY_CACHE["rows"] and (now - _LEGACY_CACHE["loaded_at"] < CACHE_TTL_SECONDS):
         return _LEGACY_CACHE["rows"]
 
-    sh = _get_spreadsheet()
-    ws = sh.worksheet(WORKSHEET_NAME)
+    ws = _get_or_create_worksheet(WORKSHEET_NAME)
     headers, rows = _worksheet_to_rows(ws)
 
     _LEGACY_CACHE["rows"] = rows
@@ -953,13 +1078,12 @@ def _load_doctrine_sheets(force: bool = False) -> Dict[str, List[Dict]]:
     if (not force) and _DOCTRINE_CACHE["sheets"] and (now - _DOCTRINE_CACHE["loaded_at"] < CACHE_TTL_SECONDS):
         return _DOCTRINE_CACHE["sheets"]
 
-    sh = _get_spreadsheet()
     sheets_data: Dict[str, List[Dict]] = {}
     headers_map: Dict[str, List[str]] = {}
 
     for name in DOCTRINE_SHEET_NAMES:
         try:
-            ws = sh.worksheet(name)
+            ws = _get_or_create_worksheet(name)
             headers, rows = _worksheet_to_rows(ws)
             sheets_data[name] = rows
             headers_map[name] = headers
@@ -985,44 +1109,11 @@ def _doctrine_sheets_available() -> bool:
 # ============================================================
 # Dream journal helpers
 # ============================================================
-def _journal_required_headers() -> List[str]:
-    return [
-        "entry_id",
-        "created_at",
-        "email",
-        "dream_text",
-        "spiritual_meaning",
-        "effects_in_physical_realm",
-        "what_to_do",
-        "full_interpretation",
-        "receipt_id",
-        "top_symbols",
-        "seal_status",
-        "seal_type",
-        "seal_risk",
-        "engine_mode",
-        "access_type",
-        "is_saved",
-        "notes",
-    ]
-
-
-def _ensure_journal_header_row():
-    ws = _get_journal_worksheet()
-    current = ws.row_values(1)
-    wanted = _journal_required_headers()
-    current_norm = [_normalize_header(x) for x in current]
-
-    if not current:
-        ws.update("A1:Q1", [wanted], value_input_option="RAW")
-        return
-
-    if current_norm[:len(wanted)] != wanted:
-        ws.update("A1:Q1", [wanted], value_input_option="RAW")
+def _get_journal_worksheet():
+    return _get_or_create_worksheet(SHEET_DREAM_JOURNAL)
 
 
 def _append_dream_journal_entry(payload: Dict[str, Any]) -> Dict[str, Any]:
-    _ensure_journal_header_row()
     ws = _get_journal_worksheet()
 
     entry_id = payload.get("entry_id") or f"DJ-{secrets.token_hex(6).upper()}"
@@ -1185,6 +1276,22 @@ def _get_location_action_modifier(row: Dict) -> str:
     return _row_get(row, "action_modifier", "action modifier", "action", "actions")
 
 
+def _get_relationship_name(row: Dict) -> str:
+    return _get_rule_name(row, "relationship_name", "relationship")
+
+
+def _get_relationship_meaning_modifier(row: Dict) -> str:
+    return _row_get(row, "meaning_modifier", "meaning modifier", "effect", "effects")
+
+
+def _get_relationship_physical_modifier(row: Dict) -> str:
+    return _row_get(row, "physical_modifier", "physical modifier", "physical_effect", "physical effects", "effect", "effects")
+
+
+def _get_relationship_action_modifier(row: Dict) -> str:
+    return _row_get(row, "action_modifier", "action modifier", "action", "actions")
+
+
 def _get_output_template(rows: List[Dict], template_type: str, fallback: str) -> str:
     wanted = _normalize_text(template_type)
     for row in rows:
@@ -1195,6 +1302,7 @@ def _get_output_template(rows: List[Dict], template_type: str, fallback: str) ->
             if txt:
                 return txt
     return fallback
+
 
 # ============================================================
 # Matching and interpretation logic
@@ -1276,6 +1384,8 @@ def _match_symbols_legacy(
 
     candidates: List[Tuple[Dict, int, Optional[Dict[str, Any]]]] = []
     for row in rows:
+        if not _row_is_active(row):
+            continue
         sc, hit = _score_row_strict(dream_norm, row, used_spans=[])
         if sc > 0 and hit:
             candidates.append((row, sc, hit))
@@ -1543,6 +1653,8 @@ def _detect_rule_hits(
             name = _get_state_name(row)
         elif kind == "location":
             name = _get_location_name(row)
+        elif kind == "relationship":
+            name = _get_relationship_name(row)
         else:
             name = ""
 
@@ -1600,6 +1712,7 @@ def _override_context(
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     symbol_names = [
         _normalize_text(_get_base_symbol_input(row))
@@ -1613,6 +1726,7 @@ def _override_context(
     behavior_names = [_normalize_text(x["name"]) for x in behaviors if x.get("name")]
     state_names = [_normalize_text(x["name"]) for x in states if x.get("name")]
     location_names = [_normalize_text(x["name"]) for x in locations if x.get("name")]
+    relationship_names = [_normalize_text(x["name"]) for x in relationships if x.get("name")]
 
     return {
         "symbol": set(symbol_names),
@@ -1620,6 +1734,7 @@ def _override_context(
         "behavior": set(behavior_names),
         "state": set(state_names),
         "location": set(location_names),
+        "relationship": set(relationship_names),
         "text": _normalize_text(dream),
         "ending": _normalize_text(_extract_dream_ending_text(dream)),
     }
@@ -1664,7 +1779,7 @@ def _token_matches_context(token: str, ctx: Dict[str, Any]) -> Tuple[bool, int]:
         field_n = _normalize_text(field)
         value_n = _normalize_text(value)
 
-        if field_n in {"symbol", "category", "behavior", "state", "location"}:
+        if field_n in {"symbol", "category", "behavior", "state", "location", "relationship"}:
             exists = value_n in ctx.get(field_n, set())
         elif field_n in {"text", "ending"}:
             exists = _contains_phrase(ctx.get(field_n, ""), value_n)
@@ -1675,11 +1790,11 @@ def _token_matches_context(token: str, ctx: Dict[str, Any]) -> Tuple[bool, int]:
         if negative:
             matched = not matched
 
-        specificity = 5 if field_n in {"symbol", "category", "behavior", "state", "location"} else 3
+        specificity = 5 if field_n in {"symbol", "category", "behavior", "state", "location", "relationship"} else 3
         return matched, specificity
 
     exists_plain = False
-    for field_name in ["symbol", "category", "behavior", "state", "location"]:
+    for field_name in ["symbol", "category", "behavior", "state", "location", "relationship"]:
         if raw_norm in ctx.get(field_name, set()):
             exists_plain = True
             break
@@ -1697,10 +1812,11 @@ def _apply_override_rules(
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
     dream: str,
     override_rows: List[Dict],
 ) -> Optional[Dict[str, Any]]:
-    ctx = _override_context(dream, base_matches, behaviors, states, locations)
+    ctx = _override_context(dream, base_matches, behaviors, states, locations, relationships)
 
     best: Optional[Dict[str, Any]] = None
     best_score = -10**9
@@ -1774,6 +1890,7 @@ def _compute_doctrine_seal(
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
     override_hit: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     ending_text = _extract_dream_ending_text(dream)
@@ -1782,6 +1899,7 @@ def _compute_doctrine_seal(
     behavior_names = {_normalize_text(x["name"]) for x in behaviors}
     state_names = {_normalize_text(x["name"]) for x in states}
     location_names = {_normalize_text(x["name"]) for x in locations}
+    relationship_names = {_normalize_text(x["name"]) for x in relationships}
 
     ending_hits = []
     for row, _sc, _hit in base_matches:
@@ -1822,6 +1940,11 @@ def _compute_doctrine_seal(
         seal_type = "Bound"
         risk = "High"
         message = "The ending places the message in a heavy or restrictive spiritual environment."
+    elif {"mother", "father", "child", "spouse", "friend"} & relationship_names:
+        status = "Focused"
+        seal_type = "Relational"
+        risk = "Medium"
+        message = "The dream ending points toward a relationship-centered message."
     elif ending_hits:
         status = "Sealed"
         seal_type = "Symbol Confirmed"
@@ -1853,6 +1976,7 @@ def _choose_template_type(
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
     interpretation: Dict[str, str],
     seal: Dict[str, Any],
 ) -> str:
@@ -1877,6 +2001,7 @@ def _choose_template_type(
     behavior_names = {_normalize_text(x["name"]) for x in behaviors}
     state_names = {_normalize_text(x["name"]) for x in states}
     location_names = {_normalize_text(x["name"]) for x in locations}
+    relationship_names = {_normalize_text(x["name"]) for x in relationships}
     interp_text = _normalize_text(" ".join(interpretation.values()))
     seal_type = _normalize_text(seal.get("type", ""))
 
@@ -1890,6 +2015,8 @@ def _choose_template_type(
         return "warning"
     if {"graveyard", "prison", "darkness"} & location_names:
         return "warning"
+    if relationship_names:
+        return "relational"
     if any(x in interp_text for x in ["monitoring spirit", "being watched", "spiritual spy"]):
         return "monitoring"
     if any(x in interp_text for x in ["cleansing", "washed", "release"]):
@@ -1897,8 +2024,9 @@ def _choose_template_type(
 
     return "default"
 
+
 # ============================================================
-# Interpretation builders + admin + routes
+# Interpretation builders
 # ============================================================
 def _summarize_symbol_meanings(base_matches: List[Tuple[Dict, int, Dict[str, Any]]]) -> str:
     items = []
@@ -1943,10 +2071,12 @@ def _build_layered_support_paragraph(
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
 ) -> str:
     behavior_parts = _compress_phrase_list([_get_behavior_meaning_modifier(x["row"]) for x in behaviors])
     state_parts = _compress_phrase_list([_get_state_meaning_modifier(x["row"]) for x in states])
     location_parts = _compress_phrase_list([_get_location_life_area_meaning(x["row"]) for x in locations])
+    relationship_parts = _compress_phrase_list([_get_relationship_meaning_modifier(x["row"]) for x in relationships])
 
     lines = []
     if behavior_parts:
@@ -1955,6 +2085,8 @@ def _build_layered_support_paragraph(
         lines.append(_sentence(f"The condition of what appeared points to {_human_join(state_parts)}"))
     if location_parts:
         lines.append(_sentence(f"The setting connects this message to {_human_join(location_parts)}"))
+    if relationship_parts:
+        lines.append(_sentence(f"The people involved point to {_human_join(relationship_parts)}"))
 
     return _merge_natural_paragraphs(lines)
 
@@ -1964,6 +2096,7 @@ def _build_real_world_impact_paragraph(
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
     override_hit: Optional[Dict[str, Any]],
 ) -> str:
     effect_parts = []
@@ -1974,6 +2107,7 @@ def _build_real_world_impact_paragraph(
     effect_parts.extend([_get_behavior_physical_modifier(x["row"]) for x in behaviors])
     effect_parts.extend([_get_state_physical_modifier(x["row"]) for x in states])
     effect_parts.extend([_get_location_physical_area_meaning(x["row"]) for x in locations])
+    effect_parts.extend([_get_relationship_physical_modifier(x["row"]) for x in relationships])
 
     if override_hit:
         effect_parts.append((override_hit or {}).get("physical", ""))
@@ -1992,6 +2126,7 @@ def _build_action_guidance_paragraph(
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
     override_hit: Optional[Dict[str, Any]],
 ) -> str:
     action_parts = []
@@ -2002,6 +2137,7 @@ def _build_action_guidance_paragraph(
     action_parts.extend([_get_behavior_action_modifier(x["row"]) for x in behaviors])
     action_parts.extend([_get_state_action_modifier(x["row"]) for x in states])
     action_parts.extend([_get_location_action_modifier(x["row"]) for x in locations])
+    action_parts.extend([_get_relationship_action_modifier(x["row"]) for x in relationships])
 
     if override_hit:
         action_parts.append((override_hit or {}).get("action", ""))
@@ -2045,6 +2181,7 @@ def _build_doctrine_interpretation(
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
     override_hit: Optional[Dict[str, Any]],
     templates: List[Dict],
     seal: Dict[str, Any],
@@ -2052,9 +2189,9 @@ def _build_doctrine_interpretation(
     top_symbols = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
 
     core_message = _build_core_message(base_matches, override_hit, seal)
-    support_message = _build_layered_support_paragraph(behaviors, states, locations)
-    physical_message = _build_real_world_impact_paragraph(base_matches, behaviors, states, locations, override_hit)
-    action_message = _build_action_guidance_paragraph(base_matches, behaviors, states, locations, override_hit)
+    support_message = _build_layered_support_paragraph(behaviors, states, locations, relationships)
+    physical_message = _build_real_world_impact_paragraph(base_matches, behaviors, states, locations, relationships, override_hit)
+    action_message = _build_action_guidance_paragraph(base_matches, behaviors, states, locations, relationships, override_hit)
     summary_message = _build_final_summary_paragraph(
         {
             "spiritual_meaning": core_message,
@@ -2071,7 +2208,7 @@ def _build_doctrine_interpretation(
     }
 
     template_type = _choose_template_type(
-        override_hit, behaviors, states, locations, interpretation, seal
+        override_hit, behaviors, states, locations, relationships, interpretation, seal
     )
 
     opening_tpl = _get_output_template(
@@ -2089,7 +2226,7 @@ def _build_doctrine_interpretation(
         template_type,
         "{symbol} carries the central meaning of {meaning}. The dream actions support {behavior_effect}. "
         "The condition of what appeared points to {state_effect}. The setting connects this to {location_effect}. "
-        "The ending seals the dream as {seal_type}.",
+        "The people involved point to {relationship_effect}. The ending seals the dream as {seal_type}.",
     )
 
     context = {
@@ -2104,6 +2241,9 @@ def _build_doctrine_interpretation(
         "location_effect": _human_join([
             _get_location_life_area_meaning(x["row"]) for x in locations if _get_location_life_area_meaning(x["row"])
         ]) or "the area of life being touched",
+        "relationship_effect": _human_join([
+            _get_relationship_meaning_modifier(x["row"]) for x in relationships if _get_relationship_meaning_modifier(x["row"])
+        ]) or "the people dimension of the dream",
         "seal_type": seal.get("type", "a layered message"),
     }
 
@@ -2223,6 +2363,8 @@ def _sheet_primary_lookup_headers(sheet_name: str) -> List[str]:
         return ["state_name", "state"]
     if sheet_name == SHEET_LOCATION_RULES:
         return ["location_name", "location"]
+    if sheet_name == SHEET_RELATIONSHIP_RULES:
+        return ["relationship_name", "relationship"]
     if sheet_name == SHEET_OVERRIDE_RULES:
         return ["override_name", "condition"]
     if sheet_name == SHEET_OUTPUT_TEMPLATES:
@@ -2296,6 +2438,7 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
         "BehaviorRules": SHEET_BEHAVIOR_RULES,
         "SizeStateRules": SHEET_SIZE_STATE_RULES,
         "LocationRules": SHEET_LOCATION_RULES,
+        "RelationshipRules": SHEET_RELATIONSHIP_RULES,
         "OverrideRules": SHEET_OVERRIDE_RULES,
         "OutputTemplates": SHEET_OUTPUT_TEMPLATES,
     }
@@ -2315,17 +2458,17 @@ def home():
 def health():
     doctrine_available = False
     journal_available = False
+    self_healing_ready = False
 
     try:
+        _ensure_core_worksheets()
+        self_healing_ready = True
         doctrine_available = _doctrine_sheets_available()
-    except Exception:
-        doctrine_available = False
-
-    try:
-        _ensure_journal_header_row()
         journal_available = True
     except Exception:
+        doctrine_available = False
         journal_available = False
+        self_healing_ready = False
 
     return jsonify({
         "ok": True,
@@ -2333,11 +2476,23 @@ def health():
         "sheet": WORKSHEET_NAME,
         "has_spreadsheet_id": bool(SPREADSHEET_ID),
         "allowed_origins": allowed_origins,
+        "match_mode": "strict_word_boundary_with_longest_phrase_priority_and_overlap_guard",
+        "brain_layers": [
+            "base_symbol_logic",
+            "behavior_logic",
+            "state_logic",
+            "location_logic",
+            "relationship_logic",
+            "ending_seal_logic",
+            "override_logic",
+            "template_logic",
+        ],
         "doctrine_mode_enabled": DOCTRINE_MODE,
         "doctrine_sheets_available": doctrine_available,
         "doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
         "dream_journal_sheet": SHEET_DREAM_JOURNAL,
         "dream_journal_available": journal_available,
+        "self_healing_worksheets_ready": self_healing_ready,
         "free_quota": FREE_TRIES,
         "stripe_configured": bool(_stripe_config_ok()),
         "price_dream_pack_set": bool(PRICE_DREAM_PACK),
@@ -2351,6 +2506,11 @@ def health():
 @app.route("/healthz", methods=["GET"])
 def healthz():
     return health()
+
+
+@app.route("/upgrade", methods=["GET"])
+def upgrade():
+    return redirect(RETURN_URL, code=302)
 
 
 @app.route("/check-access", methods=["POST", "OPTIONS"])
@@ -2512,6 +2672,9 @@ def interpret():
     data = request.get_json(silent=True) or {}
     dream = (data.get("dream") or data.get("text") or "").strip()
 
+    _log("RAW JSON RECEIVED:", _safe_debug_payload_preview(data))
+    _log("RAW DREAM RECEIVED:", repr(dream))
+
     validation_error = _validate_dream_text(dream)
     if validation_error:
         return jsonify({"error": validation_error}), 400
@@ -2538,7 +2701,7 @@ def interpret():
             return jsonify({
                 "blocked": True,
                 "reason": "free_limit_reached",
-                "message": f"You’ve used your {FREE_TRIES} free tries.",
+                "message": f"Youâve used your {FREE_TRIES} free tries.",
                 "free_uses_left": 0,
                 "access": "blocked",
                 "is_paid": False,
@@ -2565,19 +2728,21 @@ def interpret():
             behavior_rows = sheets.get(SHEET_BEHAVIOR_RULES, [])
             state_rows = sheets.get(SHEET_SIZE_STATE_RULES, [])
             location_rows = sheets.get(SHEET_LOCATION_RULES, [])
+            relationship_rows = sheets.get(SHEET_RELATIONSHIP_RULES, [])
             override_rows = sheets.get(SHEET_OVERRIDE_RULES, [])
             template_rows = sheets.get(SHEET_OUTPUT_TEMPLATES, [])
 
-            base_matches = _match_base_symbols_doctrine(dream, base_rows, top_k=3)
+            base_matches = _match_base_symbols_doctrine(dream, base_rows, top_k=BASE_MATCH_TOP_K)
             behaviors = _detect_rule_hits(dream, behavior_rows, "behavior")
             states = _detect_rule_hits(dream, state_rows, "state")
             locations = _detect_rule_hits(dream, location_rows, "location")
-            override_hit = _apply_override_rules(base_matches, behaviors, states, locations, dream, override_rows)
-            doctrine_seal = _compute_doctrine_seal(dream, base_matches, behaviors, states, locations, override_hit)
+            relationships = _detect_rule_hits(dream, relationship_rows, "relationship")
+            override_hit = _apply_override_rules(base_matches, behaviors, states, locations, relationships, dream, override_rows)
+            doctrine_seal = _compute_doctrine_seal(dream, base_matches, behaviors, states, locations, relationships, override_hit)
 
             receipt_id = f"JTS-{secrets.token_hex(4).upper()}"
             built = _build_doctrine_interpretation(
-                dream, base_matches, behaviors, states, locations, override_hit, template_rows, doctrine_seal
+                dream, base_matches, behaviors, states, locations, relationships, override_hit, template_rows, doctrine_seal
             )
 
             payload = {
@@ -2592,6 +2757,7 @@ def interpret():
                     "behaviors": [b["name"] for b in behaviors],
                     "states": [s["name"] for s in states],
                     "locations": [l["name"] for l in locations],
+                    "relationships": [r["name"] for r in relationships],
                     "override_applied": built["override_applied"],
                     "override_name": built["override_name"],
                     "template_type": built.get("template_type", "default"),
@@ -2613,7 +2779,7 @@ def interpret():
         except Exception as e:
             return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
 
-        matches = _match_symbols_legacy(dream, legacy_rows, top_k=3)
+        matches = _match_symbols_legacy(dream, legacy_rows, top_k=BASE_MATCH_TOP_K)
         receipt_id = f"JTS-{secrets.token_hex(4).upper()}"
         seal = _compute_seal_from_symbol_count(len(matches))
         built_legacy = _build_legacy_interpretation(matches)
@@ -2705,7 +2871,6 @@ def journal_history():
 
     try:
         _persist_email_to_session(email)
-        _ensure_journal_header_row()
         ws = _get_journal_worksheet()
         rows = ws.get_all_records()
 
@@ -2799,6 +2964,8 @@ def debug_config():
         "subscribers_file": str(SUBSCRIBERS_PATH),
         "cookie_samesite": COOKIE_SAMESITE,
         "return_url": RETURN_URL,
+        "doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
+        "relationship_rules_sheet": SHEET_RELATIONSHIP_RULES,
     })
 
 

@@ -2359,6 +2359,7 @@ def _summarize_symbol_meanings(base_matches: List[Tuple[Dict, int, Dict[str, Any
 
 
 def _build_core_message(
+    dream: str,
     base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
@@ -2417,6 +2418,7 @@ def _build_layered_support_paragraph(
 
 
 def _build_real_world_impact_paragraph(
+    dream: str,
     base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
@@ -2450,6 +2452,7 @@ def _build_real_world_impact_paragraph(
 
 
 def _build_action_guidance_paragraph(
+    dream: str,
     base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
@@ -2525,10 +2528,10 @@ def _build_doctrine_interpretation(
 ) -> Dict[str, Any]:
     top_symbols = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
 
-    core_message, focus = _build_core_message(base_matches, behaviors, states, locations, relationships, override_hit, seal)
+    core_message, focus = _build_core_message(dream, base_matches, behaviors, states, locations, relationships, override_hit, seal)
     support_message = _build_layered_support_paragraph(dream, behaviors, states, locations, relationships, focus)
-    physical_message = _build_real_world_impact_paragraph(base_matches, behaviors, states, locations, relationships, override_hit, focus)
-    action_message = _build_action_guidance_paragraph(base_matches, behaviors, states, locations, relationships, override_hit)
+    physical_message = _build_real_world_impact_paragraph(dream, base_matches, behaviors, states, locations, relationships, override_hit, focus)
+    action_message = _build_action_guidance_paragraph(dream, base_matches, behaviors, states, locations, relationships, override_hit)
     summary_message = _build_final_summary_paragraph(
         {
             "spiritual_meaning": core_message,

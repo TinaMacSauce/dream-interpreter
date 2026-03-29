@@ -1,3 +1,4 @@
+
 import os
 import json
 import time
@@ -63,6 +64,8 @@ RETURN_URL = os.getenv(
     "https://jamaicantruestories.com/pages/dream-interpreter",
 ).strip()
 WORKSHEET_NAME = os.getenv("WORKSHEET_NAME", "Sheet1").strip()
+TEMPLATE_INDEX = os.getenv("TEMPLATE_INDEX", "index.html").strip()
+TEMPLATE_UPGRADE = os.getenv("TEMPLATE_UPGRADE", "upgrade.html").strip()
 
 ADMIN_KEY = (
     os.getenv("JTS_ADMIN_KEY", "").strip()
@@ -2446,12 +2449,27 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
     return _admin_upsert_generic_sheet(real_sheet_name, payload)
 
 
+
+# ============================================================
+# Template/render helpers
+# ============================================================
+def _safe_return_url(value: str) -> str:
+    value = (value or "").strip()
+    if not value:
+        return RETURN_URL
+    if value.startswith("http://") or value.startswith("https://") or value.startswith("/"):
+        return value
+    return RETURN_URL
+
 # ============================================================
 # Routes
 # ============================================================
 @app.route("/", methods=["GET"])
 def home():
-    return redirect(RETURN_URL, code=302)
+    try:
+        return render_template(TEMPLATE_INDEX)
+    except Exception:
+        return redirect(RETURN_URL, code=302)
 
 
 @app.route("/health", methods=["GET"])
@@ -2500,6 +2518,8 @@ def health():
         "session_premium": _is_premium_session(),
         "session_email": _get_session_email(),
         "session_dream_pack": _get_dream_pack_status(_get_session_email()),
+        "template_index": TEMPLATE_INDEX,
+        "template_upgrade": TEMPLATE_UPGRADE,
     })
 
 
@@ -2510,7 +2530,10 @@ def healthz():
 
 @app.route("/upgrade", methods=["GET"])
 def upgrade():
-    return redirect(RETURN_URL, code=302)
+    try:
+        return render_template(TEMPLATE_UPGRADE)
+    except Exception:
+        return redirect(RETURN_URL, code=302)
 
 
 @app.route("/check-access", methods=["POST", "OPTIONS"])
@@ -2560,13 +2583,20 @@ def create_checkout_session():
     stripe.api_key = STRIPE_SECRET_KEY
 
     try:
+        requested_return = _safe_return_url(
+            request.form.get("return")
+            or request.args.get("return")
+            or request.headers.get("X-Return-Url")
+            or RETURN_URL
+        )
+
         checkout = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": DEFAULT_STRIPE_PRICE_ID, "quantity": 1}],
             customer_email=email,
-            metadata={"purchase_type": "subscription", "email": email},
-            success_url=url_for("payment_success", _external=True) + f"?email={email}",
-            cancel_url=url_for("home", _external=True),
+            metadata={"purchase_type": "subscription", "email": email, "return_url": requested_return},
+            success_url=url_for("payment_success", _external=True) + f"?email={email}&return={requested_return}",
+            cancel_url=url_for("upgrade", _external=True) + f"?email={email}&return={requested_return}",
         )
         return redirect(checkout.url, code=303)
     except Exception as e:
@@ -2586,6 +2616,13 @@ def create_dream_pack_checkout_session():
     stripe.api_key = STRIPE_SECRET_KEY
 
     try:
+        requested_return = _safe_return_url(
+            request.form.get("return")
+            or request.args.get("return")
+            or request.headers.get("X-Return-Url")
+            or RETURN_URL
+        )
+
         checkout = stripe.checkout.Session.create(
             mode="payment",
             line_items=[{"price": PRICE_DREAM_PACK, "quantity": 1}],
@@ -2595,9 +2632,10 @@ def create_dream_pack_checkout_session():
                 "dream_pack_uses": str(DREAM_PACK_USES),
                 "dream_pack_hours": str(DREAM_PACK_HOURS),
                 "email": email,
+                "return_url": requested_return,
             },
-            success_url=url_for("dream_pack_success", _external=True) + f"?email={email}",
-            cancel_url=url_for("home", _external=True),
+            success_url=url_for("dream_pack_success", _external=True) + f"?email={email}&return={requested_return}",
+            cancel_url=url_for("upgrade", _external=True) + f"?email={email}&return={requested_return}",
         )
         return redirect(checkout.url, code=303)
     except Exception as e:
@@ -2607,13 +2645,15 @@ def create_dream_pack_checkout_session():
 @app.route("/payment-success", methods=["GET"])
 def payment_success():
     email = _normalize_email(request.args.get("email") or "")
+    requested_return = _safe_return_url(request.args.get("return") or RETURN_URL)
+
     if _validate_email(email):
         _persist_email_to_session(email)
         access_ok, access_meta = _has_active_access(email)
         if access_ok and access_meta.get("type") == "subscription":
             _set_premium_session(email)
 
-    resp = redirect(RETURN_URL, code=302)
+    resp = redirect(requested_return, code=302)
     resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
     return resp
 
@@ -2621,12 +2661,14 @@ def payment_success():
 @app.route("/dream-pack-success", methods=["GET"])
 def dream_pack_success():
     email = _normalize_email(request.args.get("email") or "")
+    requested_return = _safe_return_url(request.args.get("return") or RETURN_URL)
+
     if _validate_email(email):
         _persist_email_to_session(email)
         _set_buyer_session(email)
         _mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
 
-    resp = redirect(RETURN_URL, code=302)
+    resp = redirect(requested_return, code=302)
     resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
     return resp
 
@@ -2701,11 +2743,12 @@ def interpret():
             return jsonify({
                 "blocked": True,
                 "reason": "free_limit_reached",
-                "message": f"Youâve used your {FREE_TRIES} free tries.",
+                "message": f"You’ve used your {FREE_TRIES} free tries.",
                 "free_uses_left": 0,
                 "access": "blocked",
                 "is_paid": False,
                 "email": session_email,
+                "dream_pack_available": bool(PRICE_DREAM_PACK),
             }), 402
 
     free_uses_left = 0
@@ -2966,6 +3009,8 @@ def debug_config():
         "return_url": RETURN_URL,
         "doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
         "relationship_rules_sheet": SHEET_RELATIONSHIP_RULES,
+        "template_index": TEMPLATE_INDEX,
+        "template_upgrade": TEMPLATE_UPGRADE,
     })
 
 

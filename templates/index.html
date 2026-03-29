@@ -14,7 +14,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Jamaican True Stories • Dream Interpreter</title>
 
-  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 
@@ -852,7 +851,7 @@
       </p>
 
       <div class="jts-health">
-        Health: <a href="/health" target="_blank" rel="noopener noreferrer">/health</a>
+        Health: <a href="https://interpreter.jamaicantruestories.com/health" target="_blank" rel="noopener noreferrer">/health</a>
       </div>
     </div>
   </div>
@@ -899,19 +898,17 @@
 
       function saveEmail(email) {
         const clean = normalizeEmail(email);
-        if (clean) {
-          localStorage.setItem("jts_email", clean);
-        }
+        if (clean) localStorage.setItem("jts_email", clean);
       }
 
       async function track(apiBase, event, metadata) {
         try {
-          await fetch(`${apiBase}/track`, {
+          await fetch(apiBase + "/track", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               user_id: getOrCreateUserId(),
-              event,
+              event: event,
               metadata: metadata || {}
             }),
             credentials: "include"
@@ -956,7 +953,7 @@
       }
 
       onReady(function () {
-        const API_BASE = "";
+        const API_BASE = "https://interpreter.jamaicantruestories.com";
 
         const interpretBtn = document.getElementById("interpret-btn");
         const resultBox = document.getElementById("result");
@@ -978,15 +975,25 @@
         if (!interpretBtn || !resultBox || !dreamInput || !emailInput) return;
 
         const userId = getOrCreateUserId();
+        let accessState = {
+          is_paid: false,
+          free_uses_left: null,
+          dream_pack: { active: false, uses_remaining: 0, expires_at: "" }
+        };
 
         const savedEmail = getSavedEmail();
-        if (savedEmail) {
-          emailInput.value = savedEmail;
-        }
+        if (savedEmail) emailInput.value = savedEmail;
 
         emailInput.addEventListener("blur", function () {
           const clean = normalizeEmail(emailInput.value);
           if (clean) saveEmail(clean);
+          syncAccessCheck(false);
+        });
+
+        emailInput.addEventListener("change", function () {
+          const clean = normalizeEmail(emailInput.value);
+          if (clean) saveEmail(clean);
+          syncAccessCheck(false);
         });
 
         track(API_BASE, "page_view", {
@@ -1009,78 +1016,88 @@
           }
         }
 
-        function setHintTextFromData(data) {
-          if (!softPaywallHint) return;
-
-          const isPaid = !!(data && (data.is_paid === true || data.access === "paid"));
-          const dreamPack = data && data.dream_pack ? data.dream_pack : null;
+        function renderAccessState() {
+          const isPaid = !!accessState.is_paid;
+          const pack = accessState.dream_pack || { active: false, uses_remaining: 0, expires_at: "" };
+          const freeLeft = accessState.free_uses_left;
 
           if (isPaid) {
+            accessStatusEl.innerHTML = "<strong>Access status:</strong> Subscription active. Unlimited interpretations available.";
+            freeRemainingEl.textContent = "Subscription active. Unlimited interpretations available.";
             softPaywallHint.textContent = "Subscription active. Full access is currently available.";
+            upgradeStrip.style.display = "none";
             return;
           }
 
-          if (dreamPack && dreamPack.active) {
-            const uses = typeof dreamPack.uses_remaining === "number" ? dreamPack.uses_remaining : 0;
-            softPaywallHint.textContent = `Dream Pack active. ${uses} interpretation${uses === 1 ? "" : "s"} remaining.`;
+          if (pack.active) {
+            const uses = typeof pack.uses_remaining === "number" ? pack.uses_remaining : 0;
+            const expiry = formatExpiry(pack.expires_at);
+            accessStatusEl.innerHTML = "<strong>Access status:</strong> Dream Pack active • " + uses + " use" + (uses === 1 ? "" : "s") + " remaining" + (expiry ? " • expires " + esc(expiry) : "");
+            freeRemainingEl.textContent = "Dream Pack active • " + uses + " use" + (uses === 1 ? "" : "s") + " remaining";
+            softPaywallHint.textContent = "Dream Pack active. " + uses + " interpretation" + (uses === 1 ? "" : "s") + " remaining.";
+            upgradeStrip.style.display = uses > 0 ? "none" : "block";
             return;
           }
 
+          if (typeof freeLeft === "number") {
+            const used = Math.max(0, 3 - freeLeft);
+            accessStatusEl.innerHTML = "<strong>Access status:</strong> Free mode • " + freeLeft + " free use" + (freeLeft === 1 ? "" : "s") + " remaining";
+            freeRemainingEl.textContent = "Free decodes: " + used + "/3 used • " + freeLeft + " left";
+            softPaywallHint.textContent = freeLeft > 0
+              ? "You still have " + freeLeft + " free interpretation" + (freeLeft === 1 ? "" : "s") + " left."
+              : "Your free interpretations are finished. Continue with a Dream Pack or subscription.";
+            upgradeStrip.style.display = freeLeft <= 0 ? "block" : "none";
+            return;
+          }
+
+          accessStatusEl.innerHTML = "<strong>Access status:</strong> Enter your email and dream to begin.";
+          freeRemainingEl.textContent = "Enter your email and dream to begin.";
           softPaywallHint.textContent = "Start with 3 free interpretations. Enter your email so your access and receipts stay linked to you.";
+          upgradeStrip.style.display = "none";
         }
 
-        function renderAccessStatus(barEl, data) {
-          if (!barEl) return;
+        async function syncAccessCheck(showErrors) {
+          const email = normalizeEmail(emailInput.value);
 
-          const isPaid = !!(data && (data.is_paid === true || data.access === "paid"));
-          const dreamPack = data && data.dream_pack ? data.dream_pack : null;
-          const freeLeft = (data && typeof data.free_uses_left === "number") ? data.free_uses_left : null;
-
-          if (isPaid) {
-            barEl.innerHTML = "<strong>Access status:</strong> Subscription active. Unlimited interpretations available.";
+          if (!email || !isValidEmail(email)) {
+            renderAccessState();
             return;
           }
 
-          if (dreamPack && dreamPack.active) {
-            const uses = typeof dreamPack.uses_remaining === "number" ? dreamPack.uses_remaining : 0;
-            const expiry = formatExpiry(dreamPack.expires_at);
-            barEl.innerHTML = `<strong>Access status:</strong> Dream Pack active • ${uses} use${uses === 1 ? "" : "s"} remaining${expiry ? ` • expires ${esc(expiry)}` : ""}`;
-            return;
+          saveEmail(email);
+
+          try {
+            const res = await fetch(API_BASE + "/check-access", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+              },
+              credentials: "include",
+              body: JSON.stringify({ email: email })
+            });
+
+            const parsed = await readResponse(res);
+            const pack = parsed && parsed.dream_pack ? parsed.dream_pack : { active: false, uses_remaining: 0, expires_at: "" };
+
+            if (res.ok) {
+              accessState.is_paid = parsed && parsed.access === "active";
+              accessState.dream_pack = pack;
+              renderAccessState();
+              return;
+            }
+
+            if (res.status === 402) {
+              accessState.is_paid = false;
+              accessState.dream_pack = { active: false, uses_remaining: 0, expires_at: "" };
+              renderAccessState();
+              return;
+            }
+
+            if (showErrors) console.warn(parsed);
+          } catch (err) {
+            if (showErrors) console.warn(err);
           }
-
-          if (freeLeft !== null) {
-            barEl.innerHTML = `<strong>Access status:</strong> Free mode • ${freeLeft} free use${freeLeft === 1 ? "" : "s"} remaining`;
-            return;
-          }
-
-          barEl.innerHTML = "<strong>Access status:</strong> Enter your email and dream to begin.";
-        }
-
-        function renderFreeStatus(el, data) {
-          if (!el) return;
-
-          const isPaid = !!(data && (data.is_paid === true || data.access === "paid"));
-          const dreamPack = data && data.dream_pack ? data.dream_pack : null;
-
-          if (isPaid) {
-            el.textContent = "Subscription active. Unlimited interpretations available.";
-            return;
-          }
-
-          if (dreamPack && dreamPack.active) {
-            const uses = typeof dreamPack.uses_remaining === "number" ? dreamPack.uses_remaining : 0;
-            el.textContent = `Dream Pack active • ${uses} use${uses === 1 ? "" : "s"} remaining`;
-            return;
-          }
-
-          const left = (data && typeof data.free_uses_left === "number") ? data.free_uses_left : null;
-          if (left === null) {
-            el.textContent = "Enter your email and dream to begin.";
-            return;
-          }
-
-          const used = Math.max(0, 3 - left);
-          el.textContent = `Free decodes: ${used}/3 used • ${left} left`;
         }
 
         function requireEmailOrStop() {
@@ -1111,7 +1128,7 @@
             email_present: true
           });
 
-          window.location.href = "/upgrade?email=" + encodeURIComponent(email);
+          window.location.href = API_BASE + "/upgrade?email=" + encodeURIComponent(email) + "&return=" + encodeURIComponent(location.href.split("#")[0]);
         }
 
         function setLoading(on) {
@@ -1245,19 +1262,16 @@ Ending:
           });
         });
 
-        renderFreeStatus(freeRemainingEl, null);
-        renderAccessStatus(accessStatusEl, null);
-        setHintTextFromData(null);
-
         function renderResult(data) {
           const interp = (data && data.interpretation) ? data.interpretation : {};
           const seal = (data && data.seal) ? data.seal : null;
           const receipt = (data && data.receipt) ? data.receipt : null;
           const dreamPack = data && data.dream_pack ? data.dream_pack : null;
 
-          renderFreeStatus(freeRemainingEl, data);
-          renderAccessStatus(accessStatusEl, data);
-          setHintTextFromData(data);
+          accessState.is_paid = !!(data && (data.is_paid === true || data.access === "paid"));
+          accessState.free_uses_left = (data && typeof data.free_uses_left === "number") ? data.free_uses_left : null;
+          accessState.dream_pack = dreamPack || { active: false, uses_remaining: 0, expires_at: "" };
+          renderAccessState();
 
           const isPaid = !!(data && (data.is_paid === true || data.access === "paid"));
           const freeLeft = (data && typeof data.free_uses_left === "number") ? data.free_uses_left : null;
@@ -1268,9 +1282,9 @@ Ending:
             statusLine = "Subscription active. Unlimited interpretations available.";
           } else if (dreamPackActive) {
             const uses = typeof dreamPack.uses_remaining === "number" ? dreamPack.uses_remaining : 0;
-            statusLine = `Dream Pack active. ${uses} use${uses === 1 ? "" : "s"} remaining.`;
+            statusLine = "Dream Pack active. " + uses + " use" + (uses === 1 ? "" : "s") + " remaining.";
           } else if (freeLeft !== null) {
-            statusLine = `Free uses left: ${freeLeft}`;
+            statusLine = "Free uses left: " + freeLeft;
           }
 
           const effectsText = normalizeEffectsText(interp);
@@ -1278,72 +1292,58 @@ Ending:
           let metaBlocks = "";
 
           if (seal && (seal.status || seal.type || seal.risk)) {
-            metaBlocks += `
-              <div class="jts-card jts-card-soft">
-                <div class="jts-card-label">Seal of the Dream</div>
-                <p>Status: <strong>${esc(seal.status || "N/A")}</strong> • Type: <strong>${esc(seal.type || "N/A")}</strong> • Risk: <strong>${esc(seal.risk || "N/A")}</strong></p>
-              </div>
-            `;
+            metaBlocks += '<div class="jts-card jts-card-soft"><div class="jts-card-label">Seal of the Dream</div><p>Status: <strong>'
+              + esc(seal.status || "N/A")
+              + '</strong> • Type: <strong>'
+              + esc(seal.type || "N/A")
+              + '</strong> • Risk: <strong>'
+              + esc(seal.risk || "N/A")
+              + '</strong></p></div>';
           }
 
           if (receipt) {
-            const topSymbols = Array.isArray(receipt.top_symbols) ? receipt.top_symbols : [];
-            const sharePhrase = receipt.share_phrase || "";
+            metaBlocks += '<div class="jts-card"><div class="jts-card-label">Dream Receipt</div><div style="font-size:0.85rem;opacity:0.9;">Receipt ID: <strong>'
+              + esc(receipt.id || "N/A")
+              + '</strong></div>';
 
-            metaBlocks += `
-              <div class="jts-card">
-                <div class="jts-card-label">Dream Receipt</div>
-                <div style="font-size:0.85rem;opacity:0.9;">Receipt ID: <strong>${esc(receipt.id || "N/A")}</strong></div>
-                ${topSymbols.length ? `<div style="margin-top:8px;font-size:0.88rem;line-height:1.55;"><strong>Top symbols:</strong> ${esc(topSymbols.join(", "))}</div>` : ""}
-                ${sharePhrase ? `
-                  <div style="margin-top:10px;padding:10px;border-radius:10px;border:1px solid rgba(212,175,55,0.25);background:rgba(212,175,55,0.08);">
-                    <div style="font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;opacity:0.85;margin-bottom:6px;color:#f3e28a;">Share Phrase</div>
-                    <div style="font-size:0.88rem;line-height:1.55;opacity:0.95;">${esc(sharePhrase)}</div>
-                  </div>
-                ` : ""}
-              </div>
-            `;
+            if (Array.isArray(receipt.top_symbols) && receipt.top_symbols.length) {
+              metaBlocks += '<div style="margin-top:8px;font-size:0.88rem;line-height:1.55;"><strong>Top symbols:</strong> '
+                + esc(receipt.top_symbols.join(", "))
+                + '</div>';
+            }
+
+            if (receipt.share_phrase) {
+              metaBlocks += '<div style="margin-top:10px;padding:10px;border-radius:10px;border:1px solid rgba(212,175,55,0.25);background:rgba(212,175,55,0.08);">'
+                + '<div style="font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;opacity:0.85;margin-bottom:6px;color:#f3e28a;">Share Phrase</div>'
+                + '<div style="font-size:0.88rem;line-height:1.55;opacity:0.95;">' + esc(receipt.share_phrase) + '</div>'
+                + '</div>';
+            }
+
+            metaBlocks += '</div>';
           }
 
           if (dreamPackActive) {
-            const expiry = formatExpiry(dreamPack.expires_at);
-            metaBlocks += `
-              <div class="jts-card jts-card-info">
-                <div class="jts-card-label">Dream Pack</div>
-                <p>Uses remaining: <strong>${esc(String(dreamPack.uses_remaining || 0))}</strong>${expiry ? ` • Expires: <strong>${esc(expiry)}</strong>` : ""}</p>
-              </div>
-            `;
+            metaBlocks += '<div class="jts-card jts-card-info"><div class="jts-card-label">Dream Pack</div><p>Uses remaining: <strong>'
+              + esc(String(dreamPack.uses_remaining || 0))
+              + '</strong>'
+              + (dreamPack.expires_at ? ' • Expires: <strong>' + esc(formatExpiry(dreamPack.expires_at)) + '</strong>' : '')
+              + '</p></div>';
           }
 
           resultBox.style.display = "block";
-          resultBox.innerHTML = `
-            <div class="jts-result-shell">
-              <div class="jts-result-head">
-                <h2 class="jts-result-title">Interpretation Overview</h2>
-                <p class="jts-result-sub">Here is the structured reading: meaning, likely real-world effects, and what to do next.</p>
-                <p class="jts-result-status">${esc(statusLine)}</p>
-              </div>
-
-              <div class="jts-result-grid">
-                ${metaBlocks}
-
-                <div class="jts-card jts-card-soft">
-                  <div class="jts-card-label">Spiritual Meaning</div>
-                  <p>${esc(normalizeInterpretationValue(interp.spiritual_meaning))}</p>
-                </div>
-
-                <div class="jts-card jts-card-blue">
-                  <div class="jts-card-label">Effects in the Physical Realm</div>
-                  <p>${esc(normalizeInterpretationValue(effectsText))}</p>
-                </div>
-
-                <div class="jts-card jts-card-green">
-                  <div class="jts-card-label">What to Do</div>
-                  <p>${esc(normalizeInterpretationValue(interp.what_to_do))}</p>
-                </div>
-              </div>
-            </div>
-          `;
+          resultBox.innerHTML =
+            '<div class="jts-result-shell">'
+            + '<div class="jts-result-head">'
+            + '<h2 class="jts-result-title">Interpretation Overview</h2>'
+            + '<p class="jts-result-sub">Here is the structured reading: meaning, likely real-world effects, and what to do next.</p>'
+            + '<p class="jts-result-status">' + esc(statusLine) + '</p>'
+            + '</div>'
+            + '<div class="jts-result-grid">'
+            + metaBlocks
+            + '<div class="jts-card jts-card-soft"><div class="jts-card-label">Spiritual Meaning</div><p>' + esc(normalizeInterpretationValue(interp.spiritual_meaning)) + '</p></div>'
+            + '<div class="jts-card jts-card-blue"><div class="jts-card-label">Effects in the Physical Realm</div><p>' + esc(normalizeInterpretationValue(effectsText)) + '</p></div>'
+            + '<div class="jts-card jts-card-green"><div class="jts-card-label">What to Do</div><p>' + esc(normalizeInterpretationValue(interp.what_to_do)) + '</p></div>'
+            + '</div></div>';
 
           if (shareBottom) shareBottom.style.display = "block";
           showFullInterpretation(data && data.full_interpretation);
@@ -1372,16 +1372,11 @@ Ending:
 
         function renderHardError(title, details) {
           resultBox.style.display = "block";
-          resultBox.innerHTML = `
-            <div class="jts-result-shell">
-              <div class="jts-result-grid">
-                <div class="jts-card" style="border-color:rgba(255,179,179,0.25);">
-                  <p style="margin:0 0 8px; color:#ffb3b3;"><strong>${esc(title)}</strong></p>
-                  <pre style="white-space:pre-wrap;background:rgba(0,0,0,0.35);border:1px solid rgba(255,179,179,0.25);padding:10px;border-radius:10px;margin:0;">${esc(details)}</pre>
-                </div>
-              </div>
-            </div>
-          `;
+          resultBox.innerHTML =
+            '<div class="jts-result-shell"><div class="jts-result-grid"><div class="jts-card" style="border-color:rgba(255,179,179,0.25);">'
+            + '<p style="margin:0 0 8px; color:#ffb3b3;"><strong>' + esc(title) + '</strong></p>'
+            + '<pre style="white-space:pre-wrap;background:rgba(0,0,0,0.35);border:1px solid rgba(255,179,179,0.25);padding:10px;border-radius:10px;margin:0;">' + esc(details) + '</pre>'
+            + '</div></div></div>';
           showFullInterpretation("");
           if (upgradeStrip) upgradeStrip.style.display = "none";
           if (shareBottom) shareBottom.style.display = "none";
@@ -1408,7 +1403,7 @@ Ending:
           showProcessing();
 
           try {
-            const res = await fetch(`/interpret`, {
+            const res = await fetch(API_BASE + "/interpret", {
               method: "POST",
               mode: "cors",
               credentials: "include",
@@ -1423,7 +1418,10 @@ Ending:
 
             if (res.status === 402) {
               const data402 = (parsed && typeof parsed === "object") ? parsed : {};
-              const redirectTo = data402.redirect || "/upgrade";
+              accessState.is_paid = false;
+              accessState.free_uses_left = 0;
+              accessState.dream_pack = data402.dream_pack || { active: false, uses_remaining: 0, expires_at: "" };
+              renderAccessState();
 
               track(API_BASE, "paywall_redirect", {
                 user_id: userId,
@@ -1433,12 +1431,10 @@ Ending:
                 email_present: true
               });
 
-              const absolute = redirectTo.startsWith("http")
-                ? redirectTo
-                : redirectTo;
-
+              const redirectTo = data402.redirect || "/upgrade";
+              const absolute = redirectTo.startsWith("http") ? redirectTo : (API_BASE + redirectTo);
               const joiner = absolute.includes("?") ? "&" : "?";
-              window.location.href = absolute + joiner + "email=" + encodeURIComponent(email);
+              window.location.href = absolute + joiner + "email=" + encodeURIComponent(email) + "&return=" + encodeURIComponent(location.href.split("#")[0]);
               return;
             }
 
@@ -1446,7 +1442,7 @@ Ending:
               const body = (typeof parsed === "string")
                 ? parsed
                 : JSON.stringify(parsed, null, 2);
-              throw new Error(`HTTP ${res.status} ${res.statusText}\n${body || "(empty response body)"}`);
+              throw new Error("HTTP " + res.status + " " + res.statusText + "\n" + (body || "(empty response body)"));
             }
 
             const data = parsed || {};
@@ -1461,6 +1457,11 @@ Ending:
             setLoadingAndFocus(false);
           }
         };
+
+        renderAccessState();
+        if (savedEmail && isValidEmail(savedEmail)) {
+          syncAccessCheck(false);
+        }
       });
     })();
   </script>

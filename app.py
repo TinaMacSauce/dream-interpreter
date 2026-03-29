@@ -1,4 +1,3 @@
-
 import os
 import json
 import time
@@ -421,6 +420,156 @@ def _dedupe_words_soft(text: str) -> str:
         prev = wl
 
     return " ".join(out)
+
+
+def _normalize_fragment_key(text: str) -> str:
+    text = _normalize_text(text)
+    if not text:
+        return ""
+
+    lead_ins = [
+        "this may show up as",
+        "in practical terms this may show up as",
+        "the actions in the dream suggest",
+        "the condition of what appeared points to",
+        "the setting connects this message to",
+        "the people involved point to",
+        "the ending seals this as",
+        "the ending confirms",
+        "overall this is a",
+        "the strongest message in this dream is",
+        "the strongest message here points to",
+        "this dream points to",
+    ]
+    for lead in lead_ins:
+        if text.startswith(lead):
+            text = text[len(lead):].strip()
+            break
+
+    text = re.sub(r"\b(points to|represents|shows|suggests|indicates|reveals|confirms)\b", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _dedupe_semantic_fragments(parts: List[str]) -> List[str]:
+    out: List[str] = []
+    seen = set()
+
+    for raw in parts:
+        cleaned = _strip_trailing_punct(_clean_debug_like_phrase(raw))
+        if not cleaned:
+            continue
+
+        key = _normalize_fragment_key(cleaned)
+        if not key:
+            continue
+
+        if key in seen:
+            continue
+
+        duplicate = False
+        key_words = set(key.split())
+        for old in list(seen):
+            old_words = set(old.split())
+            if not old_words or not key_words:
+                continue
+            overlap = len(key_words & old_words)
+            shortest = max(1, min(len(key_words), len(old_words)))
+            if overlap / shortest >= 0.8:
+                duplicate = True
+                break
+
+        if duplicate:
+            continue
+
+        seen.add(key)
+        out.append(cleaned)
+
+    return out
+
+
+def _limit_phrase_list(parts: List[str], max_items: int = 4) -> List[str]:
+    parts = _dedupe_semantic_fragments(parts)
+    if max_items <= 0:
+        return []
+    return parts[:max_items]
+
+
+def _compact_clause(parts: List[str], max_items: int = 3) -> str:
+    items = _limit_phrase_list(parts, max_items=max_items)
+    if not items:
+        return ""
+    return _human_join(items)
+
+
+def _first_sentence(text: str) -> str:
+    sentences = _split_sentences(text)
+    if not sentences:
+        return ""
+    return _sentence(sentences[0])
+
+
+def _compress_action_phrases(parts: List[str], max_items: int = 4) -> List[str]:
+    cleaned = [_normalize_action_phrase(x) for x in parts if x]
+    cleaned = _dedupe_semantic_fragments(cleaned)
+
+    strong = []
+    secondary = []
+    for item in cleaned:
+        lowered = _normalize_text(item)
+        if any(x in lowered for x in ["pray", "alert", "guard", "discern", "wisdom", "move carefully", "do not move blindly"]):
+            strong.append(item)
+        else:
+            secondary.append(item)
+
+    ordered = strong + secondary
+    return ordered[:max_items]
+
+
+def _compress_effect_phrases(parts: List[str], max_items: int = 5) -> List[str]:
+    cleaned = [_normalize_effect_phrase(x) for x in parts if x]
+    cleaned = _dedupe_semantic_fragments(cleaned)
+
+    priority_buckets = {"high": [], "mid": [], "low": []}
+    for item in cleaned:
+        lowered = _normalize_text(item)
+        if any(x in lowered for x in ["pressure", "fear", "conflict", "restriction", "delay", "attack", "deception"]):
+            priority_buckets["high"].append(item)
+        elif any(x in lowered for x in ["relationship", "access", "boundary", "movement", "progress"]):
+            priority_buckets["mid"].append(item)
+        else:
+            priority_buckets["low"].append(item)
+
+    ordered = priority_buckets["high"] + priority_buckets["mid"] + priority_buckets["low"]
+    return ordered[:max_items]
+
+
+def _compact_spiritual_meaning(
+    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
+    override_hit: Optional[Dict[str, Any]],
+    seal: Dict[str, Any],
+) -> str:
+    override_spiritual = _strip_trailing_punct((override_hit or {}).get("spiritual", ""))
+    if override_spiritual:
+        return override_spiritual
+
+    phrases = []
+    for row, _score, _hit in base_matches[:2]:
+        symbol = _strip_trailing_punct(_get_base_symbol_input(row))
+        meaning = _strip_trailing_punct(_get_base_symbol_meaning(row))
+        if symbol and meaning:
+            phrases.append(f"{symbol} points to {meaning}")
+        elif meaning:
+            phrases.append(meaning)
+        elif symbol:
+            phrases.append(symbol)
+
+    compact = _compact_clause(phrases, max_items=2)
+    if compact:
+        return compact
+
+    seal_message = _strip_trailing_punct(seal.get("message", ""))
+    return seal_message
 
 
 def _sentence(text: str) -> str:
@@ -2052,18 +2201,17 @@ def _build_core_message(
     override_hit: Optional[Dict[str, Any]],
     seal: Dict[str, Any],
 ) -> str:
-    override_spiritual = _strip_trailing_punct((override_hit or {}).get("spiritual", ""))
-    symbol_summary = _summarize_symbol_meanings(base_matches)
+    primary_meaning = _compact_spiritual_meaning(base_matches, override_hit, seal)
     seal_type = _strip_trailing_punct(seal.get("type", ""))
     seal_message = _strip_trailing_punct(seal.get("message", ""))
 
     parts = []
-    if override_spiritual:
-        parts.append(_sentence(f"The strongest message in this dream is {override_spiritual}"))
-    if symbol_summary:
-        parts.append(_sentence(symbol_summary))
+    if primary_meaning:
+        parts.append(_sentence(f"This dream points to {primary_meaning}"))
+
     if seal_type:
-        parts.append(_sentence(f"The ending seals this as {seal_type.lower()}"))
+        parts.append(_sentence(f"The ending confirms this as {seal_type.lower()}"))
+
     if seal_message:
         parts.append(_sentence(seal_message))
 
@@ -2076,20 +2224,20 @@ def _build_layered_support_paragraph(
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
 ) -> str:
-    behavior_parts = _compress_phrase_list([_get_behavior_meaning_modifier(x["row"]) for x in behaviors])
-    state_parts = _compress_phrase_list([_get_state_meaning_modifier(x["row"]) for x in states])
-    location_parts = _compress_phrase_list([_get_location_life_area_meaning(x["row"]) for x in locations])
-    relationship_parts = _compress_phrase_list([_get_relationship_meaning_modifier(x["row"]) for x in relationships])
+    behavior_parts = _compact_clause([_get_behavior_meaning_modifier(x["row"]) for x in behaviors], max_items=2)
+    state_parts = _compact_clause([_get_state_meaning_modifier(x["row"]) for x in states], max_items=2)
+    location_parts = _compact_clause([_get_location_life_area_meaning(x["row"]) for x in locations], max_items=1)
+    relationship_parts = _compact_clause([_get_relationship_meaning_modifier(x["row"]) for x in relationships], max_items=1)
 
     lines = []
     if behavior_parts:
-        lines.append(_sentence(f"The actions in the dream suggest {_human_join(behavior_parts)}"))
+        lines.append(_sentence(f"The dream actions suggest {behavior_parts}"))
     if state_parts:
-        lines.append(_sentence(f"The condition of what appeared points to {_human_join(state_parts)}"))
+        lines.append(_sentence(f"The condition of what appeared points to {state_parts}"))
     if location_parts:
-        lines.append(_sentence(f"The setting connects this message to {_human_join(location_parts)}"))
+        lines.append(_sentence(f"The setting connects this message to {location_parts}"))
     if relationship_parts:
-        lines.append(_sentence(f"The people involved point to {_human_join(relationship_parts)}"))
+        lines.append(_sentence(f"The people involved point to {relationship_parts}"))
 
     return _merge_natural_paragraphs(lines)
 
@@ -2115,13 +2263,12 @@ def _build_real_world_impact_paragraph(
     if override_hit:
         effect_parts.append((override_hit or {}).get("physical", ""))
 
-    effect_parts = _compress_phrase_list([_normalize_effect_phrase(x) for x in effect_parts if x])
+    compressed = _compress_effect_phrases(effect_parts, max_items=5)
 
-    if not effect_parts:
+    if not compressed:
         return "No clear physical effects were generated."
 
-    joined = _human_join(effect_parts)
-    return _sentence(f"In practical terms, this may show up as {joined}")
+    return _sentence(f"In practical terms, this may show up as {_human_join(compressed)}")
 
 
 def _build_action_guidance_paragraph(
@@ -2145,12 +2292,23 @@ def _build_action_guidance_paragraph(
     if override_hit:
         action_parts.append((override_hit or {}).get("action", ""))
 
-    action_parts = _compress_phrase_list([_normalize_action_phrase(x) for x in action_parts if x])
+    compressed = _compress_action_phrases(action_parts, max_items=4)
 
-    if not action_parts:
+    if not compressed:
         return "Pray for wisdom and confirmation."
 
-    return _sentence(" ".join(action_parts).strip())
+    if len(compressed) == 1:
+        return _sentence(compressed[0])
+
+    first = _human_join(compressed[:2])
+    if len(compressed) <= 2:
+        return _sentence(first)
+
+    second = _human_join(compressed[2:])
+    return _merge_natural_paragraphs([
+        _sentence(first),
+        _sentence(second),
+    ])
 
 
 def _build_final_summary_paragraph(
@@ -2232,21 +2390,28 @@ def _build_doctrine_interpretation(
         "The people involved point to {relationship_effect}. The ending seals the dream as {seal_type}.",
     )
 
+    compact_symbol = ", ".join([x for x in top_symbols[:2] if x]).strip() or "This dream"
+    compact_meaning = _compact_spiritual_meaning(base_matches, override_hit, seal) or "the main spiritual message here"
+    compact_behavior = _compact_clause([
+        _get_behavior_meaning_modifier(x["row"]) for x in behaviors if _get_behavior_meaning_modifier(x["row"])
+    ], max_items=2) or "the active pattern in the dream"
+    compact_state = _compact_clause([
+        _get_state_meaning_modifier(x["row"]) for x in states if _get_state_meaning_modifier(x["row"])
+    ], max_items=2) or "the condition attached to the message"
+    compact_location = _compact_clause([
+        _get_location_life_area_meaning(x["row"]) for x in locations if _get_location_life_area_meaning(x["row"])
+    ], max_items=1) or "the area of life being touched"
+    compact_relationship = _compact_clause([
+        _get_relationship_meaning_modifier(x["row"]) for x in relationships if _get_relationship_meaning_modifier(x["row"])
+    ], max_items=1) or "the people dimension of the dream"
+
     context = {
-        "symbol": ", ".join(top_symbols[:1]) if top_symbols else "This dream",
-        "meaning": interpretation["spiritual_meaning"],
-        "behavior_effect": _human_join([
-            _get_behavior_meaning_modifier(x["row"]) for x in behaviors if _get_behavior_meaning_modifier(x["row"])
-        ]) or "the active pattern in the dream",
-        "state_effect": _human_join([
-            _get_state_meaning_modifier(x["row"]) for x in states if _get_state_meaning_modifier(x["row"])
-        ]) or "the condition attached to the message",
-        "location_effect": _human_join([
-            _get_location_life_area_meaning(x["row"]) for x in locations if _get_location_life_area_meaning(x["row"])
-        ]) or "the area of life being touched",
-        "relationship_effect": _human_join([
-            _get_relationship_meaning_modifier(x["row"]) for x in relationships if _get_relationship_meaning_modifier(x["row"])
-        ]) or "the people dimension of the dream",
+        "symbol": compact_symbol,
+        "meaning": compact_meaning,
+        "behavior_effect": compact_behavior,
+        "state_effect": compact_state,
+        "location_effect": compact_location,
+        "relationship_effect": compact_relationship,
         "seal_type": seal.get("type", "a layered message"),
     }
 

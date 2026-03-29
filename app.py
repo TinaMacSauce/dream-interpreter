@@ -572,6 +572,88 @@ def _compact_spiritual_meaning(
     return seal_message
 
 
+def _scenario_signal_score(
+    behaviors: List[Dict[str, Any]],
+    states: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
+) -> int:
+    score = 0
+    score += len(behaviors) * 4
+    score += len(states) * 2
+    score += len(locations) * 2
+    score += len(relationships) * 2
+    if len(behaviors) >= 2:
+        score += 6
+    if len(behaviors) >= 3:
+        score += 4
+    if relationships and locations:
+        score += 2
+    return score
+
+
+def _rule_names_set(hits: List[Dict[str, Any]]) -> set:
+    return {_normalize_text(x.get("name", "")) for x in hits if x.get("name")}
+
+
+def _compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: int = 2) -> str:
+    return _compact_clause([getter(x["row"]) for x in hits if getter(x["row"])], max_items=max_items)
+
+
+def _build_primary_focus(
+    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
+    behaviors: List[Dict[str, Any]],
+    states: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
+    override_hit: Optional[Dict[str, Any]],
+    seal: Dict[str, Any],
+) -> Dict[str, str]:
+    if override_hit and _strip_trailing_punct((override_hit or {}).get("spiritual", "")):
+        return {
+            "mode": "override",
+            "lead": _strip_trailing_punct((override_hit or {}).get("spiritual", "")),
+            "behavior": "",
+            "state": "",
+            "location": "",
+            "relationship": "",
+        }
+
+    behavior_clause = _compact_rule_meaning_clause(behaviors, _get_behavior_meaning_modifier, max_items=2)
+    state_clause = _compact_rule_meaning_clause(states, _get_state_meaning_modifier, max_items=1)
+    location_clause = _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1)
+    relationship_clause = _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1)
+    symbol_clause = _compact_spiritual_meaning(base_matches, None, seal)
+
+    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships)
+
+    if scenario_score >= 10 and behavior_clause:
+        lead_parts = [behavior_clause]
+        if location_clause:
+            lead_parts.append(f"around {location_clause}")
+        if relationship_clause:
+            lead_parts.append(f"involving {relationship_clause}")
+        if state_clause:
+            lead_parts.append(f"with {state_clause}")
+        return {
+            "mode": "scenario",
+            "lead": _clean_sentence(" ".join(lead_parts)),
+            "behavior": behavior_clause,
+            "state": state_clause,
+            "location": location_clause,
+            "relationship": relationship_clause,
+        }
+
+    return {
+        "mode": "symbol",
+        "lead": symbol_clause,
+        "behavior": behavior_clause,
+        "state": state_clause,
+        "location": location_clause,
+        "relationship": relationship_clause,
+    }
+
+
 def _sentence(text: str) -> str:
     text = _dedupe_words_soft(text)
     text = _capitalize_first(text)
@@ -1693,12 +1775,25 @@ def _match_base_symbols_doctrine(
     dream: str,
     base_rows: List[Dict],
     top_k: int = 3,
+    behaviors: Optional[List[Dict[str, Any]]] = None,
+    states: Optional[List[Dict[str, Any]]] = None,
+    locations: Optional[List[Dict[str, Any]]] = None,
+    relationships: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Tuple[Dict, int, Dict[str, Any]]]:
     dream_norm = _normalize_text(dream)
     ending_text = _extract_dream_ending_text(dream)
 
     if not dream_norm:
         return []
+
+    behaviors = behaviors or []
+    states = states or []
+    locations = locations or []
+    relationships = relationships or []
+
+    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships)
+    location_rule_names = _rule_names_set(locations)
+    relationship_rule_names = _rule_names_set(relationships)
 
     candidates: List[Tuple[Dict, int, Dict[str, Any]]] = []
 
@@ -1738,6 +1833,14 @@ def _match_base_symbols_doctrine(
             ending_bonus = _ending_bonus_for_symbol(row, ending_text)
             score = _score_base_candidate(row, match_type, symbol_raw) + ending_bonus
 
+            cat = _normalize_category(_get_base_symbol_category(row))
+            if scenario_score >= 10 and cat in {"location", "object"}:
+                score -= 14
+            if scenario_score >= 10 and symbol in location_rule_names:
+                score -= 18
+            if scenario_score >= 8 and symbol in relationship_rule_names:
+                score -= 8
+
             candidates.append((row, score, {
                 "type": match_type,
                 "token": token,
@@ -1759,6 +1862,7 @@ def _match_base_symbols_doctrine(
     selected: List[Tuple[Dict, int, Dict[str, Any]]] = []
     used_spans: List[Tuple[int, int]] = []
     seen_symbols = set()
+    effective_top_k = 2 if scenario_score >= 10 else top_k
 
     for row, score, hit in candidates:
         span = hit.get("span")
@@ -1776,11 +1880,12 @@ def _match_base_symbols_doctrine(
         used_spans.append(span)
         seen_symbols.add(sym_key)
 
-        if len(selected) >= top_k:
+        if len(selected) >= effective_top_k:
             break
 
     selected.sort(key=lambda item: -item[1])
     return selected
+
 
 
 def _detect_rule_hits(
@@ -2198,24 +2303,28 @@ def _summarize_symbol_meanings(base_matches: List[Tuple[Dict, int, Dict[str, Any
 
 def _build_core_message(
     base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
+    behaviors: List[Dict[str, Any]],
+    states: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
     override_hit: Optional[Dict[str, Any]],
     seal: Dict[str, Any],
-) -> str:
-    primary_meaning = _compact_spiritual_meaning(base_matches, override_hit, seal)
+) -> Tuple[str, Dict[str, str]]:
+    focus = _build_primary_focus(base_matches, behaviors, states, locations, relationships, override_hit, seal)
     seal_type = _strip_trailing_punct(seal.get("type", ""))
     seal_message = _strip_trailing_punct(seal.get("message", ""))
 
     parts = []
-    if primary_meaning:
-        parts.append(_sentence(f"This dream points to {primary_meaning}"))
+    if focus.get("lead"):
+        parts.append(_sentence(f"This dream points to {focus['lead']}"))
 
     if seal_type:
         parts.append(_sentence(f"The ending confirms this as {seal_type.lower()}"))
 
-    if seal_message:
+    if seal_message and _normalize_text(seal_message) not in _normalize_text(" ".join(parts)):
         parts.append(_sentence(seal_message))
 
-    return _merge_natural_paragraphs(parts)
+    return _merge_natural_paragraphs(parts), focus
 
 
 def _build_layered_support_paragraph(
@@ -2223,20 +2332,22 @@ def _build_layered_support_paragraph(
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
+    focus: Optional[Dict[str, str]] = None,
 ) -> str:
-    behavior_parts = _compact_clause([_get_behavior_meaning_modifier(x["row"]) for x in behaviors], max_items=2)
-    state_parts = _compact_clause([_get_state_meaning_modifier(x["row"]) for x in states], max_items=2)
-    location_parts = _compact_clause([_get_location_life_area_meaning(x["row"]) for x in locations], max_items=1)
-    relationship_parts = _compact_clause([_get_relationship_meaning_modifier(x["row"]) for x in relationships], max_items=1)
+    focus = focus or {}
+    behavior_parts = _compact_rule_meaning_clause(behaviors, _get_behavior_meaning_modifier, max_items=2)
+    state_parts = _compact_rule_meaning_clause(states, _get_state_meaning_modifier, max_items=1)
+    location_parts = _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1)
+    relationship_parts = _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1)
 
     lines = []
-    if behavior_parts:
+    if behavior_parts and _normalize_text(behavior_parts) != _normalize_text(focus.get("behavior", "")):
         lines.append(_sentence(f"The dream actions suggest {behavior_parts}"))
-    if state_parts:
+    if state_parts and _normalize_text(state_parts) != _normalize_text(focus.get("state", "")):
         lines.append(_sentence(f"The condition of what appeared points to {state_parts}"))
-    if location_parts:
+    if location_parts and _normalize_text(location_parts) != _normalize_text(focus.get("location", "")):
         lines.append(_sentence(f"The setting connects this message to {location_parts}"))
-    if relationship_parts:
+    if relationship_parts and _normalize_text(relationship_parts) != _normalize_text(focus.get("relationship", "")):
         lines.append(_sentence(f"The people involved point to {relationship_parts}"))
 
     return _merge_natural_paragraphs(lines)
@@ -2249,10 +2360,14 @@ def _build_real_world_impact_paragraph(
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
     override_hit: Optional[Dict[str, Any]],
+    focus: Optional[Dict[str, str]] = None,
 ) -> str:
     effect_parts = []
 
-    for row, _score, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
+    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships)
+    base_limit = 1 if scenario_score >= 10 else NARRATIVE_MAX_SYMBOLS
+
+    for row, _score, _hit in base_matches[:base_limit]:
         effect_parts.append(_get_base_symbol_effects(row))
 
     effect_parts.extend([_get_behavior_physical_modifier(x["row"]) for x in behaviors])
@@ -2263,7 +2378,7 @@ def _build_real_world_impact_paragraph(
     if override_hit:
         effect_parts.append((override_hit or {}).get("physical", ""))
 
-    compressed = _compress_effect_phrases(effect_parts, max_items=5)
+    compressed = _compress_effect_phrases(effect_parts, max_items=3 if scenario_score >= 10 else 4)
 
     if not compressed:
         return "No clear physical effects were generated."
@@ -2281,7 +2396,10 @@ def _build_action_guidance_paragraph(
 ) -> str:
     action_parts = []
 
-    for row, _score, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
+    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships)
+    base_limit = 1 if scenario_score >= 10 else NARRATIVE_MAX_SYMBOLS
+
+    for row, _score, _hit in base_matches[:base_limit]:
         action_parts.append(_get_base_symbol_action(row))
 
     action_parts.extend([_get_behavior_action_modifier(x["row"]) for x in behaviors])
@@ -2292,7 +2410,7 @@ def _build_action_guidance_paragraph(
     if override_hit:
         action_parts.append((override_hit or {}).get("action", ""))
 
-    compressed = _compress_action_phrases(action_parts, max_items=4)
+    compressed = _compress_action_phrases(action_parts, max_items=2 if scenario_score >= 10 else 3)
 
     if not compressed:
         return "Pray for wisdom and confirmation."
@@ -2300,14 +2418,9 @@ def _build_action_guidance_paragraph(
     if len(compressed) == 1:
         return _sentence(compressed[0])
 
-    first = _human_join(compressed[:2])
-    if len(compressed) <= 2:
-        return _sentence(first)
-
-    second = _human_join(compressed[2:])
     return _merge_natural_paragraphs([
-        _sentence(first),
-        _sentence(second),
+        _sentence(compressed[0]),
+        _sentence(compressed[1]),
     ])
 
 
@@ -2349,9 +2462,9 @@ def _build_doctrine_interpretation(
 ) -> Dict[str, Any]:
     top_symbols = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
 
-    core_message = _build_core_message(base_matches, override_hit, seal)
-    support_message = _build_layered_support_paragraph(behaviors, states, locations, relationships)
-    physical_message = _build_real_world_impact_paragraph(base_matches, behaviors, states, locations, relationships, override_hit)
+    core_message, focus = _build_core_message(base_matches, behaviors, states, locations, relationships, override_hit, seal)
+    support_message = _build_layered_support_paragraph(behaviors, states, locations, relationships, focus)
+    physical_message = _build_real_world_impact_paragraph(base_matches, behaviors, states, locations, relationships, override_hit, focus)
     action_message = _build_action_guidance_paragraph(base_matches, behaviors, states, locations, relationships, override_hit)
     summary_message = _build_final_summary_paragraph(
         {
@@ -2391,19 +2504,11 @@ def _build_doctrine_interpretation(
     )
 
     compact_symbol = ", ".join([x for x in top_symbols[:2] if x]).strip() or "This dream"
-    compact_meaning = _compact_spiritual_meaning(base_matches, override_hit, seal) or "the main spiritual message here"
-    compact_behavior = _compact_clause([
-        _get_behavior_meaning_modifier(x["row"]) for x in behaviors if _get_behavior_meaning_modifier(x["row"])
-    ], max_items=2) or "the active pattern in the dream"
-    compact_state = _compact_clause([
-        _get_state_meaning_modifier(x["row"]) for x in states if _get_state_meaning_modifier(x["row"])
-    ], max_items=2) or "the condition attached to the message"
-    compact_location = _compact_clause([
-        _get_location_life_area_meaning(x["row"]) for x in locations if _get_location_life_area_meaning(x["row"])
-    ], max_items=1) or "the area of life being touched"
-    compact_relationship = _compact_clause([
-        _get_relationship_meaning_modifier(x["row"]) for x in relationships if _get_relationship_meaning_modifier(x["row"])
-    ], max_items=1) or "the people dimension of the dream"
+    compact_meaning = focus.get("lead") or _compact_spiritual_meaning(base_matches, override_hit, seal) or "the main spiritual message here"
+    compact_behavior = focus.get("behavior") or _compact_rule_meaning_clause(behaviors, _get_behavior_meaning_modifier, max_items=2) or "the active pattern in the dream"
+    compact_state = focus.get("state") or _compact_rule_meaning_clause(states, _get_state_meaning_modifier, max_items=1) or "the condition attached to the message"
+    compact_location = focus.get("location") or _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1) or "the area of life being touched"
+    compact_relationship = focus.get("relationship") or _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1) or "the people dimension of the dream"
 
     context = {
         "symbol": compact_symbol,
@@ -2427,7 +2532,7 @@ def _build_doctrine_interpretation(
         _sentence(closing_tpl),
     ]
 
-    full_interpretation = "\n\n".join([p for p in full_parts if p and p.strip()])
+    TEMP
 
     return {
         "interpretation": interpretation,
@@ -2437,6 +2542,7 @@ def _build_doctrine_interpretation(
         "override_name": (override_hit or {}).get("override_name", ""),
         "template_type": template_type,
     }
+
 
 
 def _build_legacy_interpretation(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
@@ -2940,11 +3046,19 @@ def interpret():
             override_rows = sheets.get(SHEET_OVERRIDE_RULES, [])
             template_rows = sheets.get(SHEET_OUTPUT_TEMPLATES, [])
 
-            base_matches = _match_base_symbols_doctrine(dream, base_rows, top_k=BASE_MATCH_TOP_K)
             behaviors = _detect_rule_hits(dream, behavior_rows, "behavior")
             states = _detect_rule_hits(dream, state_rows, "state")
             locations = _detect_rule_hits(dream, location_rows, "location")
             relationships = _detect_rule_hits(dream, relationship_rows, "relationship")
+            base_matches = _match_base_symbols_doctrine(
+                dream,
+                base_rows,
+                top_k=BASE_MATCH_TOP_K,
+                behaviors=behaviors,
+                states=states,
+                locations=locations,
+                relationships=relationships,
+            )
             override_hit = _apply_override_rules(base_matches, behaviors, states, locations, relationships, dream, override_rows)
             doctrine_seal = _compute_doctrine_seal(dream, base_matches, behaviors, states, locations, relationships, override_hit)
 

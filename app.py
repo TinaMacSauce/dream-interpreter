@@ -1887,7 +1887,6 @@ def _match_base_symbols_doctrine(
     return selected
 
 
-
 def _detect_rule_hits(
     dream: str,
     rows: List[Dict],
@@ -2532,7 +2531,7 @@ def _build_doctrine_interpretation(
         _sentence(closing_tpl),
     ]
 
-    TEMP
+    full_interpretation = _merge_natural_paragraphs(full_parts)
 
     return {
         "interpretation": interpretation,
@@ -2542,7 +2541,6 @@ def _build_doctrine_interpretation(
         "override_name": (override_hit or {}).get("override_name", ""),
         "template_type": template_type,
     }
-
 
 
 def _build_legacy_interpretation(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
@@ -2718,7 +2716,6 @@ def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
     real_sheet_name = sheet_alias_map.get(target_sheet, target_sheet)
     return _admin_upsert_generic_sheet(real_sheet_name, payload)
-
 
 
 # ============================================================

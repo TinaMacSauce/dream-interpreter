@@ -577,18 +577,29 @@ def _scenario_signal_score(
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
+    dream_text: str = "",
 ) -> int:
     score = 0
-    score += len(behaviors) * 4
-    score += len(states) * 2
+    score += len(behaviors) * 8
+    score += len(states) * 3
     score += len(locations) * 2
-    score += len(relationships) * 2
+    score += len(relationships) * 6
+
     if len(behaviors) >= 2:
-        score += 6
+        score += 12
     if len(behaviors) >= 3:
-        score += 4
+        score += 8
     if relationships and locations:
-        score += 2
+        score += 4
+
+    if dream_text:
+        if _detect_transition_instability(dream_text, states):
+            score += 10
+        if _dream_has_escape_cue(dream_text):
+            score += 8
+        if _dream_has_intrusion_cue(dream_text):
+            score += 8
+
     return score
 
 
@@ -601,6 +612,7 @@ def _compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: 
 
 
 def _build_primary_focus(
+    dream: str,
     base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
@@ -625,10 +637,12 @@ def _build_primary_focus(
     relationship_clause = _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1)
     symbol_clause = _compact_spiritual_meaning(base_matches, None, seal)
 
-    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships)
+    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships, dream_text=dream)
 
-    if scenario_score >= 10 and behavior_clause:
-        lead_parts = [behavior_clause]
+    if scenario_score >= 8 and (behavior_clause or state_clause):
+        lead_parts = [x for x in [behavior_clause or state_clause] if x]
+        if _detect_transition_instability(dream, states):
+            lead_parts.append("a situation that changed from calm to unstable")
         if location_clause:
             lead_parts.append(f"around {location_clause}")
         if relationship_clause:
@@ -849,6 +863,50 @@ def _extract_dream_ending_text(dream: str) -> str:
     if len(sentences) == 1:
         return sentences[-1]
     return " ".join(sentences[-2:]).strip()
+
+
+def _contains_any_phrase(text: str, phrases: List[str]) -> bool:
+    text_n = _normalize_text(text)
+    return any(_contains_phrase(text_n, p) for p in phrases if p)
+
+
+def _detect_transition_instability(dream: str, states: List[Dict[str, Any]]) -> bool:
+    text_n = _normalize_text(dream)
+    if not text_n:
+        return False
+
+    state_names = {_normalize_text(x.get("name", "")) for x in states if x.get("name")}
+    contrast_pairs = [
+        ("calm", "rough"),
+        ("clear", "dark"),
+        ("safe", "danger"),
+        ("peaceful", "violent"),
+        ("clean", "dirty"),
+    ]
+
+    for a, b in contrast_pairs:
+        if ((a in state_names and b in state_names) or (_contains_phrase(text_n, a) and _contains_phrase(text_n, b))):
+            if any(x in text_n for x in ["at first", "suddenly", "then", "became", "turned"]):
+                return True
+    return False
+
+
+def _dream_has_escape_cue(dream: str) -> bool:
+    ending = _extract_dream_ending_text(dream)
+    phrases = [
+        "got out", "get out", "came out", "made it out", "escaped", "escape",
+        "got away", "crossed over", "reached shore", "stood on the shore",
+        "closed the door", "locked the door", "left safely", "made it safely",
+    ]
+    return _contains_any_phrase(ending, phrases)
+
+
+def _dream_has_intrusion_cue(dream: str) -> bool:
+    phrases = [
+        "trying to enter", "come inside", "tried to come inside", "pushed him back",
+        "knocking at the door", "opened it", "locked the door", "closed the door",
+    ]
+    return _contains_any_phrase(dream, phrases)
 
 
 # ============================================================
@@ -1791,7 +1849,7 @@ def _match_base_symbols_doctrine(
     locations = locations or []
     relationships = relationships or []
 
-    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships)
+    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships, dream_text=dream)
     location_rule_names = _rule_names_set(locations)
     relationship_rule_names = _rule_names_set(relationships)
 
@@ -2176,7 +2234,7 @@ def _compute_doctrine_seal(
         seal_type = "Death Omen"
         risk = "High"
         message = "The ending and override logic point to a sealed warning."
-    elif {"escaping", "crossing", "finding"} & behavior_names:
+    elif _dream_has_escape_cue(dream) or {"escaping", "crossing", "finding"} & behavior_names:
         status = "Open"
         seal_type = "Breakthrough"
         risk = "Low"
@@ -2309,7 +2367,7 @@ def _build_core_message(
     override_hit: Optional[Dict[str, Any]],
     seal: Dict[str, Any],
 ) -> Tuple[str, Dict[str, str]]:
-    focus = _build_primary_focus(base_matches, behaviors, states, locations, relationships, override_hit, seal)
+    focus = _build_primary_focus(dream, base_matches, behaviors, states, locations, relationships, override_hit, seal)
     seal_type = _strip_trailing_punct(seal.get("type", ""))
     seal_message = _strip_trailing_punct(seal.get("message", ""))
 
@@ -2320,6 +2378,9 @@ def _build_core_message(
     if seal_type:
         parts.append(_sentence(f"The ending confirms this as {seal_type.lower()}"))
 
+    if _dream_has_escape_cue(dream) and not any("release" in _normalize_text(p) or "escape" in _normalize_text(p) for p in parts):
+        parts.append(_sentence("The ending shows that you came out of the danger, so this is a warning with a path of escape"))
+
     if seal_message and _normalize_text(seal_message) not in _normalize_text(" ".join(parts)):
         parts.append(_sentence(seal_message))
 
@@ -2327,6 +2388,7 @@ def _build_core_message(
 
 
 def _build_layered_support_paragraph(
+    dream: str,
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
@@ -2342,7 +2404,9 @@ def _build_layered_support_paragraph(
     lines = []
     if behavior_parts and _normalize_text(behavior_parts) != _normalize_text(focus.get("behavior", "")):
         lines.append(_sentence(f"The dream actions suggest {behavior_parts}"))
-    if state_parts and _normalize_text(state_parts) != _normalize_text(focus.get("state", "")):
+    if _detect_transition_instability(dream, states):
+        lines.append(_sentence("What appeared stable changed suddenly, so the dream is warning about instability hidden beneath a calm surface"))
+    elif state_parts and _normalize_text(state_parts) != _normalize_text(focus.get("state", "")):
         lines.append(_sentence(f"The condition of what appeared points to {state_parts}"))
     if location_parts and _normalize_text(location_parts) != _normalize_text(focus.get("location", "")):
         lines.append(_sentence(f"The setting connects this message to {location_parts}"))
@@ -2363,7 +2427,7 @@ def _build_real_world_impact_paragraph(
 ) -> str:
     effect_parts = []
 
-    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships)
+    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships, dream_text=dream)
     base_limit = 1 if scenario_score >= 10 else NARRATIVE_MAX_SYMBOLS
 
     for row, _score, _hit in base_matches[:base_limit]:
@@ -2395,7 +2459,7 @@ def _build_action_guidance_paragraph(
 ) -> str:
     action_parts = []
 
-    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships)
+    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships, dream_text=dream)
     base_limit = 1 if scenario_score >= 10 else NARRATIVE_MAX_SYMBOLS
 
     for row, _score, _hit in base_matches[:base_limit]:
@@ -2462,7 +2526,7 @@ def _build_doctrine_interpretation(
     top_symbols = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
 
     core_message, focus = _build_core_message(base_matches, behaviors, states, locations, relationships, override_hit, seal)
-    support_message = _build_layered_support_paragraph(behaviors, states, locations, relationships, focus)
+    support_message = _build_layered_support_paragraph(dream, behaviors, states, locations, relationships, focus)
     physical_message = _build_real_world_impact_paragraph(base_matches, behaviors, states, locations, relationships, override_hit, focus)
     action_message = _build_action_guidance_paragraph(base_matches, behaviors, states, locations, relationships, override_hit)
     summary_message = _build_final_summary_paragraph(

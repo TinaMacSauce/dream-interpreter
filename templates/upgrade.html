@@ -21,10 +21,11 @@
       --shadow:rgba(0,0,0,0.92);
       --danger:#ffb3b3;
       --success:#9ae6b4;
+      --info:#c9dcff;
     }
 
     html { -webkit-text-size-adjust: 100%; }
-    *{ box-sizing:border-box; }
+    * { box-sizing: border-box; }
 
     body{
       margin:0;
@@ -34,11 +35,11 @@
       align-items:center;
       padding:24px 16px 40px;
       color:var(--ink);
-      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-      text-rendering: optimizeLegibility;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      background: radial-gradient(circle at top, #1c1724 0, #050509 55%, #020203 100%);
+      font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      text-rendering:optimizeLegibility;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      background:radial-gradient(circle at top, #1c1724 0, #050509 55%, #020203 100%);
       position:relative;
       overflow:hidden;
     }
@@ -60,11 +61,11 @@
       width:min(1080px, 100%);
       border-radius:22px;
       border:1px solid rgba(212,175,55,0.5);
-      box-shadow: 0 0 30px rgba(212,175,55,0.20) inset, 0 24px 50px rgba(0,0,0,0.92);
+      box-shadow:0 0 30px rgba(212,175,55,0.20) inset, 0 24px 50px rgba(0,0,0,0.92);
       background:
         linear-gradient(180deg, rgba(255,215,128,0.06), transparent),
         radial-gradient(circle at top, #1a1410 0, #050509 55%);
-      padding: clamp(16px, 4vw, 28px);
+      padding:clamp(16px, 4vw, 28px);
     }
 
     .jts-card{
@@ -72,16 +73,16 @@
       border:1px solid var(--edge);
       border-radius:18px;
       box-shadow:0 20px 45px var(--shadow);
-      padding: clamp(14px, 2.8vw, 20px);
+      padding:clamp(14px, 2.8vw, 20px);
     }
 
     .jts-grid{
       display:grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 18px;
+      grid-template-columns:1.1fr 0.9fr;
+      gap:18px;
     }
 
-    @media (max-width: 920px){
+    @media (max-width:920px){
       .jts-grid{ grid-template-columns:1fr; }
     }
 
@@ -92,65 +93,65 @@
       border:1px solid rgba(212,175,55,0.45);
       background:rgba(212,175,55,0.10);
       color:var(--gold2);
-      font-size:0.72rem;
-      letter-spacing:0.12em;
+      font-size:.72rem;
+      letter-spacing:.12em;
       text-transform:uppercase;
-      opacity:0.92;
+      opacity:.92;
     }
 
     .jts-h1{
       margin:10px 0 8px;
       text-align:center;
-      font-family: Cinzel, serif;
-      font-size: clamp(1.25rem, 2.4vw, 1.85rem);
+      font-family:Cinzel, serif;
+      font-size:clamp(1.25rem, 2.4vw, 1.85rem);
       line-height:1.15;
-      letter-spacing:0.05em;
+      letter-spacing:.05em;
       text-transform:uppercase;
       color:var(--gold2);
     }
 
     .jts-lede{
-      margin: 0 auto 12px;
-      max-width: 60ch;
+      margin:0 auto 12px;
+      max-width:60ch;
       text-align:center;
-      font-size: 0.96rem;
+      font-size:.96rem;
       line-height:1.65;
-      color: var(--muted);
-      opacity:0.95;
+      color:var(--muted);
+      opacity:.95;
     }
 
     .jts-section-title{
       margin:0 0 8px;
       font-weight:900;
-      font-size:0.9rem;
-      letter-spacing:0.10em;
+      font-size:.9rem;
+      letter-spacing:.10em;
       text-transform:uppercase;
       color:var(--gold2);
-      opacity:0.95;
+      opacity:.95;
     }
 
     .jts-box{
       border-radius:14px;
       border:1px solid rgba(212,175,55,0.25);
       background:rgba(0,0,0,0.55);
-      padding: 12px;
+      padding:12px;
     }
 
     ul{
       margin:10px 0 0;
       padding-left:18px;
-      color: var(--muted);
-      font-size: 0.92rem;
-      line-height: 1.6;
+      color:var(--muted);
+      font-size:.92rem;
+      line-height:1.6;
     }
 
-    li{ margin: 6px 0; }
+    li{ margin:6px 0; }
 
     .jts-note{
       margin-top:12px;
-      font-size:0.82rem;
-      color: var(--muted);
-      opacity:0.88;
+      font-size:.82rem;
+      color:var(--muted);
+      opacity:.88;
       line-height:1.55;
       text-align:center;
     }
@@ -158,9 +159,9 @@
     label{
       display:block;
       margin:10px 0 6px;
-      font-size:0.85rem;
-      color: var(--muted);
-      opacity:0.9;
+      font-size:.85rem;
+      color:var(--muted);
+      opacity:.9;
     }
 
     input{
@@ -169,18 +170,18 @@
       border-radius:14px;
       border:1px solid rgba(212,175,55,0.35);
       background:#050505;
-      color: #f9f9f9;
+      color:#f9f9f9;
       outline:none;
-      font-size: 0.98rem;
+      font-size:.98rem;
       line-height:1.3;
-      box-shadow: inset 0 0 12px rgba(0,0,0,0.65);
+      box-shadow:inset 0 0 12px rgba(0,0,0,0.65);
     }
 
     .row{
       display:flex;
       gap:10px;
       flex-wrap:wrap;
-      margin-top: 10px;
+      margin-top:10px;
     }
 
     .btn{
@@ -192,11 +193,11 @@
       cursor:pointer;
       background:linear-gradient(90deg, var(--gold), var(--gold2));
       color:#111;
-      font-size:0.95rem;
+      font-size:.95rem;
       text-transform:uppercase;
-      letter-spacing:0.05em;
+      letter-spacing:.05em;
       box-shadow:0 10px 25px rgba(0,0,0,0.72);
-      transition: transform .08s ease, filter .12s ease, opacity .12s ease;
+      transition:transform .08s ease, filter .12s ease, opacity .12s ease;
     }
 
     .btn:active{ transform:scale(0.99); }
@@ -209,12 +210,12 @@
       font-weight:900;
       cursor:pointer;
       border:1px solid rgba(212,175,55,0.7);
-      background: rgba(0,0,0,0.55);
-      color: var(--gold2);
-      font-size:0.92rem;
+      background:rgba(0,0,0,0.55);
+      color:var(--gold2);
+      font-size:.92rem;
       text-transform:uppercase;
-      letter-spacing:0.06em;
-      transition: transform .08s ease, filter .12s ease, opacity .12s ease;
+      letter-spacing:.06em;
+      transition:transform .08s ease, filter .12s ease, opacity .12s ease;
     }
 
     .btn-outline:active{ transform:scale(0.99); }
@@ -229,57 +230,57 @@
 
     .mini-link{
       display:inline-block;
-      margin-top: 10px;
+      margin-top:10px;
       text-align:center;
       width:100%;
-      color: rgba(243,226,138,0.92);
-      text-decoration: underline;
-      font-size: 0.86rem;
-      opacity:0.9;
+      color:rgba(243,226,138,0.92);
+      text-decoration:underline;
+      font-size:.86rem;
+      opacity:.9;
     }
 
     .err{
       margin-top:12px;
-      color: var(--danger);
-      font-size:0.86rem;
+      color:var(--danger);
+      font-size:.86rem;
       line-height:1.5;
       min-height:1.2em;
     }
 
     .ok{
       margin-top:12px;
-      color: var(--success);
-      font-size:0.86rem;
+      color:var(--success);
+      font-size:.86rem;
       line-height:1.5;
       min-height:1.2em;
     }
 
     .micro{
       margin-top:12px;
-      font-size:0.78rem;
-      color: var(--muted);
-      opacity:0.86;
+      font-size:.78rem;
+      color:var(--muted);
+      opacity:.86;
       line-height:1.55;
     }
 
     .email-note{
       margin-top:8px;
-      font-size:0.78rem;
-      color: var(--muted);
-      opacity:0.88;
+      font-size:.78rem;
+      color:var(--muted);
+      opacity:.88;
       line-height:1.55;
     }
 
     .divider{
       height:1px;
-      background:linear-gradient(90deg,transparent,rgba(212,175,55,0.25),transparent);
+      background:linear-gradient(90deg, transparent, rgba(212,175,55,0.25), transparent);
       margin:14px 0;
     }
 
     button:focus-visible, a:focus-visible, input:focus-visible{
-      outline: 2px solid rgba(243,226,138,0.85);
-      outline-offset: 2px;
-      border-radius: 10px;
+      outline:2px solid rgba(243,226,138,0.85);
+      outline-offset:2px;
+      border-radius:10px;
     }
 
     @media (prefers-reduced-motion: reduce){
@@ -287,21 +288,19 @@
       .btn, .btn-outline{ transition:none !important; }
     }
 
-    @media (max-width: 520px){
+    @media (max-width:520px){
       .jts-shell{ border-radius:18px; }
       .jts-card{ border-radius:16px; }
-      .jts-lede{ font-size:0.94rem; }
-      .jts-note{ font-size:0.80rem; }
-      ul{ font-size:0.90rem; }
+      .jts-lede{ font-size:.94rem; }
+      .jts-note{ font-size:.80rem; }
+      ul{ font-size:.90rem; }
     }
   </style>
 </head>
 
 <body>
-
   <div class="jts-shell">
     <div class="jts-card">
-
       <div style="text-align:center;">
         <span class="jts-pill">Unlock dream access</span>
       </div>
@@ -313,7 +312,6 @@
       </p>
 
       <div class="jts-grid">
-
         <div class="jts-box">
           <div class="jts-section-title">Choose your access</div>
 
@@ -336,7 +334,7 @@
         <div class="jts-box">
           <div class="jts-section-title">Unlock existing access</div>
 
-          <p style="margin:0 0 10px;color:var(--muted);font-size:0.92rem;line-height:1.6;">
+          <p style="margin:0 0 10px;color:var(--muted);font-size:.92rem;line-height:1.6;">
             Already subscribed or purchased a dream pack? Enter the same email you used at checkout.
           </p>
 
@@ -355,11 +353,11 @@
 
           <div class="jts-section-title">Subscription</div>
 
-          <p style="margin:0 0 10px;color:var(--muted);font-size:0.92rem;line-height:1.6;">
+          <p style="margin:0 0 10px;color:var(--muted);font-size:.92rem;line-height:1.6;">
             Best for ongoing access and repeated dream interpretation.
           </p>
 
-          <form action="/create-checkout-session" method="POST" id="checkoutForm" novalidate>
+          <form action="https://interpreter.jamaicantruestories.com/create-checkout-session" method="POST" id="checkoutForm" novalidate>
             <input type="hidden" name="email" id="emailHidden" value="">
             <button class="btn" type="submit" id="subscriptionBtn">Start Subscription</button>
           </form>
@@ -368,16 +366,16 @@
 
           <div class="jts-section-title">Dream Pack</div>
 
-          <p style="margin:0 0 10px;color:var(--muted);font-size:0.92rem;line-height:1.6;">
+          <p style="margin:0 0 10px;color:var(--muted);font-size:.92rem;line-height:1.6;">
             Buy a smaller access pack for a limited number of dream interpretations.
           </p>
 
-          <form action="/create-dream-pack-checkout-session" method="POST" id="dreamPackForm" novalidate>
+          <form action="https://interpreter.jamaicantruestories.com/create-dream-pack-checkout-session" method="POST" id="dreamPackForm" novalidate>
             <input type="hidden" name="email" id="emailHiddenPack" value="">
             <button class="btn-outline" type="submit" id="dreamPackBtn">Buy Dream Pack</button>
           </form>
 
-          <a class="mini-link" href="/" id="backLink">Return to the interpreter</a>
+          <a class="mini-link" href="https://jamaicantruestories.com/pages/dream-interpreter" id="backLink">Return to the interpreter</a>
 
           <div id="err" class="err" role="alert" aria-live="polite"></div>
           <div id="ok" class="ok" role="status" aria-live="polite"></div>
@@ -386,202 +384,202 @@
             Tip: If you already paid, try the exact email you used during checkout.
           </div>
         </div>
-
       </div>
-
     </div>
   </div>
 
-<script>
-(function(){
-  const emailInput       = document.getElementById("email");
-  const emailHidden      = document.getElementById("emailHidden");
-  const emailHiddenPack  = document.getElementById("emailHiddenPack");
-  const unlockBtn        = document.getElementById("unlock");
-  const err              = document.getElementById("err");
-  const ok               = document.getElementById("ok");
-  const backLink         = document.getElementById("backLink");
-  const checkoutForm     = document.getElementById("checkoutForm");
-  const dreamPackForm    = document.getElementById("dreamPackForm");
-  const subscriptionBtn  = document.getElementById("subscriptionBtn");
-  const dreamPackBtn     = document.getElementById("dreamPackBtn");
+  <script>
+    (function () {
+      const API_BASE = "https://interpreter.jamaicantruestories.com";
+      const DEFAULT_RETURN_URL = "https://jamaicantruestories.com/pages/dream-interpreter";
 
-  function normalizeEmail(email){
-    return String(email || "").trim().toLowerCase();
-  }
+      const emailInput      = document.getElementById("email");
+      const emailHidden     = document.getElementById("emailHidden");
+      const emailHiddenPack = document.getElementById("emailHiddenPack");
+      const unlockBtn       = document.getElementById("unlock");
+      const err             = document.getElementById("err");
+      const ok              = document.getElementById("ok");
+      const backLink        = document.getElementById("backLink");
+      const checkoutForm    = document.getElementById("checkoutForm");
+      const dreamPackForm   = document.getElementById("dreamPackForm");
+      const subscriptionBtn = document.getElementById("subscriptionBtn");
+      const dreamPackBtn    = document.getElementById("dreamPackBtn");
 
-  function setMsg(type, text){
-    if (type === "err") {
-      err.textContent = text || "";
-      ok.textContent = "";
-    } else {
-      ok.textContent = text || "";
-      err.textContent = "";
-    }
-  }
-
-  function validEmail(email){
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
-  }
-
-  function syncEmail(){
-    const value = normalizeEmail(emailInput.value);
-    emailInput.value = value;
-    emailHidden.value = value;
-    emailHiddenPack.value = value;
-  }
-
-  function saveEmail(){
-    const val = normalizeEmail(emailInput.value);
-    if (val) {
-      localStorage.setItem("jts_email", val);
-    }
-  }
-
-  function getEmailFromStorage(){
-    try{
-      return normalizeEmail(localStorage.getItem("jts_email") || "");
-    }catch(e){
-      return "";
-    }
-  }
-
-  function getEmailFromURL(){
-    try{
-      const u = new URL(window.location.href);
-      return normalizeEmail(u.searchParams.get("email") || "");
-    }catch(e){
-      return "";
-    }
-  }
-
-  function getReturnFromURL(){
-    try{
-      const u = new URL(window.location.href);
-      return u.searchParams.get("return") || "";
-    }catch(e){
-      return "";
-    }
-  }
-
-  function requireValidEmail(message){
-    const email = normalizeEmail(emailInput.value);
-    syncEmail();
-
-    if (!email) {
-      setMsg("err", message || "Please enter your email first.");
-      emailInput.focus();
-      return null;
-    }
-
-    if (!validEmail(email)) {
-      setMsg("err", "Please enter a valid email address.");
-      emailInput.focus();
-      return null;
-    }
-
-    saveEmail();
-    setMsg("err", "");
-    return email;
-  }
-
-  function setBusy(btn, busyText, busy){
-    if (!btn) return;
-    if (!btn.dataset.originalText) {
-      btn.dataset.originalText = btn.textContent;
-    }
-    btn.disabled = !!busy;
-    btn.textContent = busy ? busyText : btn.dataset.originalText;
-  }
-
-  const prefillEmail = getEmailFromURL() || getEmailFromStorage();
-  if (prefillEmail) {
-    emailInput.value = prefillEmail;
-  }
-
-  const returnUrl = getReturnFromURL();
-  if (returnUrl) {
-    backLink.href = returnUrl;
-  }
-
-  syncEmail();
-
-  emailInput.addEventListener("input", () => {
-    syncEmail();
-    saveEmail();
-    setMsg("err", "");
-  });
-
-  emailInput.addEventListener("blur", () => {
-    syncEmail();
-    saveEmail();
-  });
-
-  unlockBtn.addEventListener("click", async () => {
-    setMsg("err", "");
-    setMsg("ok", "");
-
-    const email = requireValidEmail("Please enter your email to unlock access.");
-    if (!email) return;
-
-    setBusy(unlockBtn, "Checking…", true);
-
-    try{
-      const res = await fetch("/check-access", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
-        credentials: "include"
-      });
-
-      const data = await res.json().catch(()=>({}));
-
-      if (!res.ok) {
-        setMsg("err", data.message || data.error || "No active access found for that email.");
-        return;
+      function normalizeEmail(email) {
+        return String(email || "").trim().toLowerCase();
       }
 
-      setMsg("ok", "Access confirmed. Redirecting…");
-      setTimeout(() => {
-        window.location.href = data.return_url || backLink.href || "/";
-      }, 700);
+      function setMsg(type, text) {
+        if (type === "err") {
+          err.textContent = text || "";
+          ok.textContent = "";
+        } else {
+          ok.textContent = text || "";
+          err.textContent = "";
+        }
+      }
 
-    } catch(e){
-      setMsg("err", "Something went wrong checking access. Please try again.");
-    } finally{
-      setBusy(unlockBtn, "Checking…", false);
-    }
-  });
+      function validEmail(email) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
+      }
 
-  checkoutForm.addEventListener("submit", (e) => {
-    setMsg("err", "");
-    setMsg("ok", "");
+      function syncEmail() {
+        const value = normalizeEmail(emailInput.value);
+        emailInput.value = value;
+        emailHidden.value = value;
+        emailHiddenPack.value = value;
+      }
 
-    const email = requireValidEmail("Please enter your email before starting subscription checkout.");
-    if (!email) {
-      e.preventDefault();
-      return;
-    }
+      function saveEmail() {
+        const val = normalizeEmail(emailInput.value);
+        if (val) {
+          try {
+            localStorage.setItem("jts_email", val);
+          } catch (e) {}
+        }
+      }
 
-    emailHidden.value = email;
-    setBusy(subscriptionBtn, "Redirecting…", true);
-  });
+      function getEmailFromStorage() {
+        try {
+          return normalizeEmail(localStorage.getItem("jts_email") || "");
+        } catch (e) {
+          return "";
+        }
+      }
 
-  dreamPackForm.addEventListener("submit", (e) => {
-    setMsg("err", "");
-    setMsg("ok", "");
+      function getEmailFromURL() {
+        try {
+          const u = new URL(window.location.href);
+          return normalizeEmail(u.searchParams.get("email") || "");
+        } catch (e) {
+          return "";
+        }
+      }
 
-    const email = requireValidEmail("Please enter your email before buying a Dream Pack.");
-    if (!email) {
-      e.preventDefault();
-      return;
-    }
+      function getReturnFromURL() {
+        try {
+          const u = new URL(window.location.href);
+          return u.searchParams.get("return") || "";
+        } catch (e) {
+          return "";
+        }
+      }
 
-    emailHiddenPack.value = email;
-    setBusy(dreamPackBtn, "Redirecting…", true);
-  });
-})();
-</script>
+      function requireValidEmail(message) {
+        const email = normalizeEmail(emailInput.value);
+        syncEmail();
 
+        if (!email) {
+          setMsg("err", message || "Please enter your email first.");
+          emailInput.focus();
+          return null;
+        }
+
+        if (!validEmail(email)) {
+          setMsg("err", "Please enter a valid email address.");
+          emailInput.focus();
+          return null;
+        }
+
+        saveEmail();
+        setMsg("err", "");
+        return email;
+      }
+
+      function setBusy(btn, busyText, busy) {
+        if (!btn) return;
+        if (!btn.dataset.originalText) {
+          btn.dataset.originalText = btn.textContent;
+        }
+        btn.disabled = !!busy;
+        btn.textContent = busy ? busyText : btn.dataset.originalText;
+      }
+
+      const prefillEmail = getEmailFromURL() || getEmailFromStorage();
+      if (prefillEmail) {
+        emailInput.value = prefillEmail;
+      }
+
+      const returnUrl = getReturnFromURL() || DEFAULT_RETURN_URL;
+      backLink.href = returnUrl;
+
+      syncEmail();
+
+      emailInput.addEventListener("input", function () {
+        syncEmail();
+        saveEmail();
+        setMsg("err", "");
+      });
+
+      emailInput.addEventListener("blur", function () {
+        syncEmail();
+        saveEmail();
+      });
+
+      unlockBtn.addEventListener("click", async function () {
+        setMsg("err", "");
+        setMsg("ok", "");
+
+        const email = requireValidEmail("Please enter your email to unlock access.");
+        if (!email) return;
+
+        setBusy(unlockBtn, "Checking…", true);
+
+        try {
+          const res = await fetch(API_BASE + "/check-access", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: email }),
+            credentials: "include"
+          });
+
+          const data = await res.json().catch(function () { return {}; });
+
+          if (!res.ok) {
+            setMsg("err", data.message || data.error || "No active access found for that email.");
+            return;
+          }
+
+          setMsg("ok", "Access confirmed. Redirecting…");
+          setTimeout(function () {
+            window.location.href = data.return_url || returnUrl;
+          }, 700);
+
+        } catch (e) {
+          setMsg("err", "Something went wrong checking access. Please try again.");
+        } finally {
+          setBusy(unlockBtn, "Checking…", false);
+        }
+      });
+
+      checkoutForm.addEventListener("submit", function (e) {
+        setMsg("err", "");
+        setMsg("ok", "");
+
+        const email = requireValidEmail("Please enter your email before starting subscription checkout.");
+        if (!email) {
+          e.preventDefault();
+          return;
+        }
+
+        emailHidden.value = email;
+        setBusy(subscriptionBtn, "Redirecting…", true);
+      });
+
+      dreamPackForm.addEventListener("submit", function (e) {
+        setMsg("err", "");
+        setMsg("ok", "");
+
+        const email = requireValidEmail("Please enter your email before buying a Dream Pack.");
+        if (!email) {
+          e.preventDefault();
+          return;
+        }
+
+        emailHiddenPack.value = email;
+        setBusy(dreamPackBtn, "Redirecting…", true);
+      });
+    })();
+  </script>
 </body>
 </html>

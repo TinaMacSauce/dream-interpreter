@@ -422,238 +422,6 @@ def _dedupe_words_soft(text: str) -> str:
     return " ".join(out)
 
 
-def _normalize_fragment_key(text: str) -> str:
-    text = _normalize_text(text)
-    if not text:
-        return ""
-
-    lead_ins = [
-        "this may show up as",
-        "in practical terms this may show up as",
-        "the actions in the dream suggest",
-        "the condition of what appeared points to",
-        "the setting connects this message to",
-        "the people involved point to",
-        "the ending seals this as",
-        "the ending confirms",
-        "overall this is a",
-        "the strongest message in this dream is",
-        "the strongest message here points to",
-        "this dream points to",
-    ]
-    for lead in lead_ins:
-        if text.startswith(lead):
-            text = text[len(lead):].strip()
-            break
-
-    text = re.sub(r"\b(points to|represents|shows|suggests|indicates|reveals|confirms)\b", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-
-
-def _dedupe_semantic_fragments(parts: List[str]) -> List[str]:
-    out: List[str] = []
-    seen = set()
-
-    for raw in parts:
-        cleaned = _strip_trailing_punct(_clean_debug_like_phrase(raw))
-        if not cleaned:
-            continue
-
-        key = _normalize_fragment_key(cleaned)
-        if not key:
-            continue
-
-        if key in seen:
-            continue
-
-        duplicate = False
-        key_words = set(key.split())
-        for old in list(seen):
-            old_words = set(old.split())
-            if not old_words or not key_words:
-                continue
-            overlap = len(key_words & old_words)
-            shortest = max(1, min(len(key_words), len(old_words)))
-            if overlap / shortest >= 0.8:
-                duplicate = True
-                break
-
-        if duplicate:
-            continue
-
-        seen.add(key)
-        out.append(cleaned)
-
-    return out
-
-
-def _limit_phrase_list(parts: List[str], max_items: int = 4) -> List[str]:
-    parts = _dedupe_semantic_fragments(parts)
-    if max_items <= 0:
-        return []
-    return parts[:max_items]
-
-
-def _compact_clause(parts: List[str], max_items: int = 3) -> str:
-    items = _limit_phrase_list(parts, max_items=max_items)
-    if not items:
-        return ""
-    return _human_join(items)
-
-
-def _first_sentence(text: str) -> str:
-    sentences = _split_sentences(text)
-    if not sentences:
-        return ""
-    return _sentence(sentences[0])
-
-
-def _compress_action_phrases(parts: List[str], max_items: int = 4) -> List[str]:
-    cleaned = [_normalize_action_phrase(x) for x in parts if x]
-    cleaned = _dedupe_semantic_fragments(cleaned)
-
-    strong = []
-    secondary = []
-    for item in cleaned:
-        lowered = _normalize_text(item)
-        if any(x in lowered for x in ["pray", "alert", "guard", "discern", "wisdom", "move carefully", "do not move blindly"]):
-            strong.append(item)
-        else:
-            secondary.append(item)
-
-    ordered = strong + secondary
-    return ordered[:max_items]
-
-
-def _compress_effect_phrases(parts: List[str], max_items: int = 5) -> List[str]:
-    cleaned = [_normalize_effect_phrase(x) for x in parts if x]
-    cleaned = _dedupe_semantic_fragments(cleaned)
-
-    priority_buckets = {"high": [], "mid": [], "low": []}
-    for item in cleaned:
-        lowered = _normalize_text(item)
-        if any(x in lowered for x in ["pressure", "fear", "conflict", "restriction", "delay", "attack", "deception"]):
-            priority_buckets["high"].append(item)
-        elif any(x in lowered for x in ["relationship", "access", "boundary", "movement", "progress"]):
-            priority_buckets["mid"].append(item)
-        else:
-            priority_buckets["low"].append(item)
-
-    ordered = priority_buckets["high"] + priority_buckets["mid"] + priority_buckets["low"]
-    return ordered[:max_items]
-
-
-def _compact_spiritual_meaning(
-    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
-    override_hit: Optional[Dict[str, Any]],
-    seal: Dict[str, Any],
-) -> str:
-    override_spiritual = _strip_trailing_punct((override_hit or {}).get("spiritual", ""))
-    if override_spiritual:
-        return override_spiritual
-
-    phrases = []
-    for row, _score, _hit in base_matches[:2]:
-        symbol = _strip_trailing_punct(_get_base_symbol_input(row))
-        meaning = _strip_trailing_punct(_get_base_symbol_meaning(row))
-        if symbol and meaning:
-            phrases.append(f"{symbol} points to {meaning}")
-        elif meaning:
-            phrases.append(meaning)
-        elif symbol:
-            phrases.append(symbol)
-
-    compact = _compact_clause(phrases, max_items=2)
-    if compact:
-        return compact
-
-    seal_message = _strip_trailing_punct(seal.get("message", ""))
-    return seal_message
-
-
-def _scenario_signal_score(
-    behaviors: List[Dict[str, Any]],
-    states: List[Dict[str, Any]],
-    locations: List[Dict[str, Any]],
-    relationships: List[Dict[str, Any]],
-) -> int:
-    score = 0
-    score += len(behaviors) * 4
-    score += len(states) * 2
-    score += len(locations) * 2
-    score += len(relationships) * 2
-    if len(behaviors) >= 2:
-        score += 6
-    if len(behaviors) >= 3:
-        score += 4
-    if relationships and locations:
-        score += 2
-    return score
-
-
-def _rule_names_set(hits: List[Dict[str, Any]]) -> set:
-    return {_normalize_text(x.get("name", "")) for x in hits if x.get("name")}
-
-
-def _compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: int = 2) -> str:
-    return _compact_clause([getter(x["row"]) for x in hits if getter(x["row"])], max_items=max_items)
-
-
-def _build_primary_focus(
-    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
-    behaviors: List[Dict[str, Any]],
-    states: List[Dict[str, Any]],
-    locations: List[Dict[str, Any]],
-    relationships: List[Dict[str, Any]],
-    override_hit: Optional[Dict[str, Any]],
-    seal: Dict[str, Any],
-) -> Dict[str, str]:
-    if override_hit and _strip_trailing_punct((override_hit or {}).get("spiritual", "")):
-        return {
-            "mode": "override",
-            "lead": _strip_trailing_punct((override_hit or {}).get("spiritual", "")),
-            "behavior": "",
-            "state": "",
-            "location": "",
-            "relationship": "",
-        }
-
-    behavior_clause = _compact_rule_meaning_clause(behaviors, _get_behavior_meaning_modifier, max_items=2)
-    state_clause = _compact_rule_meaning_clause(states, _get_state_meaning_modifier, max_items=1)
-    location_clause = _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1)
-    relationship_clause = _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1)
-    symbol_clause = _compact_spiritual_meaning(base_matches, None, seal)
-
-    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships)
-
-    if scenario_score >= 10 and behavior_clause:
-        lead_parts = [behavior_clause]
-        if location_clause:
-            lead_parts.append(f"around {location_clause}")
-        if relationship_clause:
-            lead_parts.append(f"involving {relationship_clause}")
-        if state_clause:
-            lead_parts.append(f"with {state_clause}")
-        return {
-            "mode": "scenario",
-            "lead": _clean_sentence(" ".join(lead_parts)),
-            "behavior": behavior_clause,
-            "state": state_clause,
-            "location": location_clause,
-            "relationship": relationship_clause,
-        }
-
-    return {
-        "mode": "symbol",
-        "lead": symbol_clause,
-        "behavior": behavior_clause,
-        "state": state_clause,
-        "location": location_clause,
-        "relationship": relationship_clause,
-    }
-
-
 def _sentence(text: str) -> str:
     text = _dedupe_words_soft(text)
     text = _capitalize_first(text)
@@ -849,6 +617,13 @@ def _extract_dream_ending_text(dream: str) -> str:
     if len(sentences) == 1:
         return sentences[-1]
     return " ".join(sentences[-2:]).strip()
+
+
+def _contains_any_phrase(text: str, phrases: List[str]) -> bool:
+    text_n = _normalize_text(text)
+    if not text_n:
+        return False
+    return any(_contains_phrase(text_n, p) for p in phrases if p)
 
 
 # ============================================================
@@ -1775,25 +1550,12 @@ def _match_base_symbols_doctrine(
     dream: str,
     base_rows: List[Dict],
     top_k: int = 3,
-    behaviors: Optional[List[Dict[str, Any]]] = None,
-    states: Optional[List[Dict[str, Any]]] = None,
-    locations: Optional[List[Dict[str, Any]]] = None,
-    relationships: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Tuple[Dict, int, Dict[str, Any]]]:
     dream_norm = _normalize_text(dream)
     ending_text = _extract_dream_ending_text(dream)
 
     if not dream_norm:
         return []
-
-    behaviors = behaviors or []
-    states = states or []
-    locations = locations or []
-    relationships = relationships or []
-
-    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships)
-    location_rule_names = _rule_names_set(locations)
-    relationship_rule_names = _rule_names_set(relationships)
 
     candidates: List[Tuple[Dict, int, Dict[str, Any]]] = []
 
@@ -1833,14 +1595,6 @@ def _match_base_symbols_doctrine(
             ending_bonus = _ending_bonus_for_symbol(row, ending_text)
             score = _score_base_candidate(row, match_type, symbol_raw) + ending_bonus
 
-            cat = _normalize_category(_get_base_symbol_category(row))
-            if scenario_score >= 10 and cat in {"location", "object"}:
-                score -= 14
-            if scenario_score >= 10 and symbol in location_rule_names:
-                score -= 18
-            if scenario_score >= 8 and symbol in relationship_rule_names:
-                score -= 8
-
             candidates.append((row, score, {
                 "type": match_type,
                 "token": token,
@@ -1862,7 +1616,6 @@ def _match_base_symbols_doctrine(
     selected: List[Tuple[Dict, int, Dict[str, Any]]] = []
     used_spans: List[Tuple[int, int]] = []
     seen_symbols = set()
-    effective_top_k = 2 if scenario_score >= 10 else top_k
 
     for row, score, hit in candidates:
         span = hit.get("span")
@@ -1880,12 +1633,11 @@ def _match_base_symbols_doctrine(
         used_spans.append(span)
         seen_symbols.add(sym_key)
 
-        if len(selected) >= effective_top_k:
+        if len(selected) >= top_k:
             break
 
     selected.sort(key=lambda item: -item[1])
     return selected
-
 
 
 def _detect_rule_hits(
@@ -2264,8 +2016,6 @@ def _choose_template_type(
 
     if "death omen" in seal_type:
         return "death_omen"
-    if "protection" in seal_type or "discernment" in seal_type:
-        return "warning"
     if {"being attacked", "being chased", "fighting"} & behavior_names:
         return "warfare"
     if {"escaping", "crossing", "finding"} & behavior_names:
@@ -2327,10 +2077,16 @@ def _build_core_message(
     if event_scenario.get("support"):
         parts.append(_sentence(event_scenario["support"]))
 
+    event_seal_type = _strip_trailing_punct(event_scenario.get("seal_type", ""))
+    if event_seal_type:
+        seal_type = event_seal_type
+
     if seal_type:
         parts.append(_sentence(f"The ending confirms this as {seal_type.lower()}"))
 
-    if _dream_has_escape_cue(dream) and not any("release" in _normalize_text(p) or "escape" in _normalize_text(p) or "came out" in _normalize_text(p) for p in parts):
+    if _dream_has_escape_cue(dream) and not any(
+        x in _normalize_text(" ".join(parts)) for x in ["release", "escape", "came out", "regain control"]
+    ):
         parts.append(_sentence("The ending shows that you came out of the danger, so this is a warning with a path of escape"))
 
     if seal_message and _normalize_text(seal_message) not in _normalize_text(" ".join(parts)):
@@ -2340,60 +2096,40 @@ def _build_core_message(
 
 
 def _build_layered_support_paragraph(
-    dream: str,
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
-    focus: Optional[Dict[str, str]] = None,
-    event_scenario: Optional[Dict[str, str]] = None,
 ) -> str:
-    focus = focus or {}
-    event_scenario = event_scenario or {}
-    behavior_parts = _compact_rule_meaning_clause(behaviors, _get_behavior_meaning_modifier, max_items=2)
-    state_parts = _compact_rule_meaning_clause(states, _get_state_meaning_modifier, max_items=1)
-    location_parts = _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1)
-    relationship_parts = _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1)
+    behavior_parts = _compress_phrase_list([_get_behavior_meaning_modifier(x["row"]) for x in behaviors])
+    state_parts = _compress_phrase_list([_get_state_meaning_modifier(x["row"]) for x in states])
+    location_parts = _compress_phrase_list([_get_location_life_area_meaning(x["row"]) for x in locations])
+    relationship_parts = _compress_phrase_list([_get_relationship_meaning_modifier(x["row"]) for x in relationships])
 
     lines = []
-    if event_scenario.get("support"):
-        lines.append(_sentence(event_scenario["support"]))
-
-    if behavior_parts and _normalize_text(behavior_parts) != _normalize_text(focus.get("behavior", "")):
-        lines.append(_sentence(f"The dream actions suggest {behavior_parts}"))
-    if _detect_transition_instability(dream, states):
-        lines.append(_sentence("What appeared stable changed suddenly, so the dream is warning about instability hidden beneath a calm surface"))
-    elif state_parts and _normalize_text(state_parts) != _normalize_text(focus.get("state", "")):
-        lines.append(_sentence(f"The condition of what appeared points to {state_parts}"))
-    if location_parts and _normalize_text(location_parts) != _normalize_text(focus.get("location", "")):
-        lines.append(_sentence(f"The setting connects this message to {location_parts}"))
-    if relationship_parts and _normalize_text(relationship_parts) != _normalize_text(focus.get("relationship", "")):
-        lines.append(_sentence(f"The people involved point to {relationship_parts}"))
+    if behavior_parts:
+        lines.append(_sentence(f"The actions in the dream suggest {_human_join(behavior_parts)}"))
+    if state_parts:
+        lines.append(_sentence(f"The condition of what appeared points to {_human_join(state_parts)}"))
+    if location_parts:
+        lines.append(_sentence(f"The setting connects this message to {_human_join(location_parts)}"))
+    if relationship_parts:
+        lines.append(_sentence(f"The people involved point to {_human_join(relationship_parts)}"))
 
     return _merge_natural_paragraphs(lines)
 
 
 def _build_real_world_impact_paragraph(
-    dream: str,
     base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
     override_hit: Optional[Dict[str, Any]],
-    focus: Optional[Dict[str, str]] = None,
-    event_scenario: Optional[Dict[str, str]] = None,
 ) -> str:
     effect_parts = []
-    event_scenario = event_scenario or {}
 
-    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships, dream_text=dream)
-    base_limit = 1 if scenario_score >= 10 else NARRATIVE_MAX_SYMBOLS
-
-    if event_scenario.get("effects"):
-        effect_parts.append(event_scenario["effects"])
-
-    for row, _score, _hit in base_matches[:base_limit]:
+    for row, _score, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
         effect_parts.append(_get_base_symbol_effects(row))
 
     effect_parts.extend([_get_behavior_physical_modifier(x["row"]) for x in behaviors])
@@ -2404,34 +2140,26 @@ def _build_real_world_impact_paragraph(
     if override_hit:
         effect_parts.append((override_hit or {}).get("physical", ""))
 
-    compressed = _compress_effect_phrases(effect_parts, max_items=3 if scenario_score >= 10 else 4)
+    effect_parts = _compress_phrase_list([_normalize_effect_phrase(x) for x in effect_parts if x])
 
-    if not compressed:
+    if not effect_parts:
         return "No clear physical effects were generated."
 
-    return _sentence(f"In practical terms, this may show up as {_human_join(compressed)}")
+    joined = _human_join(effect_parts)
+    return _sentence(f"In practical terms, this may show up as {joined}")
 
 
 def _build_action_guidance_paragraph(
-    dream: str,
     base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
     override_hit: Optional[Dict[str, Any]],
-    event_scenario: Optional[Dict[str, str]] = None,
 ) -> str:
     action_parts = []
-    event_scenario = event_scenario or {}
 
-    scenario_score = _scenario_signal_score(behaviors, states, locations, relationships, dream_text=dream)
-    base_limit = 1 if scenario_score >= 10 else NARRATIVE_MAX_SYMBOLS
-
-    if event_scenario.get("action"):
-        action_parts.append(event_scenario["action"])
-
-    for row, _score, _hit in base_matches[:base_limit]:
+    for row, _score, _hit in base_matches[:NARRATIVE_MAX_SYMBOLS]:
         action_parts.append(_get_base_symbol_action(row))
 
     action_parts.extend([_get_behavior_action_modifier(x["row"]) for x in behaviors])
@@ -2442,18 +2170,12 @@ def _build_action_guidance_paragraph(
     if override_hit:
         action_parts.append((override_hit or {}).get("action", ""))
 
-    compressed = _compress_action_phrases(action_parts, max_items=2 if scenario_score >= 10 else 3)
+    action_parts = _compress_phrase_list([_normalize_action_phrase(x) for x in action_parts if x])
 
-    if not compressed:
+    if not action_parts:
         return "Pray for wisdom and confirmation."
 
-    if len(compressed) == 1:
-        return _sentence(compressed[0])
-
-    return _merge_natural_paragraphs([
-        _sentence(compressed[0]),
-        _sentence(compressed[1]),
-    ])
+    return _sentence(" ".join(action_parts).strip())
 
 
 def _build_final_summary_paragraph(
@@ -2494,10 +2216,18 @@ def _build_doctrine_interpretation(
 ) -> Dict[str, Any]:
     top_symbols = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
 
-    core_message, focus = _build_core_message(base_matches, behaviors, states, locations, relationships, override_hit, seal)
-    support_message = _build_layered_support_paragraph(behaviors, states, locations, relationships, focus)
-    physical_message = _build_real_world_impact_paragraph(base_matches, behaviors, states, locations, relationships, override_hit, focus)
-    action_message = _build_action_guidance_paragraph(base_matches, behaviors, states, locations, relationships, override_hit)
+    core_message, focus, event_scenario = _build_core_message(
+        dream, base_matches, behaviors, states, locations, relationships, override_hit, seal
+    )
+    support_message = _build_layered_support_paragraph(
+        dream, behaviors, states, locations, relationships, focus, event_scenario
+    )
+    physical_message = _build_real_world_impact_paragraph(
+        dream, base_matches, behaviors, states, locations, relationships, override_hit, focus, event_scenario
+    )
+    action_message = _build_action_guidance_paragraph(
+        dream, base_matches, behaviors, states, locations, relationships, override_hit, event_scenario
+    )
     summary_message = _build_final_summary_paragraph(
         {
             "spiritual_meaning": core_message,
@@ -2513,8 +2243,11 @@ def _build_doctrine_interpretation(
         "what_to_do": action_message or "Pray for wisdom and confirmation.",
     }
 
+    effective_seal_type = event_scenario.get("seal_type") or seal.get("type", "a layered message")
     template_type = _choose_template_type(
-        override_hit, behaviors, states, locations, relationships, interpretation, seal
+        override_hit, behaviors, states, locations, relationships, interpretation, {
+            **seal, "type": effective_seal_type
+        }
     )
 
     opening_tpl = _get_output_template(
@@ -2536,7 +2269,7 @@ def _build_doctrine_interpretation(
     )
 
     compact_symbol = ", ".join([x for x in top_symbols[:2] if x]).strip() or "This dream"
-    compact_meaning = focus.get("lead") or _compact_spiritual_meaning(base_matches, override_hit, seal) or "the main spiritual message here"
+    compact_meaning = event_scenario.get("lead") or focus.get("lead") or _compact_spiritual_meaning(base_matches, override_hit, seal) or "the main spiritual message here"
     compact_behavior = focus.get("behavior") or _compact_rule_meaning_clause(behaviors, _get_behavior_meaning_modifier, max_items=2) or "the active pattern in the dream"
     compact_state = focus.get("state") or _compact_rule_meaning_clause(states, _get_state_meaning_modifier, max_items=1) or "the condition attached to the message"
     compact_location = focus.get("location") or _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1) or "the area of life being touched"
@@ -2549,11 +2282,10 @@ def _build_doctrine_interpretation(
         "state_effect": compact_state,
         "location_effect": compact_location,
         "relationship_effect": compact_relationship,
-        "seal_type": seal.get("type", "a layered message"),
+        "seal_type": effective_seal_type,
     }
 
     rendered_main = _render_template_text(main_tpl, context)
-
     full_parts = [
         _sentence(opening_tpl),
         rendered_main,
@@ -2563,8 +2295,7 @@ def _build_doctrine_interpretation(
         summary_message,
         _sentence(closing_tpl),
     ]
-
-    TEMP
+    full_interpretation = _merge_natural_paragraphs(full_parts)
 
     return {
         "interpretation": interpretation,
@@ -2574,7 +2305,6 @@ def _build_doctrine_interpretation(
         "override_name": (override_hit or {}).get("override_name", ""),
         "template_type": template_type,
     }
-
 
 
 def _build_legacy_interpretation(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
@@ -3078,19 +2808,11 @@ def interpret():
             override_rows = sheets.get(SHEET_OVERRIDE_RULES, [])
             template_rows = sheets.get(SHEET_OUTPUT_TEMPLATES, [])
 
+            base_matches = _match_base_symbols_doctrine(dream, base_rows, top_k=BASE_MATCH_TOP_K)
             behaviors = _detect_rule_hits(dream, behavior_rows, "behavior")
             states = _detect_rule_hits(dream, state_rows, "state")
             locations = _detect_rule_hits(dream, location_rows, "location")
             relationships = _detect_rule_hits(dream, relationship_rows, "relationship")
-            base_matches = _match_base_symbols_doctrine(
-                dream,
-                base_rows,
-                top_k=BASE_MATCH_TOP_K,
-                behaviors=behaviors,
-                states=states,
-                locations=locations,
-                relationships=relationships,
-            )
             override_hit = _apply_override_rules(base_matches, behaviors, states, locations, relationships, dream, override_rows)
             doctrine_seal = _compute_doctrine_seal(dream, base_matches, behaviors, states, locations, relationships, override_hit)
 
@@ -3332,165 +3054,3 @@ if __name__ == "__main__":
         port=int(os.getenv("PORT", "5000")),
         debug=debug_mode,
     )
-
-def _detect_false_call_event(dream: str) -> bool:
-    text_n = _normalize_text(dream)
-    if not text_n:
-        return False
-    heard_call = (
-        _contains_any_phrase(text_n, [
-            "calling my name", "called my name", "heard someone calling",
-            "heard my name", "someone calling me", "voice calling me",
-        ])
-        or ("name" in text_n and "calling" in text_n)
-    )
-    nobody_there = _contains_any_phrase(text_n, [
-        "no one was there", "nobody was there", "there was no one there",
-        "nobody there", "no one there",
-    ])
-    return heard_call and nobody_there
-
-
-def _detect_breach_event(dream: str) -> bool:
-    text_n = _normalize_text(dream)
-    if not text_n:
-        return False
-    breach_phrases = [
-        "door was wide open", "door was open", "open even though i had closed it",
-        "even though i had closed it", "tried to come inside", "come inside",
-        "trying to enter", "gain access", "came inside", "breach",
-    ]
-    return _contains_any_phrase(text_n, breach_phrases)
-
-
-def _detect_restored_boundary_event(dream: str) -> bool:
-    ending = _extract_dream_ending_text(dream)
-    phrases = [
-        "shut the door", "closed the door", "locked the door",
-        "shut the door tightly", "closed it behind me", "ran inside and shut the door",
-    ]
-    return _contains_any_phrase(ending, phrases)
-
-
-def _detect_hidden_danger_event(dream: str, states: List[Dict[str, Any]]) -> bool:
-    text_n = _normalize_text(dream)
-    calm_like = _contains_any_phrase(text_n, ["looked calm", "looked normal", "at first", "seemed safe", "everything looked normal"])
-    danger_like = _contains_any_phrase(text_n, [
-        "suddenly became rough", "started pulling me", "out of control",
-        "suddenly", "became rough", "turned dark", "changed suddenly",
-    ])
-    return _detect_transition_instability(dream, states) or (calm_like and danger_like)
-
-
-def _detect_pull_into_danger_event(dream: str) -> bool:
-    text_n = _normalize_text(dream)
-    return _contains_any_phrase(text_n, [
-        "started pulling me", "pulling me", "dragging me", "out of control",
-        "could not stop", "couldnt stop", "could not reach", "couldnt reach",
-    ])
-
-
-def _detect_known_person_distortion_event(dream: str) -> bool:
-    text_n = _normalize_text(dream)
-    knew_person = _contains_any_phrase(text_n, ["i knew", "someone i knew", "man i knew", "person i knew"])
-    distortion = _contains_any_phrase(text_n, ["face looked different", "looked different", "strange face", "looked strange"])
-    return knew_person and distortion
-
-
-def _extract_event_flags(dream: str, states: List[Dict[str, Any]]) -> Dict[str, bool]:
-    return {
-        "false_call": _detect_false_call_event(dream),
-        "breach": _detect_breach_event(dream),
-        "restored_boundary": _detect_restored_boundary_event(dream),
-        "hidden_danger": _detect_hidden_danger_event(dream, states),
-        "pull_into_danger": _detect_pull_into_danger_event(dream),
-        "escape": _dream_has_escape_cue(dream),
-        "intrusion": _dream_has_intrusion_cue(dream),
-        "known_person_distortion": _detect_known_person_distortion_event(dream),
-    }
-
-
-def _event_layer_strength(dream: str, states: List[Dict[str, Any]]) -> int:
-    flags = _extract_event_flags(dream, states)
-    strength = 0
-    if flags["false_call"]:
-        strength += 8
-    if flags["breach"]:
-        strength += 8
-    if flags["restored_boundary"]:
-        strength += 8
-    if flags["hidden_danger"]:
-        strength += 7
-    if flags["pull_into_danger"]:
-        strength += 7
-    if flags["escape"]:
-        strength += 6
-    if flags["intrusion"]:
-        strength += 5
-    if flags["known_person_distortion"]:
-        strength += 6
-    return strength
-
-
-def _build_event_scenario(
-    dream: str,
-    behaviors: List[Dict[str, Any]],
-    states: List[Dict[str, Any]],
-    locations: List[Dict[str, Any]],
-    relationships: List[Dict[str, Any]],
-) -> Dict[str, str]:
-    flags = _extract_event_flags(dream, states)
-    relationship_clause = _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1)
-    location_clause = _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1)
-
-    if flags["false_call"] and flags["breach"] and flags["restored_boundary"]:
-        lead = "deception or distraction trying to gain access into your personal life, but the ending shows you shut it down"
-        support = "A false signal pulled your attention outward, then an opening appeared where a boundary should have remained closed"
-        action = "Do not respond blindly to every call or signal. Guard your space and keep your spiritual boundaries firm"
-        effects = "subtle distraction, boundary pressure, or access being tested around your personal life"
-        seal_type = "Protection"
-        risk = "Medium"
-    elif flags["hidden_danger"] and flags["pull_into_danger"] and flags["escape"]:
-        lead = "a situation that looked manageable at first but turned unstable before you came out of it"
-        support = "What appeared calm changed suddenly, and the dream highlights danger hidden beneath a normal surface"
-        action = "Move carefully in situations that look harmless at first. Pray for discernment before stepping in further"
-        effects = "instability, emotional pressure, and being pulled deeper into something that is not as safe as it appears"
-        seal_type = "Breakthrough"
-        risk = "Medium"
-    elif flags["intrusion"] and flags["restored_boundary"]:
-        lead = "pressure trying to enter your space, with the ending showing boundary restoration"
-        support = "The dream centers on access, resistance, and shutting the opening again"
-        action = "Stay alert, guard your boundaries, and do not permit what should remain outside"
-        effects = "boundary pressure or unwanted access being tested"
-        seal_type = "Protection"
-        risk = "Medium"
-    elif flags["known_person_distortion"]:
-        lead = "a familiar influence appearing with hidden or altered intent"
-        support = "The dream warns that something known to you may not be presenting itself truthfully"
-        action = "Pray for discernment around familiar people or situations and do not trust appearances too quickly"
-        effects = "confusion, deception, or mixed signals tied to a familiar connection"
-        seal_type = "Warning"
-        risk = "Medium"
-    else:
-        lead = ""
-        support = ""
-        action = ""
-        effects = ""
-        seal_type = ""
-        risk = ""
-
-    if lead:
-        if relationship_clause and "familiar" not in lead and "connection" not in effects:
-            support = _merge_natural_paragraphs([support, f"The people involved connect this to {relationship_clause}."])
-        if location_clause and "personal life" not in lead and "personal life" not in support:
-            support = _merge_natural_paragraphs([support, f"The setting ties this to {location_clause}."])
-
-    return {
-        "lead": _clean_sentence(lead),
-        "support": _clean_sentence(support),
-        "action": _clean_sentence(action),
-        "effects": _clean_sentence(effects),
-        "seal_type": seal_type,
-        "risk": risk,
-    }
-

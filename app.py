@@ -2053,17 +2053,7 @@ def _summarize_symbol_meanings(base_matches: List[Tuple[Dict, int, Dict[str, Any
     return _sentence(joined) if joined else ""
 
 
-def _build_core_message(
-    dream: str,
-    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
-    behaviors: List[Dict[str, Any]],
-    states: List[Dict[str, Any]],
-    locations: List[Dict[str, Any]],
-    relationships: List[Dict[str, Any]],
-    override_hit: Optional[Dict[str, Any]],
-    seal: Dict[str, Any],
-) -> Tuple[str, Dict[str, str], Dict[str, str]]:
-    def _build_primary_focus(
+def _build_primary_focus(
     dream: str,
     base_matches,
     behaviors,
@@ -2073,10 +2063,18 @@ def _build_core_message(
     override_hit,
     seal,
 ):
-    behavior_clause = _compact_rule_meaning_clause(behaviors, _get_behavior_meaning_modifier, max_items=2)
-    state_clause = _compact_rule_meaning_clause(states, _get_state_meaning_modifier, max_items=1)
-    location_clause = _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1)
-    relationship_clause = _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1)
+    behavior_clause = _compact_rule_meaning_clause(
+        behaviors, _get_behavior_meaning_modifier, max_items=2
+    )
+    state_clause = _compact_rule_meaning_clause(
+        states, _get_state_meaning_modifier, max_items=1
+    )
+    location_clause = _compact_rule_meaning_clause(
+        locations, _get_location_life_area_meaning, max_items=1
+    )
+    relationship_clause = _compact_rule_meaning_clause(
+        relationships, _get_relationship_meaning_modifier, max_items=1
+    )
     symbol_clause = _compact_spiritual_meaning(base_matches, override_hit, seal)
 
     return {
@@ -2087,12 +2085,36 @@ def _build_core_message(
         "location": location_clause,
         "relationship": relationship_clause,
     }
-    focus = _build_primary_focus(dream, base_matches, behaviors, states, locations, relationships, override_hit, seal)
-    event_scenario = _build_event_scenario(dream, behaviors, states, locations, relationships)
+
+
+def _build_core_message(
+    dream: str,
+    base_matches: List[Tuple[Dict, int, Dict[str, Any]]],
+    behaviors: List[Dict[str, Any]],
+    states: List[Dict[str, Any]],
+    locations: List[Dict[str, Any]],
+    relationships: List[Dict[str, Any]],
+    override_hit: Optional[Dict[str, Any]],
+    seal: Dict[str, Any],
+) -> Tuple[str, Dict[str, str], Dict[str, str]]:
+    focus = _build_primary_focus(
+        dream,
+        base_matches,
+        behaviors,
+        states,
+        locations,
+        relationships,
+        override_hit,
+        seal,
+    )
+    event_scenario = _build_event_scenario(
+        dream, behaviors, states, locations, relationships
+    )
     seal_type = _strip_trailing_punct(seal.get("type", ""))
     seal_message = _strip_trailing_punct(seal.get("message", ""))
 
     parts = []
+
     if event_scenario.get("lead"):
         parts.append(_sentence(f"This dream points to {event_scenario['lead']}"))
     elif focus.get("lead"):
@@ -2109,9 +2131,14 @@ def _build_core_message(
         parts.append(_sentence(f"The ending confirms this as {seal_type.lower()}"))
 
     if _dream_has_escape_cue(dream) and not any(
-        x in _normalize_text(" ".join(parts)) for x in ["release", "escape", "came out", "regain control"]
+        x in _normalize_text(" ".join(parts))
+        for x in ["release", "escape", "came out", "regain control"]
     ):
-        parts.append(_sentence("The ending shows that you came out of the danger, so this is a warning with a path of escape"))
+        parts.append(
+            _sentence(
+                "The ending shows that you came out of the danger, so this is a warning with a path of escape"
+            )
+        )
 
     if seal_message and _normalize_text(seal_message) not in _normalize_text(" ".join(parts)):
         parts.append(_sentence(seal_message))
@@ -2125,10 +2152,18 @@ def _build_layered_support_paragraph(
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
 ) -> str:
-    behavior_parts = _compress_phrase_list([_get_behavior_meaning_modifier(x["row"]) for x in behaviors])
-    state_parts = _compress_phrase_list([_get_state_meaning_modifier(x["row"]) for x in states])
-    location_parts = _compress_phrase_list([_get_location_life_area_meaning(x["row"]) for x in locations])
-    relationship_parts = _compress_phrase_list([_get_relationship_meaning_modifier(x["row"]) for x in relationships])
+    behavior_parts = _compress_phrase_list(
+        [_get_behavior_meaning_modifier(x["row"]) for x in behaviors]
+    )
+    state_parts = _compress_phrase_list(
+        [_get_state_meaning_modifier(x["row"]) for x in states]
+    )
+    location_parts = _compress_phrase_list(
+        [_get_location_life_area_meaning(x["row"]) for x in locations]
+    )
+    relationship_parts = _compress_phrase_list(
+        [_get_relationship_meaning_modifier(x["row"]) for x in relationships]
+    )
 
     lines = []
     if behavior_parts:
@@ -2164,7 +2199,9 @@ def _build_real_world_impact_paragraph(
     if override_hit:
         effect_parts.append((override_hit or {}).get("physical", ""))
 
-    effect_parts = _compress_phrase_list([_normalize_effect_phrase(x) for x in effect_parts if x])
+    effect_parts = _compress_phrase_list(
+        [_normalize_effect_phrase(x) for x in effect_parts if x]
+    )
 
     if not effect_parts:
         return "No clear physical effects were generated."
@@ -2194,7 +2231,9 @@ def _build_action_guidance_paragraph(
     if override_hit:
         action_parts.append((override_hit or {}).get("action", ""))
 
-    action_parts = _compress_phrase_list([_normalize_action_phrase(x) for x in action_parts if x])
+    action_parts = _compress_phrase_list(
+        [_normalize_action_phrase(x) for x in action_parts if x]
+    )
 
     if not action_parts:
         return "Pray for wisdom and confirmation."
@@ -2211,11 +2250,15 @@ def _build_final_summary_paragraph(
 
     parts = []
     if seal_type and risk:
-        parts.append(_sentence(f"Overall, this is a {seal_type.lower()} message with {risk.lower()} risk"))
+        parts.append(
+            _sentence(f"Overall, this is a {seal_type.lower()} message with {risk.lower()} risk")
+        )
 
-    parts.append(_sentence(
-        "Do not react in panic. Take the message seriously, stay spiritually grounded, and respond with discipline"
-    ))
+    parts.append(
+        _sentence(
+            "Do not react in panic. Take the message seriously, stay spiritually grounded, and respond with discipline"
+        )
+    )
 
     return _merge_natural_paragraphs(parts)
 
@@ -2241,17 +2284,41 @@ def _build_doctrine_interpretation(
     top_symbols = [_get_base_symbol_input(row) for row, _sc, _hit in base_matches]
 
     core_message, focus, event_scenario = _build_core_message(
-        dream, base_matches, behaviors, states, locations, relationships, override_hit, seal
+        dream,
+        base_matches,
+        behaviors,
+        states,
+        locations,
+        relationships,
+        override_hit,
+        seal,
     )
-  support_message = _build_layered_support_paragraph(
-    behaviors, states, locations, relationships
-)
+
+    support_message = _build_layered_support_paragraph(
+        behaviors,
+        states,
+        locations,
+        relationships,
+    )
+
     physical_message = _build_real_world_impact_paragraph(
-    base_matches, behaviors, states, locations, relationships, override_hit
-)
-  action_message = _build_action_guidance_paragraph(
-    base_matches, behaviors, states, locations, relationships, override_hit
-)
+        base_matches,
+        behaviors,
+        states,
+        locations,
+        relationships,
+        override_hit,
+    )
+
+    action_message = _build_action_guidance_paragraph(
+        base_matches,
+        behaviors,
+        states,
+        locations,
+        relationships,
+        override_hit,
+    )
+
     summary_message = _build_final_summary_paragraph(
         {
             "spiritual_meaning": core_message,
@@ -2269,9 +2336,16 @@ def _build_doctrine_interpretation(
 
     effective_seal_type = event_scenario.get("seal_type") or seal.get("type", "a layered message")
     template_type = _choose_template_type(
-        override_hit, behaviors, states, locations, relationships, interpretation, {
-            **seal, "type": effective_seal_type
-        }
+        override_hit,
+        behaviors,
+        states,
+        locations,
+        relationships,
+        interpretation,
+        {
+            **seal,
+            "type": effective_seal_type,
+        },
     )
 
     opening_tpl = _get_output_template(
@@ -2293,11 +2367,32 @@ def _build_doctrine_interpretation(
     )
 
     compact_symbol = ", ".join([x for x in top_symbols[:2] if x]).strip() or "This dream"
-    compact_meaning = event_scenario.get("lead") or focus.get("lead") or _compact_spiritual_meaning(base_matches, override_hit, seal) or "the main spiritual message here"
-    compact_behavior = focus.get("behavior") or _compact_rule_meaning_clause(behaviors, _get_behavior_meaning_modifier, max_items=2) or "the active pattern in the dream"
-    compact_state = focus.get("state") or _compact_rule_meaning_clause(states, _get_state_meaning_modifier, max_items=1) or "the condition attached to the message"
-    compact_location = focus.get("location") or _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1) or "the area of life being touched"
-    compact_relationship = focus.get("relationship") or _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1) or "the people dimension of the dream"
+    compact_meaning = (
+        event_scenario.get("lead")
+        or focus.get("lead")
+        or _compact_spiritual_meaning(base_matches, override_hit, seal)
+        or "the main spiritual message here"
+    )
+    compact_behavior = (
+        focus.get("behavior")
+        or _compact_rule_meaning_clause(behaviors, _get_behavior_meaning_modifier, max_items=2)
+        or "the active pattern in the dream"
+    )
+    compact_state = (
+        focus.get("state")
+        or _compact_rule_meaning_clause(states, _get_state_meaning_modifier, max_items=1)
+        or "the condition attached to the message"
+    )
+    compact_location = (
+        focus.get("location")
+        or _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1)
+        or "the area of life being touched"
+    )
+    compact_relationship = (
+        focus.get("relationship")
+        or _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1)
+        or "the people dimension of the dream"
+    )
 
     context = {
         "symbol": compact_symbol,
@@ -2310,6 +2405,7 @@ def _build_doctrine_interpretation(
     }
 
     rendered_main = _render_template_text(main_tpl, context)
+
     full_parts = [
         _sentence(opening_tpl),
         rendered_main,
@@ -2329,752 +2425,3 @@ def _build_doctrine_interpretation(
         "override_name": (override_hit or {}).get("override_name", ""),
         "template_type": template_type,
     }
-
-
-def _build_legacy_interpretation(matches: List[Tuple[Dict, int, Optional[Dict[str, Any]]]]) -> Dict[str, str]:
-    spiritual_parts: List[str] = []
-    physical_parts: List[str] = []
-    action_parts: List[str] = []
-
-    for row, _sc, _hit in matches[:NARRATIVE_MAX_SYMBOLS]:
-        symbol = _strip_trailing_punct(_get_symbol_cell(row))
-        base_meaning = _strip_trailing_punct(_get_spiritual_meaning_cell(row))
-        base_effects = _strip_trailing_punct(_get_effects_cell(row))
-        base_action = _strip_trailing_punct(_get_what_to_do_cell(row))
-
-        if symbol and base_meaning:
-            spiritual_parts.append(f"{symbol} points to {base_meaning}")
-        elif symbol:
-            spiritual_parts.append(symbol)
-
-        if base_effects:
-            physical_parts.append(_normalize_effect_phrase(base_effects))
-        if base_action:
-            action_parts.append(_normalize_action_phrase(base_action))
-
-    spiritual_text = _sentence(_human_join(spiritual_parts)) if spiritual_parts else "No clear spiritual meaning was generated."
-    physical_text = (
-        _sentence(f"In practical terms, this may show up as {_human_join(physical_parts)}")
-        if physical_parts else "No clear physical effects were generated."
-    )
-    action_text = (
-        _sentence(" ".join(_compress_phrase_list(action_parts)))
-        if action_parts else "Pray for wisdom and confirmation."
-    )
-
-    return {
-        "spiritual_meaning": spiritual_text,
-        "effects_in_physical_realm": physical_text,
-        "what_to_do": action_text,
-    }
-
-
-def _compute_seal_from_symbol_count(symbol_count: int) -> Dict[str, str]:
-    if symbol_count <= 0:
-        return {"status": "Delayed", "type": "Unclear", "risk": "High"}
-    if symbol_count == 1:
-        return {"status": "Live", "type": "Confirmed", "risk": "Low"}
-    return {"status": "Delayed", "type": "Processing", "risk": "Medium"}
-
-
-# ============================================================
-# Admin helpers
-# ============================================================
-def _get_admin_key_from_request() -> str:
-    q = (request.args.get("key") or "").strip()
-    h = (request.headers.get("X-Admin-Key") or "").strip()
-    return q or h
-
-
-def _require_admin() -> Optional[Response]:
-    if not ADMIN_KEY:
-        return make_response("Admin is not configured.", 403)
-    provided = _get_admin_key_from_request()
-    if not provided or provided != ADMIN_KEY:
-        return make_response("Forbidden", 403)
-    return None
-
-
-def _build_col_map(header_row: List[str]) -> Dict[str, int]:
-    col_map: Dict[str, int] = {}
-    for idx, h in enumerate(header_row, start=1):
-        col_map[_normalize_header(h)] = idx
-    return col_map
-
-
-def _find_existing_row_index_by_column(ws, lookup_value: str, lookup_col: int) -> Optional[int]:
-    target = _normalize_text(lookup_value)
-    if not target:
-        return None
-
-    col_vals = ws.col_values(lookup_col)
-    for i, v in enumerate(col_vals[1:], start=2):
-        if _normalize_text(v) == target:
-            return i
-    return None
-
-
-def _sheet_primary_lookup_headers(sheet_name: str) -> List[str]:
-    if sheet_name == SHEET_BASE_SYMBOLS:
-        return ["symbol", "input"]
-    if sheet_name == SHEET_BEHAVIOR_RULES:
-        return ["behavior_name", "behavior"]
-    if sheet_name == SHEET_SIZE_STATE_RULES:
-        return ["state_name", "state"]
-    if sheet_name == SHEET_LOCATION_RULES:
-        return ["location_name", "location"]
-    if sheet_name == SHEET_RELATIONSHIP_RULES:
-        return ["relationship_name", "relationship"]
-    if sheet_name == SHEET_OVERRIDE_RULES:
-        return ["override_name", "condition"]
-    if sheet_name == SHEET_OUTPUT_TEMPLATES:
-        return ["template_type"]
-    return ["input", "symbol"]
-
-
-def _admin_upsert_generic_sheet(sheet_name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    ws = _get_or_create_worksheet(sheet_name, rows=2000, cols=30)
-    header_row = ws.row_values(1)
-    if not header_row:
-        raise RuntimeError(f"Sheet {sheet_name} has no header row.")
-
-    col_map = _build_col_map(header_row)
-    mode = (payload.get("mode") or "upsert").strip().lower()
-
-    lookup_col = None
-    lookup_value = ""
-
-    for key in _sheet_primary_lookup_headers(sheet_name):
-        nk = _normalize_header(key)
-        if col_map.get(nk) and str(payload.get(key, "")).strip():
-            lookup_col = col_map[nk]
-            lookup_value = str(payload.get(key, "")).strip()
-            break
-
-    if not lookup_col or not lookup_value:
-        raise RuntimeError(f"Missing primary lookup field for sheet {sheet_name}.")
-
-    existing_row = None
-    if mode != "add":
-        existing_row = _find_existing_row_index_by_column(ws, lookup_value, lookup_col)
-
-    row_index = existing_row if existing_row else len(ws.get_all_values()) + 1
-    op = "updated" if existing_row else "added"
-
-    updates = []
-    for raw_header in header_row:
-        nh = _normalize_header(raw_header)
-        chosen_value = None
-
-        for payload_key, payload_val in payload.items():
-            if _normalize_header(payload_key) == nh:
-                chosen_value = payload_val
-                break
-
-        if chosen_value is None:
-            continue
-
-        chosen_value = _sanitize_keywords_for_storage(str(chosen_value)) if nh == "keywords" else str(chosen_value).strip()
-        col_index = col_map.get(nh)
-        if col_index:
-            updates.append((row_index, col_index, chosen_value))
-
-    if not updates:
-        raise RuntimeError("No matching payload fields found for target sheet headers.")
-
-    ws.update_cells([gspread.Cell(r, c, v) for r, c, v in updates], value_input_option="RAW")
-    _invalidate_all_caches()
-
-    return {"ok": True, "action": op, "written_row": row_index, "worksheet_name": sheet_name}
-
-
-def _admin_upsert_to_sheet(payload: Dict[str, Any]) -> Dict[str, Any]:
-    target_sheet = (payload.get("target_sheet") or "legacy").strip()
-    if target_sheet == "legacy":
-        return _admin_upsert_generic_sheet(WORKSHEET_NAME, payload)
-
-    sheet_alias_map = {
-        "BaseSymbols": SHEET_BASE_SYMBOLS,
-        "BehaviorRules": SHEET_BEHAVIOR_RULES,
-        "SizeStateRules": SHEET_SIZE_STATE_RULES,
-        "LocationRules": SHEET_LOCATION_RULES,
-        "RelationshipRules": SHEET_RELATIONSHIP_RULES,
-        "OverrideRules": SHEET_OVERRIDE_RULES,
-        "OutputTemplates": SHEET_OUTPUT_TEMPLATES,
-    }
-    real_sheet_name = sheet_alias_map.get(target_sheet, target_sheet)
-    return _admin_upsert_generic_sheet(real_sheet_name, payload)
-
-
-
-# ============================================================
-# Template/render helpers
-# ============================================================
-def _safe_return_url(value: str) -> str:
-    value = (value or "").strip()
-    if not value:
-        return RETURN_URL
-    if value.startswith("http://") or value.startswith("https://") or value.startswith("/"):
-        return value
-    return RETURN_URL
-
-# ============================================================
-# Routes
-# ============================================================
-@app.route("/", methods=["GET"])
-def home():
-    try:
-        return render_template(TEMPLATE_INDEX)
-    except Exception:
-        return redirect(RETURN_URL, code=302)
-
-
-@app.route("/health", methods=["GET"])
-def health():
-    doctrine_available = False
-    journal_available = False
-    self_healing_ready = False
-
-    try:
-        _ensure_core_worksheets()
-        self_healing_ready = True
-        doctrine_available = _doctrine_sheets_available()
-        journal_available = True
-    except Exception:
-        doctrine_available = False
-        journal_available = False
-        self_healing_ready = False
-
-    return jsonify({
-        "ok": True,
-        "service": "dream-interpreter",
-        "sheet": WORKSHEET_NAME,
-        "has_spreadsheet_id": bool(SPREADSHEET_ID),
-        "allowed_origins": allowed_origins,
-        "match_mode": "strict_word_boundary_with_longest_phrase_priority_and_overlap_guard",
-        "brain_layers": [
-            "base_symbol_logic",
-            "behavior_logic",
-            "state_logic",
-            "location_logic",
-            "relationship_logic",
-            "ending_seal_logic",
-            "override_logic",
-            "template_logic",
-        ],
-        "doctrine_mode_enabled": DOCTRINE_MODE,
-        "doctrine_sheets_available": doctrine_available,
-        "doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
-        "dream_journal_sheet": SHEET_DREAM_JOURNAL,
-        "dream_journal_available": journal_available,
-        "self_healing_worksheets_ready": self_healing_ready,
-        "free_quota": FREE_TRIES,
-        "stripe_configured": bool(_stripe_config_ok()),
-        "price_dream_pack_set": bool(PRICE_DREAM_PACK),
-        "return_url": RETURN_URL,
-        "session_premium": _is_premium_session(),
-        "session_email": _get_session_email(),
-        "session_dream_pack": _get_dream_pack_status(_get_session_email()),
-        "template_index": TEMPLATE_INDEX,
-        "template_upgrade": TEMPLATE_UPGRADE,
-    })
-
-
-@app.route("/healthz", methods=["GET"])
-def healthz():
-    return health()
-
-
-@app.route("/upgrade", methods=["GET"])
-def upgrade():
-    try:
-        return render_template(TEMPLATE_UPGRADE)
-    except Exception:
-        return redirect(RETURN_URL, code=302)
-
-
-@app.route("/check-access", methods=["POST", "OPTIONS"])
-def check_access():
-    if request.method == "OPTIONS":
-        return _preflight_ok()
-
-    data = request.get_json(silent=True) or {}
-    email = _normalize_email(data.get("email") or "")
-
-    if not _validate_email(email):
-        return jsonify({"ok": False, "error": "Please enter a valid email."}), 400
-
-    _persist_email_to_session(email)
-    access_ok, access_meta = _has_active_access(email)
-
-    if access_ok and access_meta.get("type") == "subscription":
-        _set_premium_session(email)
-        resp = make_response(jsonify({"ok": True, "access": "active", "return_url": RETURN_URL}))
-        resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
-        return resp
-
-    if access_ok and access_meta.get("type") == "dream_pack":
-        _set_buyer_session(email)
-        resp = make_response(jsonify({
-            "ok": True,
-            "access": "dream_pack_active",
-            "return_url": RETURN_URL,
-            "dream_pack": access_meta.get("details", {}),
-        }))
-        resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
-        return resp
-
-    return jsonify({"ok": False, "access": "inactive", "message": "No active subscription or dream pack found."}), 402
-
-
-@app.route("/create-checkout-session", methods=["POST"])
-def create_checkout_session():
-    if not _stripe_config_ok():
-        return make_response("Stripe not configured.", 500)
-
-    email = _extract_email_from_request()
-    if not _validate_email(email):
-        return make_response("Missing email.", 400)
-
-    _persist_email_to_session(email)
-    stripe.api_key = STRIPE_SECRET_KEY
-
-    try:
-        requested_return = _safe_return_url(
-            request.form.get("return")
-            or request.args.get("return")
-            or request.headers.get("X-Return-Url")
-            or RETURN_URL
-        )
-
-        checkout = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{"price": DEFAULT_STRIPE_PRICE_ID, "quantity": 1}],
-            customer_email=email,
-            metadata={"purchase_type": "subscription", "email": email, "return_url": requested_return},
-            success_url=url_for("payment_success", _external=True) + f"?email={email}&return={requested_return}",
-            cancel_url=url_for("upgrade", _external=True) + f"?email={email}&return={requested_return}",
-        )
-        return redirect(checkout.url, code=303)
-    except Exception as e:
-        return make_response(f"Stripe error: {str(e)}", 500)
-
-
-@app.route("/create-dream-pack-checkout-session", methods=["POST", "GET"])
-def create_dream_pack_checkout_session():
-    if not _stripe_dream_pack_ok():
-        return make_response("Dream pack Stripe config missing.", 500)
-
-    email = _extract_email_from_request()
-    if not _validate_email(email):
-        return make_response("Missing email for dream pack checkout.", 400)
-
-    _persist_email_to_session(email)
-    stripe.api_key = STRIPE_SECRET_KEY
-
-    try:
-        requested_return = _safe_return_url(
-            request.form.get("return")
-            or request.args.get("return")
-            or request.headers.get("X-Return-Url")
-            or RETURN_URL
-        )
-
-        checkout = stripe.checkout.Session.create(
-            mode="payment",
-            line_items=[{"price": PRICE_DREAM_PACK, "quantity": 1}],
-            customer_email=email,
-            metadata={
-                "purchase_type": "dream_pack",
-                "dream_pack_uses": str(DREAM_PACK_USES),
-                "dream_pack_hours": str(DREAM_PACK_HOURS),
-                "email": email,
-                "return_url": requested_return,
-            },
-            success_url=url_for("dream_pack_success", _external=True) + f"?email={email}&return={requested_return}",
-            cancel_url=url_for("upgrade", _external=True) + f"?email={email}&return={requested_return}",
-        )
-        return redirect(checkout.url, code=303)
-    except Exception as e:
-        return make_response(f"Stripe dream pack error: {str(e)}", 500)
-
-
-@app.route("/payment-success", methods=["GET"])
-def payment_success():
-    email = _normalize_email(request.args.get("email") or "")
-    requested_return = _safe_return_url(request.args.get("return") or RETURN_URL)
-
-    if _validate_email(email):
-        _persist_email_to_session(email)
-        access_ok, access_meta = _has_active_access(email)
-        if access_ok and access_meta.get("type") == "subscription":
-            _set_premium_session(email)
-
-    resp = redirect(requested_return, code=302)
-    resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
-    return resp
-
-
-@app.route("/dream-pack-success", methods=["GET"])
-def dream_pack_success():
-    email = _normalize_email(request.args.get("email") or "")
-    requested_return = _safe_return_url(request.args.get("return") or RETURN_URL)
-
-    if _validate_email(email):
-        _persist_email_to_session(email)
-        _set_buyer_session(email)
-        _mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
-
-    resp = redirect(requested_return, code=302)
-    resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
-    return resp
-
-
-@app.route("/webhook", methods=["POST"])
-def stripe_webhook():
-    if not stripe or not STRIPE_SECRET_KEY or not STRIPE_WEBHOOK_SECRET:
-        return ("not configured", 400)
-
-    stripe.api_key = STRIPE_SECRET_KEY
-    payload = request.data
-    sig_header = request.headers.get("Stripe-Signature", "")
-
-    try:
-        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
-    except Exception:
-        return ("bad signature", 400)
-
-    event_type = event.get("type", "")
-    data_obj = (event.get("data") or {}).get("object") or {}
-
-    if event_type == "checkout.session.completed":
-        metadata = data_obj.get("metadata") or {}
-        email = _normalize_email(metadata.get("email") or data_obj.get("customer_email") or "")
-        customer_id = data_obj.get("customer") or ""
-        mode = (data_obj.get("mode") or "").strip().lower()
-        purchase_type = (metadata.get("purchase_type") or "").strip().lower()
-
-        if _validate_email(email) and mode == "subscription":
-            _mark_subscriber(email, True, customer_id)
-
-        if _validate_email(email) and mode == "payment" and purchase_type == "dream_pack":
-            _mark_dream_pack_purchase(email, uses=DREAM_PACK_USES, hours=DREAM_PACK_HOURS)
-
-    return ("ok", 200)
-
-
-@app.route("/interpret", methods=["POST", "OPTIONS"])
-def interpret():
-    if request.method == "OPTIONS":
-        return _preflight_ok()
-
-    data = request.get_json(silent=True) or {}
-    dream = (data.get("dream") or data.get("text") or "").strip()
-
-    _log("RAW JSON RECEIVED:", _safe_debug_payload_preview(data))
-    _log("RAW DREAM RECEIVED:", repr(dream))
-
-    validation_error = _validate_dream_text(dream)
-    if validation_error:
-        return jsonify({"error": validation_error}), 400
-
-    request_email = _extract_email_from_request()
-    if _validate_email(request_email):
-        _persist_email_to_session(request_email)
-
-    session_email = _get_session_email()
-    access_ok, access_meta = _has_active_access(session_email)
-    access_type = access_meta.get("type", "")
-    is_paid = access_ok and access_type == "subscription"
-
-    dream_pack_status_before = _get_dream_pack_status(session_email)
-    has_active_dream_pack = access_ok and access_type == "dream_pack"
-
-    if not access_ok:
-        ip = _get_client_ip()
-        cookie_used = _get_cookie_tries_used()
-        ip_used = _shadow_count(ip)
-        effective_used = max(cookie_used, ip_used)
-
-        if effective_used >= FREE_TRIES:
-            return jsonify({
-                "blocked": True,
-                "reason": "free_limit_reached",
-                "message": f"You’ve used your {FREE_TRIES} free tries.",
-                "free_uses_left": 0,
-                "access": "blocked",
-                "is_paid": False,
-                "email": session_email,
-                "dream_pack_available": bool(PRICE_DREAM_PACK),
-            }), 402
-
-    free_uses_left = 0
-    dream_pack_status_after = dream_pack_status_before
-
-    if not access_ok:
-        ip = _get_client_ip()
-        effective_used = max(_get_cookie_tries_used(), _shadow_count(ip))
-        _shadow_increment(ip)
-        free_uses_left = _free_tries_remaining_after_this(effective_used)
-    elif has_active_dream_pack:
-        dream_pack_status_after = _consume_dream_pack_use(session_email)
-
-    doctrine_active = DOCTRINE_MODE and _doctrine_sheets_available()
-
-    if doctrine_active:
-        try:
-            sheets = _load_doctrine_sheets()
-            base_rows = sheets.get(SHEET_BASE_SYMBOLS, [])
-            behavior_rows = sheets.get(SHEET_BEHAVIOR_RULES, [])
-            state_rows = sheets.get(SHEET_SIZE_STATE_RULES, [])
-            location_rows = sheets.get(SHEET_LOCATION_RULES, [])
-            relationship_rows = sheets.get(SHEET_RELATIONSHIP_RULES, [])
-            override_rows = sheets.get(SHEET_OVERRIDE_RULES, [])
-            template_rows = sheets.get(SHEET_OUTPUT_TEMPLATES, [])
-
-            base_matches = _match_base_symbols_doctrine(dream, base_rows, top_k=BASE_MATCH_TOP_K)
-            behaviors = _detect_rule_hits(dream, behavior_rows, "behavior")
-            states = _detect_rule_hits(dream, state_rows, "state")
-            locations = _detect_rule_hits(dream, location_rows, "location")
-            relationships = _detect_rule_hits(dream, relationship_rows, "relationship")
-            override_hit = _apply_override_rules(base_matches, behaviors, states, locations, relationships, dream, override_rows)
-            doctrine_seal = _compute_doctrine_seal(dream, base_matches, behaviors, states, locations, relationships, override_hit)
-
-            receipt_id = f"JTS-{secrets.token_hex(4).upper()}"
-            built = _build_doctrine_interpretation(
-                dream, base_matches, behaviors, states, locations, relationships, override_hit, template_rows, doctrine_seal
-            )
-
-            payload = {
-                "engine_mode": "doctrine",
-                "access": "paid" if is_paid else ("dream_pack" if has_active_dream_pack else "free"),
-                "is_paid": bool(is_paid),
-                "email": session_email,
-                "free_uses_left": free_uses_left,
-                "dream_pack": dream_pack_status_after,
-                "seal": doctrine_seal,
-                "brain": {
-                    "behaviors": [b["name"] for b in behaviors],
-                    "states": [s["name"] for s in states],
-                    "locations": [l["name"] for l in locations],
-                    "relationships": [r["name"] for r in relationships],
-                    "override_applied": built["override_applied"],
-                    "override_name": built["override_name"],
-                    "template_type": built.get("template_type", "default"),
-                },
-                "interpretation": built["interpretation"],
-                "full_interpretation": built["full_interpretation"],
-                "receipt": {
-                    "id": receipt_id,
-                    "top_symbols": built["top_symbols"],
-                    "share_phrase": "I decoded my dream on Jamaican True Stories.",
-                },
-            }
-            resp = make_response(jsonify(payload))
-        except Exception as e:
-            return jsonify({"error": "Doctrine engine failed", "details": str(e)}), 500
-    else:
-        try:
-            legacy_rows = _load_legacy_sheet_rows()
-        except Exception as e:
-            return jsonify({"error": "Sheet load failed", "details": str(e)}), 500
-
-        matches = _match_symbols_legacy(dream, legacy_rows, top_k=BASE_MATCH_TOP_K)
-        receipt_id = f"JTS-{secrets.token_hex(4).upper()}"
-        seal = _compute_seal_from_symbol_count(len(matches))
-        built_legacy = _build_legacy_interpretation(matches)
-
-        payload = {
-            "engine_mode": "legacy",
-            "access": "paid" if is_paid else ("dream_pack" if has_active_dream_pack else "free"),
-            "is_paid": bool(is_paid),
-            "email": session_email,
-            "free_uses_left": free_uses_left,
-            "dream_pack": dream_pack_status_after,
-            "seal": seal,
-            "brain": {},
-            "interpretation": built_legacy,
-            "full_interpretation": "\n\n".join([
-                _sentence("This dream is revealing symbolic meaning through the matched symbols"),
-                built_legacy["spiritual_meaning"],
-                built_legacy["effects_in_physical_realm"],
-                built_legacy["what_to_do"],
-            ]),
-            "receipt": {
-                "id": receipt_id,
-                "top_symbols": [_get_symbol_cell(row) for row, _sc, _hit in matches if _get_symbol_cell(row)],
-                "share_phrase": "I decoded my dream on Jamaican True Stories.",
-            },
-        }
-        resp = make_response(jsonify(payload))
-
-    if not access_ok:
-        resp.set_cookie(
-            COOKIE_NAME,
-            str(_get_cookie_tries_used() + 1),
-            max_age=COOKIE_MAX_AGE,
-            samesite=COOKIE_SAMESITE,
-            secure=COOKIE_SECURE,
-        )
-    else:
-        resp.set_cookie(COOKIE_NAME, "0", max_age=0, samesite=COOKIE_SAMESITE, secure=COOKIE_SECURE)
-
-    return resp
-
-
-@app.route("/journal/save", methods=["POST", "OPTIONS"])
-def journal_save():
-    if request.method == "OPTIONS":
-        return _preflight_ok()
-
-    data = request.get_json(silent=True) or {}
-    email = _normalize_email(data.get("email") or "")
-    dream_text = (data.get("dream_text") or "").strip()
-
-    if not _validate_email(email):
-        return jsonify({"ok": False, "error": "Valid email is required."}), 400
-    if not dream_text:
-        return jsonify({"ok": False, "error": "Dream text is required."}), 400
-
-    try:
-        _persist_email_to_session(email)
-        result = _append_dream_journal_entry({
-            "email": email,
-            "dream_text": dream_text,
-            "spiritual_meaning": data.get("spiritual_meaning", ""),
-            "effects_in_physical_realm": data.get("effects_in_physical_realm", ""),
-            "what_to_do": data.get("what_to_do", ""),
-            "full_interpretation": data.get("full_interpretation", ""),
-            "receipt_id": data.get("receipt_id", ""),
-            "top_symbols": data.get("top_symbols", []),
-            "seal_status": data.get("seal_status", ""),
-            "seal_type": data.get("seal_type", ""),
-            "seal_risk": data.get("seal_risk", ""),
-            "engine_mode": data.get("engine_mode", ""),
-            "access_type": data.get("access_type", ""),
-            "is_saved": "yes",
-            "notes": data.get("notes", ""),
-        })
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/journal/history", methods=["GET", "OPTIONS"])
-def journal_history():
-    if request.method == "OPTIONS":
-        return _preflight_ok()
-
-    email = _normalize_email(request.args.get("email") or "")
-    if not _validate_email(email):
-        return jsonify({"ok": False, "error": "Valid email is required."}), 400
-
-    try:
-        _persist_email_to_session(email)
-        ws = _get_journal_worksheet()
-        rows = ws.get_all_records()
-
-        matches = []
-        for row in rows:
-            row_email = _normalize_email(row.get("email") or "")
-            if row_email != email:
-                continue
-
-            top_symbols_raw = (row.get("top_symbols") or "").strip()
-            top_symbols = [x.strip() for x in top_symbols_raw.split(",") if x.strip()]
-
-            matches.append({
-                "entry_id": row.get("entry_id", ""),
-                "created_at": row.get("created_at", ""),
-                "email": row_email,
-                "dream_text": row.get("dream_text", ""),
-                "spiritual_meaning": row.get("spiritual_meaning", ""),
-                "effects_in_physical_realm": row.get("effects_in_physical_realm", ""),
-                "what_to_do": row.get("what_to_do", ""),
-                "full_interpretation": row.get("full_interpretation", ""),
-                "receipt_id": row.get("receipt_id", ""),
-                "top_symbols": top_symbols,
-                "seal_status": row.get("seal_status", ""),
-                "seal_type": row.get("seal_type", ""),
-                "seal_risk": row.get("seal_risk", ""),
-                "engine_mode": row.get("engine_mode", ""),
-                "access_type": row.get("access_type", ""),
-                "notes": row.get("notes", ""),
-            })
-
-        matches.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        return jsonify({"ok": True, "email": email, "entries": matches[:50]})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/track", methods=["POST", "OPTIONS"])
-def track():
-    if request.method == "OPTIONS":
-        return _preflight_ok()
-
-    payload = request.get_json(silent=True) or {}
-    event_name = payload.get("event") or payload.get("event_type") or "unknown"
-    return jsonify({
-        "ok": True,
-        "event": event_name,
-        "session_email": _get_session_email(),
-        "session_premium": _is_premium_session(),
-        "dream_pack": _get_dream_pack_status(_get_session_email()),
-    })
-
-
-@app.route("/admin/upsert", methods=["POST", "OPTIONS"])
-def admin_upsert():
-    if request.method == "OPTIONS":
-        return _preflight_ok()
-
-    auth_fail = _require_admin()
-    if auth_fail:
-        return jsonify({"ok": False, "error": "Forbidden"}), 403
-
-    payload = request.get_json(silent=True) or {}
-    try:
-        result = _admin_upsert_to_sheet(payload)
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/debug/config", methods=["GET"])
-def debug_config():
-    if not DEBUG_MATCH:
-        return jsonify({"error": "Debug disabled"}), 403
-
-    return jsonify({
-        "spreadsheet_id": SPREADSHEET_ID,
-        "worksheet_name": WORKSHEET_NAME,
-        "cache_ttl_seconds": CACHE_TTL_SECONDS,
-        "allowed_origins": allowed_origins,
-        "admin_configured": bool(ADMIN_KEY),
-        "free_quota": FREE_TRIES,
-        "shadow_window_hours": SHADOW_WINDOW_HOURS,
-        "stripe_has_key": bool(STRIPE_SECRET_KEY),
-        "stripe_has_price": bool(DEFAULT_STRIPE_PRICE_ID),
-        "webhook_configured": bool(STRIPE_WEBHOOK_SECRET),
-        "price_dream_pack_set": bool(PRICE_DREAM_PACK),
-        "dream_pack_uses": DREAM_PACK_USES,
-        "dream_pack_hours": DREAM_PACK_HOURS,
-        "counts_file": str(USAGE_COUNTS_PATH),
-        "subscribers_file": str(SUBSCRIBERS_PATH),
-        "cookie_samesite": COOKIE_SAMESITE,
-        "return_url": RETURN_URL,
-        "doctrine_sheet_names": DOCTRINE_SHEET_NAMES,
-        "relationship_rules_sheet": SHEET_RELATIONSHIP_RULES,
-        "template_index": TEMPLATE_INDEX,
-        "template_upgrade": TEMPLATE_UPGRADE,
-    })
-
-
-if __name__ == "__main__":
-    debug_mode = os.getenv("FLASK_DEBUG", "0") == "1"
-    app.run(
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", "5000")),
-        debug=debug_mode,
-    )

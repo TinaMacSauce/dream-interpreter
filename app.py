@@ -2063,13 +2063,37 @@ def _build_core_message(
     override_hit: Optional[Dict[str, Any]],
     seal: Dict[str, Any],
 ) -> Tuple[str, Dict[str, str], Dict[str, str]]:
+    def _build_primary_focus(
+    dream: str,
+    base_matches,
+    behaviors,
+    states,
+    locations,
+    relationships,
+    override_hit,
+    seal,
+):
+    behavior_clause = _compact_rule_meaning_clause(behaviors, _get_behavior_meaning_modifier, max_items=2)
+    state_clause = _compact_rule_meaning_clause(states, _get_state_meaning_modifier, max_items=1)
+    location_clause = _compact_rule_meaning_clause(locations, _get_location_life_area_meaning, max_items=1)
+    relationship_clause = _compact_rule_meaning_clause(relationships, _get_relationship_meaning_modifier, max_items=1)
+    symbol_clause = _compact_spiritual_meaning(base_matches, override_hit, seal)
+
+    return {
+        "mode": "symbol",
+        "lead": symbol_clause,
+        "behavior": behavior_clause,
+        "state": state_clause,
+        "location": location_clause,
+        "relationship": relationship_clause,
+    }
     focus = _build_primary_focus(dream, base_matches, behaviors, states, locations, relationships, override_hit, seal)
     event_scenario = _build_event_scenario(dream, behaviors, states, locations, relationships)
     seal_type = _strip_trailing_punct(seal.get("type", ""))
     seal_message = _strip_trailing_punct(seal.get("message", ""))
 
     parts = []
-    if event_scenario.get("lead") and _event_layer_strength(dream, states) >= 12:
+    if event_scenario.get("lead"):
         parts.append(_sentence(f"This dream points to {event_scenario['lead']}"))
     elif focus.get("lead"):
         parts.append(_sentence(f"This dream points to {focus['lead']}"))
@@ -2219,15 +2243,15 @@ def _build_doctrine_interpretation(
     core_message, focus, event_scenario = _build_core_message(
         dream, base_matches, behaviors, states, locations, relationships, override_hit, seal
     )
-    support_message = _build_layered_support_paragraph(
-        dream, behaviors, states, locations, relationships, focus, event_scenario
-    )
+  support_message = _build_layered_support_paragraph(
+    behaviors, states, locations, relationships
+)
     physical_message = _build_real_world_impact_paragraph(
-        dream, base_matches, behaviors, states, locations, relationships, override_hit, focus, event_scenario
-    )
-    action_message = _build_action_guidance_paragraph(
-        dream, base_matches, behaviors, states, locations, relationships, override_hit, event_scenario
-    )
+    base_matches, behaviors, states, locations, relationships, override_hit
+)
+  action_message = _build_action_guidance_paragraph(
+    base_matches, behaviors, states, locations, relationships, override_hit
+)
     summary_message = _build_final_summary_paragraph(
         {
             "spiritual_meaning": core_message,

@@ -495,6 +495,11 @@
       border-color:rgba(140,190,255,0.28);
     }
 
+    .jts-card-purple{
+      background:rgba(16,10,22,0.9);
+      border-color:rgba(174,142,255,0.34);
+    }
+
     .jts-card-label{
       font-size:0.8rem;
       letter-spacing:0.12em;
@@ -506,12 +511,29 @@
 
     .jts-card-blue .jts-card-label{ color:#c9dcff; }
     .jts-card-green .jts-card-label{ color:#d7f5c0; }
+    .jts-card-purple .jts-card-label{ color:#ddc7ff; }
 
     .jts-card p,
     .jts-card div{
       margin:0;
       line-height:1.7;
       white-space:pre-wrap;
+    }
+
+    .jts-mini-grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:8px;
+      margin-top:8px;
+    }
+
+    .jts-mini-line{
+      padding:8px 10px;
+      border-radius:10px;
+      background:rgba(255,255,255,0.03);
+      border:1px solid rgba(212,175,55,0.16);
+      font-size:0.86rem;
+      line-height:1.55;
     }
 
     .jts-toggle-btn{
@@ -952,6 +974,47 @@
         return String(value || "").trim();
       }
 
+      function normalizeNarration(data) {
+        if (!data || !data.narration) return "";
+        return String(data.narration.readable_summary || "").trim();
+      }
+
+      function buildDoctrineFactsHtml(doctrineFacts) {
+        if (!doctrineFacts || typeof doctrineFacts !== "object") return "";
+
+        const lead = String(doctrineFacts.lead_message || "").trim();
+        const topSymbols = Array.isArray(doctrineFacts.top_symbols) ? doctrineFacts.top_symbols.filter(Boolean) : [];
+        const behavior = String(doctrineFacts.behavior_meaning || "").trim();
+        const state = String(doctrineFacts.state_meaning || "").trim();
+        const location = String(doctrineFacts.location_meaning || "").trim();
+        const relationship = String(doctrineFacts.relationship_meaning || "").trim();
+
+        const lines = [];
+
+        if (lead) {
+          lines.push('<div class="jts-mini-line"><strong>Lead message:</strong> ' + esc(lead) + '</div>');
+        }
+        if (topSymbols.length) {
+          lines.push('<div class="jts-mini-line"><strong>Top symbols:</strong> ' + esc(topSymbols.join(", ")) + '</div>');
+        }
+        if (behavior && !behavior.toLowerCase().includes("active pattern in the dream")) {
+          lines.push('<div class="jts-mini-line"><strong>Action pattern:</strong> ' + esc(behavior) + '</div>');
+        }
+        if (state && !state.toLowerCase().includes("condition attached to the message")) {
+          lines.push('<div class="jts-mini-line"><strong>State cue:</strong> ' + esc(state) + '</div>');
+        }
+        if (location && !location.toLowerCase().includes("area of life being touched")) {
+          lines.push('<div class="jts-mini-line"><strong>Life area:</strong> ' + esc(location) + '</div>');
+        }
+        if (relationship && !relationship.toLowerCase().includes("people dimension of the dream")) {
+          lines.push('<div class="jts-mini-line"><strong>Relationship cue:</strong> ' + esc(relationship) + '</div>');
+        }
+
+        if (!lines.length) return "";
+
+        return '<div class="jts-card jts-card-info"><div class="jts-card-label">Dream Intelligence</div><div class="jts-mini-grid">' + lines.join("") + '</div></div>';
+      }
+
       onReady(function () {
         const API_BASE = window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1")
           ? "http://127.0.0.1:5000"
@@ -1269,6 +1332,8 @@ Ending:
           const seal = (data && data.seal) ? data.seal : null;
           const receipt = (data && data.receipt) ? data.receipt : null;
           const dreamPack = data && data.dream_pack ? data.dream_pack : null;
+          const readableSummary = normalizeNarration(data);
+          const doctrineFacts = data && data.doctrine_facts ? data.doctrine_facts : {};
 
           accessState.is_paid = !!(data && (data.is_paid === true || data.access === "paid"));
           accessState.free_uses_left = (data && typeof data.free_uses_left === "number") ? data.free_uses_left : null;
@@ -1332,6 +1397,11 @@ Ending:
               + '</p></div>';
           }
 
+          const doctrineFactsHtml = buildDoctrineFactsHtml(doctrineFacts);
+          const readableSummaryHtml = readableSummary
+            ? '<div class="jts-card jts-card-purple"><div class="jts-card-label">Readable Summary</div><p>' + esc(readableSummary) + '</p></div>'
+            : '';
+
           resultBox.style.display = "block";
           resultBox.innerHTML =
             '<div class="jts-result-shell">'
@@ -1341,7 +1411,9 @@ Ending:
             + '<p class="jts-result-status">' + esc(statusLine) + '</p>'
             + '</div>'
             + '<div class="jts-result-grid">'
+            + readableSummaryHtml
             + metaBlocks
+            + doctrineFactsHtml
             + '<div class="jts-card jts-card-soft"><div class="jts-card-label">Spiritual Meaning</div><p>' + esc(normalizeInterpretationValue(interp.spiritual_meaning)) + '</p></div>'
             + '<div class="jts-card jts-card-blue"><div class="jts-card-label">Effects in the Physical Realm</div><p>' + esc(normalizeInterpretationValue(effectsText)) + '</p></div>'
             + '<div class="jts-card jts-card-green"><div class="jts-card-label">What to Do</div><p>' + esc(normalizeInterpretationValue(interp.what_to_do)) + '</p></div>'
@@ -1368,6 +1440,7 @@ Ending:
             has_receipt: !!data.receipt,
             has_seal: !!data.seal,
             has_full: !!(data.full_interpretation && String(data.full_interpretation).trim()),
+            has_readable_summary: !!readableSummary,
             engine_mode: data.engine_mode || ""
           });
         }

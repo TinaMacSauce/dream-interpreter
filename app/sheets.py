@@ -1,14 +1,14 @@
 import json
-import time
 import os
+import time
 from typing import Dict, List, Tuple
 
 import gspread
 from google.oauth2.service_account import Credentials
 
+from app.cache import DOCTRINE_CACHE, LEGACY_CACHE
 from app.config import Config
-from app.utils import normalize_header
-from app.cache import LEGACY_CACHE, DOCTRINE_CACHE
+from app.utils import col_to_a1, normalize_header
 
 
 # ============================================================
@@ -20,7 +20,10 @@ def get_credentials() -> Credentials:
     if raw:
         raw_fixed = raw.replace("\\n", "\n")
         info = json.loads(raw_fixed)
-        return Credentials.from_service_account_info(info, scopes=Config.GOOGLE_SCOPES)
+        return Credentials.from_service_account_info(
+            info,
+            scopes=Config.GOOGLE_SCOPES,
+        )
 
     if not os.path.exists(Config.GOOGLE_SERVICE_ACCOUNT_FILE):
         raise RuntimeError("Missing Google credentials.")
@@ -40,19 +43,19 @@ def get_spreadsheet():
 # ============================================================
 # Worksheet handling
 # ============================================================
-def get_or_create_worksheet(sheet_name: str):
+def get_or_create_worksheet(sheet_name: str, rows: int = 2000, cols: int = 30):
     sh = get_spreadsheet()
 
     try:
         ws = sh.worksheet(sheet_name)
     except Exception:
-        ws = sh.add_worksheet(title=sheet_name, rows=2000, cols=30)
+        ws = sh.add_worksheet(title=sheet_name, rows=rows, cols=cols)
 
     ensure_expected_headers(ws, sheet_name)
     return ws
 
 
-def ensure_expected_headers(ws, sheet_name: str):
+def ensure_expected_headers(ws, sheet_name: str) -> None:
     expected = Config.EXPECTED_HEADERS.get(sheet_name)
     if not expected:
         return
@@ -60,15 +63,18 @@ def ensure_expected_headers(ws, sheet_name: str):
     current = ws.row_values(1)
     current_norm = [normalize_header(x) for x in current]
     expected_norm = [normalize_header(x) for x in expected]
-
-    from app.utils import col_to_a1
     end_col = col_to_a1(len(expected))
 
-    if not current or current_norm[:len(expected_norm)] != expected_norm:
-        ws.update(f"A1:{end_col}1", [expected])
+    if not current or current_norm[: len(expected_norm)] != expected_norm:
+        ws.update(
+            f"A1:{end_col}1",
+            [expected],
+            value_input_option="RAW",
+        )
+
 
 # ============================================================
-# Sheet → rows
+# Sheet -> rows
 # ============================================================
 def worksheet_to_rows(ws) -> Tuple[List[str], List[Dict[str, str]]]:
     values = ws.get_all_values()
@@ -77,8 +83,8 @@ def worksheet_to_rows(ws) -> Tuple[List[str], List[Dict[str, str]]]:
         return [], []
 
     raw_headers = values[0]
-    headers = []
-    seen = {}
+    headers: List[str] = []
+    seen: Dict[str, int] = {}
 
     for h in raw_headers:
         nh = normalize_header(h) or "col"
@@ -92,10 +98,7 @@ def worksheet_to_rows(ws) -> Tuple[List[str], List[Dict[str, str]]]:
         if len(r) < len(headers):
             r = r + [""] * (len(headers) - len(r))
 
-        rows.append({
-            headers[i]: (r[i] or "").strip()
-            for i in range(len(headers))
-        })
+        rows.append({headers[i]: (r[i] or "").strip() for i in range(len(headers))})
 
     return headers, rows
 
@@ -143,7 +146,6 @@ def load_doctrine_sheets(force: bool = False) -> Dict[str, List[Dict]]:
         try:
             ws = get_or_create_worksheet(name)
             headers, rows = worksheet_to_rows(ws)
-
             sheets_data[name] = rows
             headers_map[name] = headers
         except Exception:

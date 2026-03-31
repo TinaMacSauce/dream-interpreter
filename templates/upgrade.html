@@ -359,6 +359,7 @@
 
           <form action="https://interpreter.jamaicantruestories.com/create-checkout-session" method="POST" id="checkoutForm" novalidate>
             <input type="hidden" name="email" id="emailHidden" value="">
+            <input type="hidden" name="return" id="returnHiddenSub" value="">
             <button class="btn" type="submit" id="subscriptionBtn">Start Subscription</button>
           </form>
 
@@ -372,6 +373,7 @@
 
           <form action="https://interpreter.jamaicantruestories.com/create-dream-pack-checkout-session" method="POST" id="dreamPackForm" novalidate>
             <input type="hidden" name="email" id="emailHiddenPack" value="">
+            <input type="hidden" name="return" id="returnHiddenPack" value="">
             <button class="btn-outline" type="submit" id="dreamPackBtn">Buy Dream Pack</button>
           </form>
 
@@ -390,20 +392,25 @@
 
   <script>
     (function () {
-      const API_BASE = "https://interpreter.jamaicantruestories.com";
+      const API_BASE = window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1")
+        ? "http://127.0.0.1:5000"
+        : "https://interpreter.jamaicantruestories.com";
+
       const DEFAULT_RETURN_URL = "https://jamaicantruestories.com/pages/dream-interpreter";
 
-      const emailInput      = document.getElementById("email");
-      const emailHidden     = document.getElementById("emailHidden");
-      const emailHiddenPack = document.getElementById("emailHiddenPack");
-      const unlockBtn       = document.getElementById("unlock");
-      const err             = document.getElementById("err");
-      const ok              = document.getElementById("ok");
-      const backLink        = document.getElementById("backLink");
-      const checkoutForm    = document.getElementById("checkoutForm");
-      const dreamPackForm   = document.getElementById("dreamPackForm");
-      const subscriptionBtn = document.getElementById("subscriptionBtn");
-      const dreamPackBtn    = document.getElementById("dreamPackBtn");
+      const emailInput       = document.getElementById("email");
+      const emailHidden      = document.getElementById("emailHidden");
+      const emailHiddenPack  = document.getElementById("emailHiddenPack");
+      const returnHiddenSub  = document.getElementById("returnHiddenSub");
+      const returnHiddenPack = document.getElementById("returnHiddenPack");
+      const unlockBtn        = document.getElementById("unlock");
+      const err              = document.getElementById("err");
+      const ok               = document.getElementById("ok");
+      const backLink         = document.getElementById("backLink");
+      const checkoutForm     = document.getElementById("checkoutForm");
+      const dreamPackForm    = document.getElementById("dreamPackForm");
+      const subscriptionBtn  = document.getElementById("subscriptionBtn");
+      const dreamPackBtn     = document.getElementById("dreamPackBtn");
 
       function normalizeEmail(email) {
         return String(email || "").trim().toLowerCase();
@@ -502,6 +509,8 @@
 
       const returnUrl = getReturnFromURL() || DEFAULT_RETURN_URL;
       backLink.href = returnUrl;
+      returnHiddenSub.value = returnUrl;
+      returnHiddenPack.value = returnUrl;
 
       syncEmail();
 
@@ -517,6 +526,8 @@
       });
 
       unlockBtn.addEventListener("click", async function () {
+        if (unlockBtn.disabled) return;
+
         setMsg("err", "");
         setMsg("ok", "");
 
@@ -553,6 +564,11 @@
       });
 
       checkoutForm.addEventListener("submit", function (e) {
+        if (subscriptionBtn.disabled) {
+          e.preventDefault();
+          return;
+        }
+
         setMsg("err", "");
         setMsg("ok", "");
 
@@ -563,10 +579,16 @@
         }
 
         emailHidden.value = email;
+        returnHiddenSub.value = returnUrl;
         setBusy(subscriptionBtn, "Redirecting…", true);
       });
 
       dreamPackForm.addEventListener("submit", function (e) {
+        if (dreamPackBtn.disabled) {
+          e.preventDefault();
+          return;
+        }
+
         setMsg("err", "");
         setMsg("ok", "");
 
@@ -577,6 +599,7 @@
         }
 
         emailHiddenPack.value = email;
+        returnHiddenPack.value = returnUrl;
         setBusy(dreamPackBtn, "Redirecting…", true);
       });
     })();

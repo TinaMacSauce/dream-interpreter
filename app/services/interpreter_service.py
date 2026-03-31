@@ -22,6 +22,7 @@ from app.matching import match_base_symbols_doctrine, match_symbols_legacy
 from app.overrides import apply_override_rules
 from app.rules import detect_rule_hits
 from app.seal import compute_doctrine_seal, compute_seal_from_symbol_count
+from app.services.narration_service import build_narration_result
 from app.sheets import doctrine_available, load_doctrine_sheets, load_legacy_rows
 from app.utils import normalize_email, safe_debug_payload_preview, validate_dream_text
 
@@ -162,6 +163,12 @@ def _build_doctrine_payload(
         narrative_max_symbols=Config.NARRATIVE_MAX_SYMBOLS,
     )
 
+    narration = build_narration_result(
+        doctrine_facts=built.get("doctrine_facts", {}),
+        interpretation=built.get("interpretation", {}),
+        ai_enabled=False,
+    )
+
     payload: Dict[str, Any] = {
         "engine_mode": "doctrine",
         "access": _access_label(is_paid, has_active_dream_pack),
@@ -183,6 +190,7 @@ def _build_doctrine_payload(
         "full_interpretation": built["full_interpretation"],
         "receipt": _build_receipt(built.get("top_symbols", [])),
         "doctrine_facts": built.get("doctrine_facts", {}),
+        "narration": narration,
     }
 
     if Config.DEBUG_MATCH:
@@ -245,6 +253,13 @@ def _build_legacy_payload(
         ),
         "receipt": _build_receipt(top_symbols),
         "doctrine_facts": {},
+        "narration": {
+            "mode": "legacy_fallback",
+            "enabled": False,
+            "used_ai": False,
+            "readable_summary": "",
+            "prompt_payload": {},
+        },
     }
 
     if Config.DEBUG_MATCH:

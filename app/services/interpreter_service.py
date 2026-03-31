@@ -166,7 +166,7 @@ def _build_doctrine_payload(
     narration = build_narration_result(
         doctrine_facts=built.get("doctrine_facts", {}),
         interpretation=built.get("interpretation", {}),
-        ai_enabled=False,
+        ai_enabled=Config.AI_NARRATION_ENABLED,
     )
 
     payload: Dict[str, Any] = {

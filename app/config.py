@@ -8,6 +8,13 @@ def _csv_to_list(value: str) -> List[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 class Config:
     # ============================================================
     # Core Flask
@@ -18,12 +25,7 @@ class Config:
 
     MAX_CONTENT_LENGTH = 64 * 1024
     SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "None").strip()
-    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "true").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", True)
 
     # ============================================================
     # Allowed Origins / CORS
@@ -64,22 +66,35 @@ class Config:
     ]
 
     # ============================================================
-    # Doctrine Mode
+    # Doctrine Mode / Narrative
     # ============================================================
-    DOCTRINE_MODE = os.getenv("DOCTRINE_MODE", "1").strip().lower() not in {
-        "0",
-        "false",
-        "no",
-        "off",
-    }
+    DOCTRINE_MODE = _env_bool("DOCTRINE_MODE", True)
 
-    NARRATIVE_ENABLED = os.getenv("NARRATIVE_ENABLED", "1").strip().lower() not in {
-        "0",
-        "false",
-        "no",
-        "off",
-    }
+    NARRATIVE_ENABLED = _env_bool("NARRATIVE_ENABLED", True)
     NARRATIVE_MAX_SYMBOLS = int(os.getenv("NARRATIVE_MAX_SYMBOLS", "3"))
+
+    # ============================================================
+    # Narration Layer
+    # ============================================================
+    NARRATION_ENABLED = _env_bool("NARRATION_ENABLED", True)
+    NARRATION_MODE = os.getenv("NARRATION_MODE", "deterministic").strip().lower()
+    NARRATION_MAX_SYMBOLS = int(os.getenv("NARRATION_MAX_SYMBOLS", "3"))
+    NARRATION_INCLUDE_PROMPT_PAYLOAD = _env_bool("NARRATION_INCLUDE_PROMPT_PAYLOAD", True)
+
+    # ============================================================
+    # Future AI Narration Controls
+    # ============================================================
+    AI_NARRATION_ENABLED = _env_bool("AI_NARRATION_ENABLED", False)
+    AI_NARRATION_PROVIDER = os.getenv("AI_NARRATION_PROVIDER", "none").strip().lower()
+    AI_NARRATION_MODEL = os.getenv("AI_NARRATION_MODEL", "").strip()
+    AI_NARRATION_TIMEOUT_SECONDS = int(os.getenv("AI_NARRATION_TIMEOUT_SECONDS", "20"))
+    AI_NARRATION_MAX_INPUT_CHARS = int(os.getenv("AI_NARRATION_MAX_INPUT_CHARS", "6000"))
+    AI_NARRATION_MAX_OUTPUT_CHARS = int(os.getenv("AI_NARRATION_MAX_OUTPUT_CHARS", "2000"))
+    AI_NARRATION_TEMPERATURE = float(os.getenv("AI_NARRATION_TEMPERATURE", "0.2"))
+    AI_NARRATION_STRICT_DOCTRINE = _env_bool("AI_NARRATION_STRICT_DOCTRINE", True)
+
+    # Optional future API key slots
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 
     # ============================================================
     # Doctrine Sheets
@@ -107,12 +122,7 @@ class Config:
     # Matching / Engine Limits
     # ============================================================
     CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", os.getenv("SHEET_CACHE_TTL", "120")))
-    DEBUG_MATCH = os.getenv("DEBUG_MATCH", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    DEBUG_MATCH = _env_bool("DEBUG_MATCH", False)
 
     KEYWORD_GUARD_ENABLED = True
     MAX_DREAM_LENGTH = int(os.getenv("MAX_DREAM_LENGTH", "2500"))
@@ -264,3 +274,15 @@ class Config:
             raise RuntimeError("MAX_RULE_HITS_PER_LAYER must be at least 1.")
         if cls.FREE_TRIES < 0:
             raise RuntimeError("FREE_TRIES cannot be negative.")
+        if cls.NARRATIVE_MAX_SYMBOLS < 1:
+            raise RuntimeError("NARRATIVE_MAX_SYMBOLS must be at least 1.")
+        if cls.NARRATION_MAX_SYMBOLS < 1:
+            raise RuntimeError("NARRATION_MAX_SYMBOLS must be at least 1.")
+        if cls.AI_NARRATION_TIMEOUT_SECONDS < 1:
+            raise RuntimeError("AI_NARRATION_TIMEOUT_SECONDS must be at least 1.")
+        if cls.AI_NARRATION_MAX_INPUT_CHARS < 500:
+            raise RuntimeError("AI_NARRATION_MAX_INPUT_CHARS is set too low.")
+        if cls.AI_NARRATION_MAX_OUTPUT_CHARS < 200:
+            raise RuntimeError("AI_NARRATION_MAX_OUTPUT_CHARS is set too low.")
+        if cls.AI_NARRATION_TEMPERATURE < 0 or cls.AI_NARRATION_TEMPERATURE > 1.5:
+            raise RuntimeError("AI_NARRATION_TEMPERATURE must be between 0 and 1.5.")

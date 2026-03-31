@@ -11,6 +11,7 @@ def create_app() -> Flask:
     )
 
     app.config.from_object(Config)
+    Config.validate()
 
     CORS(
         app,

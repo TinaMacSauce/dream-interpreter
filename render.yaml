@@ -1,4 +1,3 @@
-# render.yaml
 services:
   - type: web
     name: dream-interpreter-0015
@@ -6,44 +5,83 @@ services:
     plan: starter
     region: oregon
     autoDeploy: true
-    healthCheckPath: /health
 
-    buildCommand: |
-      pip install --upgrade pip
-      pip install -r requirements.txt
-
-    startCommand: |
-      gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
-
+    # ✅ Explicit Python version (VERY IMPORTANT)
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+
       # --- Sheet ---
       - key: SPREADSHEET_ID
         value: 1ToWPpJ_u-Z14eqL9U1oJppXX6f63h_eZcjUVglKr4Zk
+
       - key: WORKSHEET_NAME
         value: Sheet1
+
+      # --- Security ---
+      - key: FLASK_SECRET_KEY
+        generateValue: true
 
       # --- CORS ---
       - key: ALLOWED_ORIGINS
         value: https://jamaicantruestories.com,https://www.jamaicantruestories.com,https://plqwhd-jm.myshopify.com
 
-      # --- Optional cache tuning (your app.py uses SHEET_CACHE_TTL) ---
-      - key: SHEET_CACHE_TTL
-        value: "120"
+      # --- App behavior ---
+      - key: RETURN_URL
+        value: https://jamaicantruestories.com/pages/dream-interpreter
 
-      # --- Debug (optional) ---
-      - key: DEBUG_MATCH
-        value: "0"
+      - key: DOCTRINE_MODE
+        value: "1"
+
       - key: NARRATIVE_ENABLED
         value: "1"
+
       - key: NARRATIVE_MAX_SYMBOLS
         value: "3"
 
-      # --- Google credentials (use ONE of the two approaches below) ---
+      # --- Cache ---
+      - key: CACHE_TTL_SECONDS
+        value: "120"
 
-      # Option A (RECOMMENDED): store service account JSON in Render as an env var
-      # Set this in the Render dashboard as a Secret value:
-      # GOOGLE_SERVICE_ACCOUNT_JSON
+      # --- Debug ---
+      - key: DEBUG_MATCH
+        value: "0"
 
-      # Option B: if you are mounting a credentials.json file into the container:
+      # --- Free access ---
+      - key: FREE_QUOTA
+        value: "3"
+
+      - key: SHADOW_WINDOW_HOURS
+        value: "72"
+
+      # --- Dream pack ---
+      - key: DREAM_PACK_USES
+        value: "3"
+
+      - key: DREAM_PACK_HOURS
+        value: "72"
+
+      # --- Cookies ---
+      - key: SESSION_COOKIE_SAMESITE
+        value: None
+
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+
+      # --- Google credentials ---
+      # Recommended: set GOOGLE_SERVICE_ACCOUNT_JSON in dashboard as secret
+
       - key: GOOGLE_SERVICE_ACCOUNT_FILE
         value: /etc/secrets/credentials.json
+
+    # --- Build ---
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r requirements.txt
+
+    # --- Start ---
+    startCommand: |
+      gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+
+    # --- Health check ---
+    healthCheckPath: /health

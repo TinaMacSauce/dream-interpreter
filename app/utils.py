@@ -216,13 +216,6 @@ def validate_dream_text(dream: str, min_length: int, max_length: int) -> Optiona
 
 
 def normalize_action_phrase(text: str) -> str:
-    """
-    Normalizes action phrases so output reads naturally and consistently.
-    Examples:
-    - 'is chasing' -> 'chasing'
-    - 'was attacking' -> 'attacking'
-    - 'attacks me' -> 'attacks me'
-    """
     text = strip_trailing_punct(text)
     if not text:
         return ""
@@ -284,10 +277,6 @@ def normalize_action_phrase(text: str) -> str:
 
 
 def normalize_effect_phrase(text: str) -> str:
-    """
-    Soft-normalizes effect/result phrases so they can be merged into
-    readable interpretation sentences without awkward capitalization or punctuation.
-    """
     text = strip_trailing_punct(text)
     if not text:
         return ""
@@ -297,57 +286,3 @@ def normalize_effect_phrase(text: str) -> str:
         return ""
 
     return text[:1].lower() + text[1:]
-
-
-def normalize_subject_phrase(text: str) -> str:
-    """
-    Normalizes subject fragments for cleaner narrative assembly.
-    """
-    text = strip_trailing_punct(text)
-    if not text:
-        return ""
-    text = re.sub(r"\s+", " ", text).strip()
-    return text.lower()
-
-
-def normalize_location_phrase(text: str) -> str:
-    """
-    Normalizes location phrases such as 'in the house' or 'at church'
-    for clean sentence composition.
-    """
-    text = strip_trailing_punct(text)
-    if not text:
-        return ""
-    text = re.sub(r"\s+", " ", text).strip().lower()
-    return text
-
-
-def unique_preserve_order(items: List[str]) -> List[str]:
-    out: List[str] = []
-    seen = set()
-
-    for item in items:
-        item_clean = clean_sentence(item)
-        if not item_clean:
-            continue
-        key = normalize_text(item_clean)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(item_clean)
-
-    return out
-
-
-def merge_fragment_list(items: List[str]) -> str:
-    """
-    Turns a list of short text fragments into one readable phrase.
-    """
-    cleaned = unique_preserve_order(items)
-    if not cleaned:
-        return ""
-    if len(cleaned) == 1:
-        return cleaned[0]
-    if len(cleaned) == 2:
-        return f"{cleaned[0]} and {cleaned[1]}"
-    return ", ".join(cleaned[:-1]) + f", and {cleaned[-1]}"

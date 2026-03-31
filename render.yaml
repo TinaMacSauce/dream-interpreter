@@ -33,7 +33,7 @@ services:
 
       # 🌐 CORS
       - key: ALLOWED_ORIGINS
-        value: https://jamaicantruestories.com,https://www.jamaicantruestories.com,https://plqwhd-jm.myshopify.com
+        value: https://jamaicantruestories.com,https://www.jamaicantruestories.com,https://plqwhd-jm.myshopify.com,https://interpreter.jamaicantruestories.com
 
       # 🔁 App behavior
       - key: RETURN_URL

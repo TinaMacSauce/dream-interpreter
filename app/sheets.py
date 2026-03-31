@@ -61,9 +61,11 @@ def ensure_expected_headers(ws, sheet_name: str):
     current_norm = [normalize_header(x) for x in current]
     expected_norm = [normalize_header(x) for x in expected]
 
-    if not current or current_norm[:len(expected_norm)] != expected_norm:
-        ws.update(f"A1:{chr(64 + len(expected))}1", [expected])
+    from app.utils import col_to_a1
+    end_col = col_to_a1(len(expected))
 
+    if not current or current_norm[:len(expected_norm)] != expected_norm:
+        ws.update(f"A1:{end_col}1", [expected])
 
 # ============================================================
 # Sheet → rows

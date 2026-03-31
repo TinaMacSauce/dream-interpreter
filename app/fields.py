@@ -69,8 +69,24 @@ def get_keywords_cell(row: Dict[str, Any]) -> str:
     return row_get(row, "keywords", "keyword", "tags")
 
 
+def get_priority_cell(row: Dict[str, Any], default: int = 0) -> int:
+    raw = row_get(row, "priority")
+    if not raw:
+        return default
+    try:
+        return int(float(raw))
+    except Exception:
+        return default
+
+
 def get_base_symbol_input(row: Dict[str, Any]) -> str:
-    return row_get(row, "symbol", "input")
+    return row_get(
+        row,
+        "symbol",
+        "input",
+        "input symbol",
+        "dream symbol",
+    )
 
 
 def get_base_symbol_category(row: Dict[str, Any]) -> str:
@@ -98,7 +114,13 @@ def get_base_symbol_effects(row: Dict[str, Any]) -> str:
 
 
 def get_base_symbol_action(row: Dict[str, Any]) -> str:
-    return row_get(row, "base_action", "base action", "action", "actions")
+    return row_get(
+        row,
+        "base_action",
+        "base action",
+        "action",
+        "actions",
+    )
 
 
 def get_rule_name(row: Dict[str, Any], *keys: str) -> str:
@@ -106,8 +128,9 @@ def get_rule_name(row: Dict[str, Any], *keys: str) -> str:
 
 
 def get_rule_keywords(row: Dict[str, Any]) -> List[str]:
-    from app.utils import normalize_text
     import re
+
+    from app.utils import normalize_text
 
     raw = row_get(row, "keywords", "keyword", "tags")
     if not raw:
@@ -134,7 +157,13 @@ def get_behavior_name(row: Dict[str, Any]) -> str:
 
 
 def get_behavior_meaning_modifier(row: Dict[str, Any]) -> str:
-    return row_get(row, "meaning_modifier", "meaning modifier", "effect", "effects")
+    return row_get(
+        row,
+        "meaning_modifier",
+        "meaning modifier",
+        "effect",
+        "effects",
+    )
 
 
 def get_behavior_physical_modifier(row: Dict[str, Any]) -> str:
@@ -150,7 +179,13 @@ def get_behavior_physical_modifier(row: Dict[str, Any]) -> str:
 
 
 def get_behavior_action_modifier(row: Dict[str, Any]) -> str:
-    return row_get(row, "action_modifier", "action modifier", "action", "actions")
+    return row_get(
+        row,
+        "action_modifier",
+        "action modifier",
+        "action",
+        "actions",
+    )
 
 
 def get_state_name(row: Dict[str, Any]) -> str:
@@ -158,7 +193,13 @@ def get_state_name(row: Dict[str, Any]) -> str:
 
 
 def get_state_meaning_modifier(row: Dict[str, Any]) -> str:
-    return row_get(row, "meaning_modifier", "meaning modifier", "effect", "effects")
+    return row_get(
+        row,
+        "meaning_modifier",
+        "meaning modifier",
+        "effect",
+        "effects",
+    )
 
 
 def get_state_physical_modifier(row: Dict[str, Any]) -> str:
@@ -174,7 +215,13 @@ def get_state_physical_modifier(row: Dict[str, Any]) -> str:
 
 
 def get_state_action_modifier(row: Dict[str, Any]) -> str:
-    return row_get(row, "action_modifier", "action modifier", "action", "actions")
+    return row_get(
+        row,
+        "action_modifier",
+        "action modifier",
+        "action",
+        "actions",
+    )
 
 
 def get_location_name(row: Dict[str, Any]) -> str:
@@ -182,7 +229,13 @@ def get_location_name(row: Dict[str, Any]) -> str:
 
 
 def get_location_life_area_meaning(row: Dict[str, Any]) -> str:
-    return row_get(row, "life_area_meaning", "life area meaning", "effect", "effects")
+    return row_get(
+        row,
+        "life_area_meaning",
+        "life area meaning",
+        "effect",
+        "effects",
+    )
 
 
 def get_location_physical_area_meaning(row: Dict[str, Any]) -> str:
@@ -196,7 +249,13 @@ def get_location_physical_area_meaning(row: Dict[str, Any]) -> str:
 
 
 def get_location_action_modifier(row: Dict[str, Any]) -> str:
-    return row_get(row, "action_modifier", "action modifier", "action", "actions")
+    return row_get(
+        row,
+        "action_modifier",
+        "action modifier",
+        "action",
+        "actions",
+    )
 
 
 def get_relationship_name(row: Dict[str, Any]) -> str:
@@ -204,7 +263,13 @@ def get_relationship_name(row: Dict[str, Any]) -> str:
 
 
 def get_relationship_meaning_modifier(row: Dict[str, Any]) -> str:
-    return row_get(row, "meaning_modifier", "meaning modifier", "effect", "effects")
+    return row_get(
+        row,
+        "meaning_modifier",
+        "meaning modifier",
+        "effect",
+        "effects",
+    )
 
 
 def get_relationship_physical_modifier(row: Dict[str, Any]) -> str:
@@ -220,7 +285,47 @@ def get_relationship_physical_modifier(row: Dict[str, Any]) -> str:
 
 
 def get_relationship_action_modifier(row: Dict[str, Any]) -> str:
-    return row_get(row, "action_modifier", "action modifier", "action", "actions")
+    return row_get(
+        row,
+        "action_modifier",
+        "action modifier",
+        "action",
+        "actions",
+    )
+
+
+def get_override_name(row: Dict[str, Any]) -> str:
+    return row_get(row, "override_name", "override name", "name")
+
+
+def get_override_spiritual(row: Dict[str, Any]) -> str:
+    return row_get(
+        row,
+        "final_spiritual_meaning",
+        "final spiritual meaning",
+        "spiritual meaning",
+        "meaning",
+    )
+
+
+def get_override_physical(row: Dict[str, Any]) -> str:
+    return row_get(
+        row,
+        "final_physical_effects",
+        "final physical effects",
+        "physical effects",
+        "effects",
+    )
+
+
+def get_override_action(row: Dict[str, Any]) -> str:
+    return row_get(
+        row,
+        "final_action",
+        "final action",
+        "action",
+        "actions",
+    )
 
 
 def get_output_template(rows: List[Dict[str, Any]], template_type: str, fallback: str) -> str:
@@ -231,7 +336,9 @@ def get_output_template(rows: List[Dict[str, Any]], template_type: str, fallback
     for row in rows:
         if not row_is_active(row):
             continue
-        if normalize_text(row_get(row, "template_type")) == wanted:
+
+        row_type = normalize_text(row_get(row, "template_type"))
+        if row_type == wanted:
             text = row_get(row, "template_text")
             if text:
                 return text

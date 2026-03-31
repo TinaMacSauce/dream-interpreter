@@ -953,7 +953,9 @@
       }
 
       onReady(function () {
-        const API_BASE = "https://interpreter.jamaicantruestories.com";
+        const API_BASE = window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1")
+          ? "http://127.0.0.1:5000"
+          : "https://interpreter.jamaicantruestories.com";
 
         const interpretBtn = document.getElementById("interpret-btn");
         const resultBox = document.getElementById("result");
@@ -1383,6 +1385,8 @@ Ending:
         }
 
         interpretBtn.onclick = async function () {
+          if (interpretBtn.disabled) return;
+
           const dream = dreamInput.value.trim();
           const email = requireEmailOrStop();
           if (!email) return;

@@ -213,3 +213,141 @@ def validate_dream_text(dream: str, min_length: int, max_length: int) -> Optiona
     if len(dream) > max_length:
         return f"Dream text is too long. Maximum allowed is {max_length} characters."
     return None
+
+
+def normalize_action_phrase(text: str) -> str:
+    """
+    Normalizes action phrases so output reads naturally and consistently.
+    Examples:
+    - 'is chasing' -> 'chasing'
+    - 'was attacking' -> 'attacking'
+    - 'attacks me' -> 'attacks me'
+    """
+    text = strip_trailing_punct(text)
+    if not text:
+        return ""
+
+    text = re.sub(r"\s+", " ", text).strip().lower()
+
+    replacements = {
+        "is chasing": "chasing",
+        "are chasing": "chasing",
+        "was chasing": "chasing",
+        "were chasing": "chasing",
+        "is following": "following",
+        "are following": "following",
+        "was following": "following",
+        "were following": "following",
+        "is attacking": "attacking",
+        "are attacking": "attacking",
+        "was attacking": "attacking",
+        "were attacking": "attacking",
+        "is fighting": "fighting",
+        "are fighting": "fighting",
+        "was fighting": "fighting",
+        "were fighting": "fighting",
+        "is biting": "biting",
+        "are biting": "biting",
+        "was biting": "biting",
+        "were biting": "biting",
+        "is watching": "watching",
+        "are watching": "watching",
+        "was watching": "watching",
+        "were watching": "watching",
+        "is crying": "crying",
+        "are crying": "crying",
+        "was crying": "crying",
+        "were crying": "crying",
+        "is running": "running",
+        "are running": "running",
+        "was running": "running",
+        "were running": "running",
+        "is hiding": "hiding",
+        "are hiding": "hiding",
+        "was hiding": "hiding",
+        "were hiding": "hiding",
+        "is speaking": "speaking",
+        "are speaking": "speaking",
+        "was speaking": "speaking",
+        "were speaking": "speaking",
+        "is looking at": "looking at",
+        "are looking at": "looking at",
+        "was looking at": "looking at",
+        "were looking at": "looking at",
+        "is standing": "standing",
+        "are standing": "standing",
+        "was standing": "standing",
+        "were standing": "standing",
+    }
+
+    return replacements.get(text, text)
+
+
+def normalize_effect_phrase(text: str) -> str:
+    """
+    Soft-normalizes effect/result phrases so they can be merged into
+    readable interpretation sentences without awkward capitalization or punctuation.
+    """
+    text = strip_trailing_punct(text)
+    if not text:
+        return ""
+
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return ""
+
+    return text[:1].lower() + text[1:]
+
+
+def normalize_subject_phrase(text: str) -> str:
+    """
+    Normalizes subject fragments for cleaner narrative assembly.
+    """
+    text = strip_trailing_punct(text)
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text).strip()
+    return text.lower()
+
+
+def normalize_location_phrase(text: str) -> str:
+    """
+    Normalizes location phrases such as 'in the house' or 'at church'
+    for clean sentence composition.
+    """
+    text = strip_trailing_punct(text)
+    if not text:
+        return ""
+    text = re.sub(r"\s+", " ", text).strip().lower()
+    return text
+
+
+def unique_preserve_order(items: List[str]) -> List[str]:
+    out: List[str] = []
+    seen = set()
+
+    for item in items:
+        item_clean = clean_sentence(item)
+        if not item_clean:
+            continue
+        key = normalize_text(item_clean)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item_clean)
+
+    return out
+
+
+def merge_fragment_list(items: List[str]) -> str:
+    """
+    Turns a list of short text fragments into one readable phrase.
+    """
+    cleaned = unique_preserve_order(items)
+    if not cleaned:
+        return ""
+    if len(cleaned) == 1:
+        return cleaned[0]
+    if len(cleaned) == 2:
+        return f"{cleaned[0]} and {cleaned[1]}"
+    return ", ".join(cleaned[:-1]) + f", and {cleaned[-1]}"

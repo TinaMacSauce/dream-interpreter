@@ -56,7 +56,7 @@ def clean_debug_like_phrase(text: str) -> str:
 
 
 def merge_natural_paragraphs(parts: List[str]) -> str:
-    cleaned = []
+    cleaned: List[str] = []
     seen = set()
 
     for part in parts:
@@ -65,7 +65,7 @@ def merge_natural_paragraphs(parts: List[str]) -> str:
         if not part:
             continue
 
-        key = part.lower()
+        key = normalize_text(part)
         if key in seen:
             continue
 
@@ -75,10 +75,32 @@ def merge_natural_paragraphs(parts: List[str]) -> str:
     return "\n".join(cleaned).strip()
 
 
+def unique_text_parts(parts: List[str], max_items: Optional[int] = None) -> List[str]:
+    out: List[str] = []
+    seen = set()
+
+    for part in parts:
+        part = strip_trailing_punct(part)
+        if not part:
+            continue
+
+        key = normalize_text(part)
+        if not key or key in seen:
+            continue
+
+        seen.add(key)
+        out.append(part)
+
+        if max_items is not None and len(out) >= max_items:
+            break
+
+    return out
+
+
 def compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: int = 2) -> str:
     parts: List[str] = []
 
-    for hit in hits[:max_items]:
+    for hit in hits:
         try:
             part = strip_trailing_punct(getter(hit["row"]))
         except Exception:
@@ -86,6 +108,7 @@ def compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: i
         if part:
             parts.append(part)
 
+    parts = unique_text_parts(parts, max_items=max_items)
     return human_join(parts)
 
 
@@ -99,18 +122,21 @@ def compact_spiritual_meaning(
         return strip_trailing_punct(override_hit.get("spiritual", ""))
 
     parts: List[str] = []
+
     for row, _score, _hit in base_matches[:narrative_max_symbols]:
         symbol = strip_trailing_punct(get_base_symbol_input(row))
         meaning = strip_trailing_punct(get_base_symbol_meaning(row))
 
         if symbol and meaning:
-            parts.append(f"{symbol} points to {meaning}")
+            parts.append(f"{symbol} suggests {meaning}")
         elif meaning:
             parts.append(meaning)
         elif symbol:
             parts.append(symbol)
 
+    parts = unique_text_parts(parts, max_items=narrative_max_symbols)
     joined = human_join(parts)
+
     return joined or strip_trailing_punct(seal.get("message", "")) or "the main symbolic message in the dream"
 
 
@@ -124,7 +150,7 @@ def build_primary_focus(
     override_hit,
     seal,
     narrative_max_symbols: int,
-):
+) -> Dict[str, str]:
     return {
         "mode": "symbol",
         "lead": compact_spiritual_meaning(base_matches, override_hit, seal, narrative_max_symbols),
@@ -135,12 +161,35 @@ def build_primary_focus(
     }
 
 
+def build_base_symbol_clause(
+    base_matches,
+    narrative_max_symbols: int,
+) -> str:
+    symbol_clauses: List[str] = []
+
+    for row, _score, _hit in base_matches[:narrative_max_symbols]:
+        symbol = strip_trailing_punct(get_base_symbol_input(row))
+        meaning = strip_trailing_punct(get_base_symbol_meaning(row))
+
+        if symbol and meaning:
+            symbol_clauses.append(f"{symbol} suggests {meaning}")
+        elif meaning:
+            symbol_clauses.append(meaning)
+        elif symbol:
+            symbol_clauses.append(symbol)
+
+    symbol_clauses = unique_text_parts(symbol_clauses, max_items=2)
+    return human_join(symbol_clauses)
+
+
 def build_event_scenario(
     dream: str,
+    base_matches,
     behaviors: List[Dict[str, Any]],
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
+    narrative_max_symbols: int,
 ) -> Dict[str, str]:
     behavior_names = {normalize_text(x.get("name", "")) for x in behaviors}
     state_names = {normalize_text(x.get("name", "")) for x in states}
@@ -150,6 +199,12 @@ def build_event_scenario(
     lead = ""
     support_parts: List[str] = []
     seal_type = ""
+
+    base_clause = build_base_symbol_clause(base_matches, narrative_max_symbols)
+    behavior_clause = compact_rule_meaning_clause(behaviors, get_behavior_meaning_modifier, max_items=2)
+    state_clause = compact_rule_meaning_clause(states, get_state_meaning_modifier, max_items=1)
+    location_clause = compact_rule_meaning_clause(locations, get_location_life_area_meaning, max_items=1)
+    relationship_clause = compact_rule_meaning_clause(relationships, get_relationship_meaning_modifier, max_items=1)
 
     if {"being attacked", "being bitten", "being chased", "fighting"} & behavior_names:
         lead = "active spiritual warfare or pressure against you"
@@ -166,25 +221,26 @@ def build_event_scenario(
     elif relationship_names:
         lead = "a relationship-centered spiritual message"
         seal_type = "Relational"
+    elif base_clause:
+        lead = base_clause
 
-    behavior_clause = compact_rule_meaning_clause(behaviors, get_behavior_meaning_modifier, max_items=2)
-    state_clause = compact_rule_meaning_clause(states, get_state_meaning_modifier, max_items=1)
-    location_clause = compact_rule_meaning_clause(locations, get_location_life_area_meaning, max_items=1)
-    relationship_clause = compact_rule_meaning_clause(relationships, get_relationship_meaning_modifier, max_items=1)
-
+    if base_clause and normalize_text(base_clause) not in normalize_text(lead):
+        support_parts.append(f"The main symbols suggest {base_clause}")
     if behavior_clause:
-        support_parts.append(f"The actions reinforce {behavior_clause}")
+        support_parts.append(f"The actions show {behavior_clause}")
     if state_clause:
-        support_parts.append(f"The condition points to {state_clause}")
+        support_parts.append(f"The condition of what appeared points to {state_clause}")
     if location_clause:
-        support_parts.append(f"The setting ties this to {location_clause}")
+        support_parts.append(f"The setting connects this message to {location_clause}")
     if relationship_clause:
         support_parts.append(f"The people involved point to {relationship_clause}")
 
+    support_parts = unique_text_parts(support_parts, max_items=4)
+
     return {
-        "lead": lead,
+        "lead": strip_trailing_punct(lead),
         "support": " ".join([strip_trailing_punct(x) for x in support_parts if x]).strip(),
-        "seal_type": seal_type,
+        "seal_type": strip_trailing_punct(seal_type),
     }
 
 
@@ -210,16 +266,28 @@ def build_core_message(
         seal,
         narrative_max_symbols,
     )
-    event_scenario = build_event_scenario(dream, behaviors, states, locations, relationships)
+    event_scenario = build_event_scenario(
+        dream,
+        base_matches,
+        behaviors,
+        states,
+        locations,
+        relationships,
+        narrative_max_symbols,
+    )
+
     seal_type = strip_trailing_punct(seal.get("type", ""))
     seal_message = strip_trailing_punct(seal.get("message", ""))
 
-    parts = []
+    parts: List[str] = []
 
-    if event_scenario.get("lead"):
-        parts.append(sentence(f"This dream points to {event_scenario['lead']}"))
-    elif focus.get("lead"):
-        parts.append(sentence(f"This dream points to {focus['lead']}"))
+    lead = strip_trailing_punct(event_scenario.get("lead", "")) or strip_trailing_punct(focus.get("lead", ""))
+
+    if lead:
+        if "suggests" in normalize_text(lead) or "indicates" in normalize_text(lead):
+            parts.append(sentence(f"This dream reveals that {lead}"))
+        else:
+            parts.append(sentence(f"This dream points to {lead}"))
 
     if event_scenario.get("support"):
         parts.append(sentence(event_scenario["support"]))
@@ -229,12 +297,15 @@ def build_core_message(
         seal_type = event_seal_type
 
     if seal_type:
-        parts.append(sentence(f"The ending confirms this as {seal_type.lower()}"))
+        if normalize_text(seal_type) in {"symbol confirmed", "confirmed"}:
+            parts.append(sentence("The ending confirms a major symbol from the dream"))
+        else:
+            parts.append(sentence(f"The ending confirms this as {seal_type.lower()}"))
 
     if dream_has_escape_cue(dream) and not any(
-        x in normalize_text(" ".join(parts)) for x in ["release", "escape", "came out", "regain control"]
+        x in normalize_text(" ".join(parts)) for x in ["release", "escape", "came out", "regain control", "way out"]
     ):
-        parts.append(sentence("The ending shows that you came out of the danger, so this is a warning with a path of escape"))
+        parts.append(sentence("The ending shows there is a path of escape, so the warning is serious but not without a way through"))
 
     if seal_message and normalize_text(seal_message) not in normalize_text(" ".join(parts)):
         parts.append(sentence(seal_message))
@@ -248,20 +319,33 @@ def build_layered_support_paragraph(
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
 ) -> str:
-    behavior_parts = compress_phrase_list([get_behavior_meaning_modifier(x["row"]) for x in behaviors])
-    state_parts = compress_phrase_list([get_state_meaning_modifier(x["row"]) for x in states])
-    location_parts = compress_phrase_list([get_location_life_area_meaning(x["row"]) for x in locations])
-    relationship_parts = compress_phrase_list([get_relationship_meaning_modifier(x["row"]) for x in relationships])
+    behavior_parts = unique_text_parts(
+        [get_behavior_meaning_modifier(x["row"]) for x in behaviors],
+        max_items=2,
+    )
+    state_parts = unique_text_parts(
+        [get_state_meaning_modifier(x["row"]) for x in states],
+        max_items=1,
+    )
+    location_parts = unique_text_parts(
+        [get_location_life_area_meaning(x["row"]) for x in locations],
+        max_items=1,
+    )
+    relationship_parts = unique_text_parts(
+        [get_relationship_meaning_modifier(x["row"]) for x in relationships],
+        max_items=1,
+    )
 
-    lines = []
+    lines: List[str] = []
+
     if behavior_parts:
-        lines.append(sentence(f"The actions in the dream suggest {human_join(behavior_parts)}"))
+        lines.append(sentence(f"The actions in the dream show {human_join(behavior_parts)}"))
     if state_parts:
-        lines.append(sentence(f"The condition of what appeared points to {human_join(state_parts)}"))
+        lines.append(sentence(f"The condition of what appeared suggests {human_join(state_parts)}"))
     if location_parts:
-        lines.append(sentence(f"The setting connects this message to {human_join(location_parts)}"))
+        lines.append(sentence(f"The setting connects the message to {human_join(location_parts)}"))
     if relationship_parts:
-        lines.append(sentence(f"The people involved point to {human_join(relationship_parts)}"))
+        lines.append(sentence(f"The people involved highlight {human_join(relationship_parts)}"))
 
     return merge_natural_paragraphs(lines)
 
@@ -275,7 +359,7 @@ def build_real_world_impact_paragraph(
     override_hit,
     narrative_max_symbols: int,
 ) -> str:
-    effect_parts = []
+    effect_parts: List[str] = []
 
     for row, _score, _hit in base_matches[:narrative_max_symbols]:
         effect_parts.append(get_base_symbol_effects(row))
@@ -288,12 +372,15 @@ def build_real_world_impact_paragraph(
     if override_hit:
         effect_parts.append((override_hit or {}).get("physical", ""))
 
-    effect_parts = compress_phrase_list([normalize_effect_phrase(x) for x in effect_parts if x])
+    cleaned_effects = unique_text_parts(
+        [normalize_effect_phrase(x) for x in effect_parts if x],
+        max_items=4,
+    )
 
-    if not effect_parts:
+    if not cleaned_effects:
         return "No clear physical effects were generated."
 
-    return sentence(f"In practical terms, this may show up as {human_join(effect_parts)}")
+    return sentence(f"In practical terms, this may show up as {human_join(cleaned_effects)}")
 
 
 def build_action_guidance_paragraph(
@@ -305,7 +392,7 @@ def build_action_guidance_paragraph(
     override_hit,
     narrative_max_symbols: int,
 ) -> str:
-    action_parts = []
+    action_parts: List[str] = []
 
     for row, _score, _hit in base_matches[:narrative_max_symbols]:
         action_parts.append(get_base_symbol_action(row))
@@ -318,23 +405,42 @@ def build_action_guidance_paragraph(
     if override_hit:
         action_parts.append((override_hit or {}).get("action", ""))
 
-    action_parts = compress_phrase_list([normalize_action_phrase(x) for x in action_parts if x])
+    cleaned_actions = unique_text_parts(
+        [normalize_action_phrase(x) for x in action_parts if x],
+        max_items=3,
+    )
 
-    if not action_parts:
+    if not cleaned_actions:
         return "Pray for wisdom and confirmation."
 
-    return sentence(" ".join(action_parts).strip())
+    if len(cleaned_actions) == 1:
+        return sentence(cleaned_actions[0])
+
+    first = cleaned_actions[0]
+    rest = human_join(cleaned_actions[1:])
+
+    if rest:
+        return sentence(f"{first}, and {rest}")
+    return sentence(first)
 
 
 def build_final_summary_paragraph(interpretation: Dict[str, str], seal: Dict[str, Any]) -> str:
     seal_type = strip_trailing_punct(seal.get("type", ""))
     risk = strip_trailing_punct(seal.get("risk", ""))
 
-    parts = []
+    parts: List[str] = []
+
     if seal_type and risk:
         parts.append(sentence(f"Overall, this is a {seal_type.lower()} message with {risk.lower()} risk"))
+    elif seal_type:
+        parts.append(sentence(f"Overall, this dream carries a {seal_type.lower()} message"))
 
-    parts.append(sentence("Do not react in panic. Take the message seriously, stay spiritually grounded, and respond with discipline"))
+    parts.append(
+        sentence(
+            "Do not react in panic. Take the message seriously, stay spiritually grounded, and respond with discipline"
+        )
+    )
+
     return merge_natural_paragraphs(parts)
 
 
@@ -411,7 +517,10 @@ def build_doctrine_interpretation(
     seal,
     narrative_max_symbols: int,
 ) -> Dict[str, Any]:
-    top_symbols = [get_base_symbol_input(row) for row, _score, _hit in base_matches]
+    top_symbols = unique_text_parts(
+        [get_base_symbol_input(row) for row, _score, _hit in base_matches],
+        max_items=max(narrative_max_symbols, 3),
+    )
 
     core_message, focus, event_scenario = build_core_message(
         dream,
@@ -426,6 +535,7 @@ def build_doctrine_interpretation(
     )
 
     support_message = build_layered_support_paragraph(behaviors, states, locations, relationships)
+
     physical_message = build_real_world_impact_paragraph(
         base_matches,
         behaviors,
@@ -435,6 +545,7 @@ def build_doctrine_interpretation(
         override_hit,
         narrative_max_symbols,
     )
+
     action_message = build_action_guidance_paragraph(
         base_matches,
         behaviors,
@@ -444,14 +555,6 @@ def build_doctrine_interpretation(
         override_hit,
         narrative_max_symbols,
     )
-    summary_message = build_final_summary_paragraph(
-        {
-            "spiritual_meaning": core_message,
-            "effects_in_physical_realm": physical_message,
-            "what_to_do": action_message,
-        },
-        seal,
-    )
 
     interpretation = {
         "spiritual_meaning": core_message or "No clear spiritual meaning was generated.",
@@ -459,7 +562,10 @@ def build_doctrine_interpretation(
         "what_to_do": action_message or "Pray for wisdom and confirmation.",
     }
 
+    summary_message = build_final_summary_paragraph(interpretation, seal)
+
     effective_seal_type = event_scenario.get("seal_type") or seal.get("type", "a layered message")
+
     template_type = choose_template_type(
         override_hit,
         behaviors,
@@ -489,11 +595,32 @@ def build_doctrine_interpretation(
     )
 
     compact_symbol = ", ".join([x for x in top_symbols[:2] if x]).strip() or "This dream"
-    compact_meaning = event_scenario.get("lead") or focus.get("lead") or compact_spiritual_meaning(base_matches, override_hit, seal, narrative_max_symbols) or "the main spiritual message here"
-    compact_behavior = focus.get("behavior") or compact_rule_meaning_clause(behaviors, get_behavior_meaning_modifier, max_items=2) or "the active pattern in the dream"
-    compact_state = focus.get("state") or compact_rule_meaning_clause(states, get_state_meaning_modifier, max_items=1) or "the condition attached to the message"
-    compact_location = focus.get("location") or compact_rule_meaning_clause(locations, get_location_life_area_meaning, max_items=1) or "the area of life being touched"
-    compact_relationship = focus.get("relationship") or compact_rule_meaning_clause(relationships, get_relationship_meaning_modifier, max_items=1) or "the people dimension of the dream"
+    compact_meaning = (
+        event_scenario.get("lead")
+        or focus.get("lead")
+        or compact_spiritual_meaning(base_matches, override_hit, seal, narrative_max_symbols)
+        or "the main spiritual message here"
+    )
+    compact_behavior = (
+        focus.get("behavior")
+        or compact_rule_meaning_clause(behaviors, get_behavior_meaning_modifier, max_items=2)
+        or "the active pattern in the dream"
+    )
+    compact_state = (
+        focus.get("state")
+        or compact_rule_meaning_clause(states, get_state_meaning_modifier, max_items=1)
+        or "the condition attached to the message"
+    )
+    compact_location = (
+        focus.get("location")
+        or compact_rule_meaning_clause(locations, get_location_life_area_meaning, max_items=1)
+        or "the area of life being touched"
+    )
+    compact_relationship = (
+        focus.get("relationship")
+        or compact_rule_meaning_clause(relationships, get_relationship_meaning_modifier, max_items=1)
+        or "the people dimension of the dream"
+    )
 
     context = {
         "symbol": compact_symbol,
@@ -506,6 +633,7 @@ def build_doctrine_interpretation(
     }
 
     rendered_main = render_template_text(main_tpl, context)
+
     full_parts = [
         sentence(opening_tpl),
         rendered_main,
@@ -515,7 +643,23 @@ def build_doctrine_interpretation(
         summary_message,
         sentence(closing_tpl),
     ]
+
     full_interpretation = merge_natural_paragraphs(full_parts)
+
+    doctrine_facts = {
+        "lead_message": compact_meaning,
+        "top_symbols": top_symbols,
+        "behavior_meaning": compact_behavior,
+        "state_meaning": compact_state,
+        "location_meaning": compact_location,
+        "relationship_meaning": compact_relationship,
+        "seal_type": effective_seal_type,
+        "seal_message": strip_trailing_punct(seal.get("message", "")),
+        "risk": strip_trailing_punct(seal.get("risk", "")),
+        "override_applied": bool(override_hit),
+        "override_name": (override_hit or {}).get("override_name", ""),
+        "template_type": template_type,
+    }
 
     return {
         "interpretation": interpretation,
@@ -524,6 +668,7 @@ def build_doctrine_interpretation(
         "override_applied": bool(override_hit),
         "override_name": (override_hit or {}).get("override_name", ""),
         "template_type": template_type,
+        "doctrine_facts": doctrine_facts,
     }
 
 
@@ -539,18 +684,40 @@ def build_legacy_interpretation(matches, narrative_max_symbols: int) -> Dict[str
         base_action = strip_trailing_punct(get_what_to_do_cell(row))
 
         if symbol and base_meaning:
-            spiritual_parts.append(f"{symbol} points to {base_meaning}")
+            spiritual_parts.append(f"{symbol} suggests {base_meaning}")
         elif symbol:
             spiritual_parts.append(symbol)
+        elif base_meaning:
+            spiritual_parts.append(base_meaning)
 
         if base_effects:
             physical_parts.append(normalize_effect_phrase(base_effects))
         if base_action:
             action_parts.append(normalize_action_phrase(base_action))
 
-    spiritual_text = sentence(human_join(spiritual_parts)) if spiritual_parts else "No clear spiritual meaning was generated."
-    physical_text = sentence(f"In practical terms, this may show up as {human_join(physical_parts)}") if physical_parts else "No clear physical effects were generated."
-    action_text = sentence(" ".join(compress_phrase_list(action_parts))) if action_parts else "Pray for wisdom and confirmation."
+    spiritual_parts = unique_text_parts(spiritual_parts, max_items=narrative_max_symbols)
+    physical_parts = unique_text_parts(physical_parts, max_items=4)
+    action_parts = unique_text_parts(action_parts, max_items=3)
+
+    spiritual_text = (
+        sentence(f"This dream points to {human_join(spiritual_parts)}")
+        if spiritual_parts
+        else "No clear spiritual meaning was generated."
+    )
+
+    physical_text = (
+        sentence(f"In practical terms, this may show up as {human_join(physical_parts)}")
+        if physical_parts
+        else "No clear physical effects were generated."
+    )
+
+    if action_parts:
+        if len(action_parts) == 1:
+            action_text = sentence(action_parts[0])
+        else:
+            action_text = sentence(f"{action_parts[0]}, and {human_join(action_parts[1:])}")
+    else:
+        action_text = "Pray for wisdom and confirmation."
 
     return {
         "spiritual_meaning": spiritual_text,

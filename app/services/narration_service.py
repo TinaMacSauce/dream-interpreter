@@ -1,6 +1,7 @@
 from typing import Any, Dict, List
 
 from app.config import Config
+from app.utils import compress_phrase_list, human_join, normalize_text
 
 
 def _clean(value: str) -> str:
@@ -22,8 +23,8 @@ def _normalize_list(items: List[str], max_items: int = 3) -> List[str]:
         if not item:
             continue
 
-        key = item.lower()
-        if key in seen:
+        key = normalize_text(item)
+        if not key or key in seen:
             continue
 
         seen.add(key)
@@ -33,17 +34,6 @@ def _normalize_list(items: List[str], max_items: int = 3) -> List[str]:
             break
 
     return out
-
-
-def _human_join(items: List[str]) -> str:
-    items = [x for x in items if x]
-    if not items:
-        return ""
-    if len(items) == 1:
-        return items[0]
-    if len(items) == 2:
-        return f"{items[0]} and {items[1]}"
-    return ", ".join(items[:-1]) + f", and {items[-1]}"
 
 
 def _sentence(text: str) -> str:
@@ -57,8 +47,171 @@ def _sentence(text: str) -> str:
 
 
 def _should_skip_placeholder(value: str, placeholders: List[str]) -> bool:
-    value_n = value.strip().lower()
-    return any(p in value_n for p in placeholders)
+    value_n = normalize_text(value)
+    return any(normalize_text(p) in value_n for p in placeholders)
+
+
+def _dedupe_sentences(parts: List[str]) -> List[str]:
+    out: List[str] = []
+    seen = set()
+
+    for part in parts:
+        part = _clean(part)
+        if not part:
+            continue
+
+        key = normalize_text(part)
+        if not key or key in seen:
+            continue
+
+        duplicate = False
+        for existing in out:
+            ex_key = normalize_text(existing)
+            if key == ex_key:
+                duplicate = True
+                break
+            if key in ex_key or ex_key in key:
+                duplicate = True
+                break
+
+        if duplicate:
+            continue
+
+        seen.add(key)
+        out.append(part)
+
+    return out
+
+
+def _phrase_to_natural_clause(text: str) -> str:
+    """
+    Converts literal doctrine fragments into smoother summary language
+    without inventing new doctrine.
+    """
+    text = _clean(text)
+    if not text:
+        return ""
+
+    lower = normalize_text(text)
+
+    replacements = [
+        (" suggests ", " points to "),
+        (" indicate ", " points to "),
+        (" indicates ", " points to "),
+        (" reveals ", " points to "),
+        (" enemy and pursuit", " enemy pursuit"),
+        (" active spiritual pursuit", " active spiritual pressure"),
+    ]
+
+    out = text
+    for old, new in replacements:
+        out = out.replace(old, new)
+
+    return out.strip()
+
+
+def _build_lead_sentence(lead_message: str) -> str:
+    lead_message = _phrase_to_natural_clause(lead_message)
+    if not lead_message:
+        return ""
+
+    lead_lower = normalize_text(lead_message)
+
+    if " points to " in lead_lower:
+        return _sentence(f"This dream points to {lead_message.split(' points to ', 1)[1]}")
+
+    if lead_lower.startswith(("a ", "an ", "the ")):
+        return _sentence(f"This dream points to {lead_message}")
+
+    return _sentence(f"This dream points to {lead_message}")
+
+
+def _build_symbols_sentence(top_symbols: List[str]) -> str:
+    top_symbols = _normalize_list(top_symbols, max_items=max(1, Config.NARRATION_MAX_SYMBOLS))
+    if not top_symbols:
+        return ""
+    if len(top_symbols) == 1:
+        return _sentence(f"The main symbol in the dream is {top_symbols[0]}")
+    return _sentence(f"The main symbols in the dream are {human_join(top_symbols)}")
+
+
+def _build_support_sentence(
+    behavior_meaning: str,
+    state_meaning: str,
+    location_meaning: str,
+    relationship_meaning: str,
+) -> str:
+    support_clauses: List[str] = []
+
+    if behavior_meaning and not _should_skip_placeholder(
+        behavior_meaning,
+        ["active pattern in the dream"],
+    ):
+        support_clauses.append(f"the actions show {_phrase_to_natural_clause(behavior_meaning)}")
+
+    if state_meaning and not _should_skip_placeholder(
+        state_meaning,
+        ["condition attached to the message"],
+    ):
+        support_clauses.append(f"the condition of what appeared points to {_phrase_to_natural_clause(state_meaning)}")
+
+    if location_meaning and not _should_skip_placeholder(
+        location_meaning,
+        ["area of life being touched"],
+    ):
+        support_clauses.append(f"the setting connects this to {_phrase_to_natural_clause(location_meaning)}")
+
+    if relationship_meaning and not _should_skip_placeholder(
+        relationship_meaning,
+        ["people dimension of the dream"],
+    ):
+        support_clauses.append(f"the people involved point to {_phrase_to_natural_clause(relationship_meaning)}")
+
+    support_clauses = compress_phrase_list(support_clauses)
+    if not support_clauses:
+        return ""
+
+    return _sentence(human_join(support_clauses))
+
+
+def _build_seal_sentence(seal_type: str, seal_message: str) -> str:
+    seal_type = _clean(seal_type)
+    seal_message = _clean(seal_message)
+
+    if not seal_type and not seal_message:
+        return ""
+
+    seal_type_n = normalize_text(seal_type)
+    seal_message_n = normalize_text(seal_message)
+
+    if seal_type_n == "symbol confirmed":
+        return _sentence("The ending confirms a major symbol from the dream")
+
+    if seal_type:
+        generic = _sentence(f"The ending seals this as {seal_type.lower()}")
+        if seal_message:
+            # If the message already says basically the same thing, keep only one.
+            if "confirm" in seal_message_n and "symbol" in seal_message_n and seal_type_n in {"symbol confirmed", "confirmed"}:
+                return generic
+            if normalize_text(generic) in seal_message_n or seal_message_n in normalize_text(generic):
+                return generic
+        return generic
+
+    return _sentence(seal_message)
+
+
+def _build_risk_sentence(risk: str) -> str:
+    risk = _clean(risk)
+    if not risk:
+        return ""
+    return _sentence(f"The level of concern attached to this dream appears to be {risk.lower()}")
+
+
+def _fallback_from_interpretation(interpretation: Dict[str, str]) -> str:
+    spiritual = _safe_text((interpretation or {}).get("spiritual_meaning"))
+    if not spiritual:
+        return ""
+    return _sentence(spiritual)
 
 
 def build_doctrine_bound_summary(
@@ -85,69 +238,36 @@ def build_doctrine_bound_summary(
 
     parts: List[str] = []
 
-    if lead_message:
-        lead_lower = lead_message.lower()
-        if lead_lower.startswith(("a ", "an ", "the ")):
-            parts.append(_sentence(f"This dream points to {lead_message}"))
-        elif "suggests" in lead_lower or "reveals" in lead_lower or "indicates" in lead_lower:
-            parts.append(_sentence(f"This dream shows that {lead_message}"))
-        else:
-            parts.append(_sentence(f"This dream points to {lead_message}"))
+    lead_sentence = _build_lead_sentence(lead_message)
+    symbols_sentence = _build_symbols_sentence(top_symbols)
+    support_sentence = _build_support_sentence(
+        behavior_meaning=behavior_meaning,
+        state_meaning=state_meaning,
+        location_meaning=location_meaning,
+        relationship_meaning=relationship_meaning,
+    )
+    seal_sentence = _build_seal_sentence(seal_type, seal_message)
+    risk_sentence = _build_risk_sentence(risk)
 
-    if top_symbols:
-        if len(top_symbols) == 1:
-            parts.append(_sentence(f"The main symbol in the dream is {top_symbols[0]}"))
-        else:
-            parts.append(_sentence(f"The main symbols in the dream are {_human_join(top_symbols)}"))
+    for item in [
+        lead_sentence,
+        symbols_sentence,
+        support_sentence,
+        seal_sentence,
+        risk_sentence,
+    ]:
+        if item:
+            parts.append(item)
 
-    support_clauses: List[str] = []
-
-    if behavior_meaning and not _should_skip_placeholder(
-        behavior_meaning,
-        ["active pattern in the dream"],
-    ):
-        support_clauses.append(f"the actions show {behavior_meaning}")
-
-    if state_meaning and not _should_skip_placeholder(
-        state_meaning,
-        ["condition attached to the message"],
-    ):
-        support_clauses.append(f"the condition of what appeared suggests {state_meaning}")
-
-    if location_meaning and not _should_skip_placeholder(
-        location_meaning,
-        ["area of life being touched"],
-    ):
-        support_clauses.append(f"the setting connects this to {location_meaning}")
-
-    if relationship_meaning and not _should_skip_placeholder(
-        relationship_meaning,
-        ["people dimension of the dream"],
-    ):
-        support_clauses.append(f"the people involved highlight {relationship_meaning}")
-
-    if support_clauses:
-        parts.append(_sentence(_human_join(support_clauses)))
-
-    if seal_type:
-        if seal_type.lower() == "symbol confirmed":
-            parts.append(_sentence("The ending confirms a major symbol from the dream"))
-        else:
-            parts.append(_sentence(f"The ending seals this as {seal_type.lower()}"))
-
-    if seal_message:
-        parts.append(_sentence(seal_message))
-
-    if risk:
-        parts.append(_sentence(f"The level of concern attached to this dream appears to be {risk.lower()}"))
+    parts = _dedupe_sentences(parts)
 
     if not parts:
-        fallback = _safe_text((interpretation or {}).get("spiritual_meaning"))
+        fallback = _fallback_from_interpretation(interpretation)
         if fallback:
-            return _sentence(fallback)
+            return fallback
         return ""
 
-    return "\n".join([p for p in parts if p]).strip()
+    return "\n".join(parts).strip()
 
 
 def build_ai_prompt_payload(
@@ -201,7 +321,7 @@ def _build_disabled_result() -> Dict[str, Any]:
         "enabled": False,
         "used_ai": False,
         "readable_summary": "",
-        "prompt_payload": {} if not Config.NARRATION_INCLUDE_PROMPT_PAYLOAD else {},
+        "prompt_payload": {},
     }
 
 

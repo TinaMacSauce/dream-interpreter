@@ -23,6 +23,7 @@ from app.fields import (
     get_symbol_cell,
     get_what_to_do_cell,
 )
+from app.seal import dream_has_escape_cue
 from app.utils import (
     clean_sentence,
     compress_phrase_list,
@@ -33,7 +34,6 @@ from app.utils import (
     sentence,
     strip_trailing_punct,
 )
-from app.seal import dream_has_escape_cue
 
 
 def clean_debug_like_phrase(text: str) -> str:
@@ -60,12 +60,17 @@ def _semantic_key(text: str) -> str:
     replacements = {
         "repeated or confirmed": "confirmed",
         "confirms": "confirmed",
+        "confirmed": "confirmed",
         "major symbol from the dream": "major symbol",
         "the ending": "ending",
         "ongoing conflict": "conflict",
         "spiritually protected": "protected",
         "stay alert and spiritually protected": "stay alert protected",
         "pray and stay alert": "pray stay alert",
+        "points to": "points",
+        "suggests": "points",
+        "reveals": "points",
+        "indicates": "points",
     }
     out = text_n
     for old, new in replacements.items():
@@ -93,7 +98,6 @@ def _is_duplicate_or_subsumed(candidate: str, existing_parts: List[str]) -> bool
         if ex_n in cand_n and len(ex_n.split()) >= 4:
             return True
 
-        # stronger semantic duplicate check for ending language
         if "ending" in cand_n and "ending" in ex_n:
             if "major symbol" in cand_n and "major symbol" in ex_n:
                 return True
@@ -398,15 +402,16 @@ def build_layered_support_paragraph(
 def _collapse_effects(effect_parts: List[str], max_items: int = 4) -> List[str]:
     cleaned = compress_phrase_list([normalize_effect_phrase(x) for x in effect_parts if x])
 
-    # prefer richer phrases first so weaker ones like "conflict" fall away
     cleaned.sort(key=lambda x: (-len(normalize_text(x).split()), -len(x)))
 
     out: List[str] = []
     for item in cleaned:
         item_n = _semantic_key(item)
         skip = False
+
         for existing in out:
             existing_n = _semantic_key(existing)
+
             if item_n == existing_n:
                 skip = True
                 break
@@ -416,13 +421,14 @@ def _collapse_effects(effect_parts: List[str], max_items: int = 4) -> List[str]:
             if existing_n in item_n and len(existing_n.split()) >= 1:
                 skip = True
                 break
+
         if skip:
             continue
+
         out.append(item)
         if len(out) >= max_items:
             break
 
-    # reorder shortest-to-longest after selection for more natural reading
     out.sort(key=lambda x: (len(normalize_text(x).split()), len(x)))
     return out
 
@@ -466,8 +472,10 @@ def _collapse_actions(action_parts: List[str], max_items: int = 2) -> List[str]:
     for item in cleaned:
         item_n = _semantic_key(item)
         skip = False
+
         for existing in out:
             existing_n = _semantic_key(existing)
+
             if item_n == existing_n:
                 skip = True
                 break
@@ -480,8 +488,10 @@ def _collapse_actions(action_parts: List[str], max_items: int = 2) -> List[str]:
             if "pray" in item_n and "pray" in existing_n and ("stay alert" in item_n or "stay alert" in existing_n):
                 skip = True
                 break
+
         if skip:
             continue
+
         out.append(item)
         if len(out) >= max_items:
             break
@@ -615,9 +625,13 @@ def build_doctrine_interpretation(
     seal,
     narrative_max_symbols: int,
 ) -> Dict[str, Any]:
-    top_symbols = compress_phrase_list(
-        [get_base_symbol_input(row) for row, _score, _hit in base_matches if get_base_symbol_input(row)]
-    )[: max(narrative_max_symbols, 3)]
+    # Preserve ranking order from the matcher instead of re-sorting by phrase content.
+    top_symbols = [
+        get_base_symbol_input(row)
+        for row, _score, _hit in base_matches
+        if get_base_symbol_input(row)
+    ]
+    top_symbols = _strong_unique_parts(top_symbols, max_items=max(narrative_max_symbols, 3))
 
     core_message, focus, event_scenario = build_core_message(
         dream,
@@ -731,18 +745,6 @@ def build_doctrine_interpretation(
 
     rendered_main = render_template_text(main_tpl, context)
 
-    full_parts = [
-        sentence(opening_tpl),
-        rendered_main,
-        support_message,
-        interpretation["effects_in_physical_realm"],
-        interpretation["what_to_do"],
-        summary_message,
-        sentence(closing_tpl),
-    ]
-
-    full_interpretation = merge_natural_paragraphs(full_parts)
-
     doctrine_facts = {
         "lead_message": compact_meaning,
         "top_symbols": top_symbols,
@@ -757,6 +759,30 @@ def build_doctrine_interpretation(
         "override_name": (override_hit or {}).get("override_name", ""),
         "template_type": template_type,
     }
+
+    # Use narration result as the center of the full interpretation so the long output
+    # stays cleaner than the old raw doctrine-fragment assembly.
+    try:
+        from app.services.narration_service import build_doctrine_bound_summary
+
+        readable_core = build_doctrine_bound_summary(
+            doctrine_facts=doctrine_facts,
+            interpretation=interpretation,
+        )
+    except Exception:
+        readable_core = ""
+
+    full_parts = [
+        sentence(opening_tpl),
+        readable_core or rendered_main,
+        support_message,
+        interpretation["effects_in_physical_realm"],
+        interpretation["what_to_do"],
+        summary_message,
+        sentence(closing_tpl),
+    ]
+
+    full_interpretation = merge_natural_paragraphs(full_parts)
 
     return {
         "interpretation": interpretation,

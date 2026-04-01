@@ -55,24 +55,69 @@ def clean_debug_like_phrase(text: str) -> str:
     return text
 
 
+def _semantic_key(text: str) -> str:
+    text_n = normalize_text(text)
+    replacements = {
+        "repeated or confirmed": "confirmed",
+        "confirms": "confirmed",
+        "major symbol from the dream": "major symbol",
+        "the ending": "ending",
+        "ongoing conflict": "conflict",
+        "spiritually protected": "protected",
+        "stay alert and spiritually protected": "stay alert protected",
+        "pray and stay alert": "pray stay alert",
+    }
+    out = text_n
+    for old, new in replacements.items():
+        out = out.replace(old, new)
+    out = " ".join(out.split())
+    return out
+
+
 def _is_duplicate_or_subsumed(candidate: str, existing_parts: List[str]) -> bool:
-    cand_n = normalize_text(candidate)
+    cand_n = _semantic_key(candidate)
     if not cand_n:
         return True
 
     for existing in existing_parts:
-        ex_n = normalize_text(existing)
+        ex_n = _semantic_key(existing)
         if not ex_n:
             continue
 
         if cand_n == ex_n:
             return True
+
         if cand_n in ex_n:
             return True
+
         if ex_n in cand_n and len(ex_n.split()) >= 4:
             return True
 
+        # stronger semantic duplicate check for ending language
+        if "ending" in cand_n and "ending" in ex_n:
+            if "major symbol" in cand_n and "major symbol" in ex_n:
+                return True
+
     return False
+
+
+def _strong_unique_parts(parts: List[str], max_items: Optional[int] = None) -> List[str]:
+    out: List[str] = []
+
+    for part in parts:
+        part = strip_trailing_punct(part)
+        if not part:
+            continue
+
+        if _is_duplicate_or_subsumed(part, out):
+            continue
+
+        out.append(part)
+
+        if max_items is not None and len(out) >= max_items:
+            break
+
+    return out
 
 
 def merge_natural_paragraphs(parts: List[str]) -> str:
@@ -93,22 +138,7 @@ def merge_natural_paragraphs(parts: List[str]) -> str:
 
 
 def unique_text_parts(parts: List[str], max_items: Optional[int] = None) -> List[str]:
-    out: List[str] = []
-
-    for part in parts:
-        part = strip_trailing_punct(part)
-        if not part:
-            continue
-
-        if _is_duplicate_or_subsumed(part, out):
-            continue
-
-        out.append(part)
-
-        if max_items is not None and len(out) >= max_items:
-            break
-
-    return out
+    return _strong_unique_parts(parts, max_items=max_items)
 
 
 def compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: int = 2) -> str:
@@ -122,7 +152,7 @@ def compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: i
         if part:
             parts.append(part)
 
-    parts = unique_text_parts(parts, max_items=max_items)
+    parts = _strong_unique_parts(parts, max_items=max_items)
     return human_join(parts)
 
 
@@ -148,7 +178,7 @@ def compact_spiritual_meaning(
         elif symbol:
             parts.append(symbol)
 
-    parts = unique_text_parts(parts, max_items=narrative_max_symbols)
+    parts = _strong_unique_parts(parts, max_items=narrative_max_symbols)
     joined = human_join(parts)
 
     return joined or strip_trailing_punct(seal.get("message", "")) or "the main symbolic message in the dream"
@@ -192,7 +222,7 @@ def build_base_symbol_clause(
         elif symbol:
             symbol_clauses.append(symbol)
 
-    symbol_clauses = unique_text_parts(symbol_clauses, max_items=2)
+    symbol_clauses = _strong_unique_parts(symbol_clauses, max_items=2)
     return human_join(symbol_clauses)
 
 
@@ -249,7 +279,7 @@ def build_event_scenario(
     if relationship_clause:
         support_parts.append(f"The people involved point to {relationship_clause}")
 
-    support_parts = unique_text_parts(support_parts, max_items=4)
+    support_parts = _strong_unique_parts(support_parts, max_items=4)
 
     return {
         "lead": strip_trailing_punct(lead),
@@ -318,12 +348,8 @@ def build_core_message(
         else:
             ending_line = sentence(f"The ending confirms this as {seal_type.lower()}")
 
-    seal_message_n = normalize_text(seal_message)
-    ending_line_n = normalize_text(ending_line)
-
     if ending_line:
-        if not seal_message_n or (ending_line_n not in seal_message_n and seal_message_n not in ending_line_n):
-            parts.append(ending_line)
+        parts.append(ending_line)
 
     if dream_has_escape_cue(dream) and not any(
         x in normalize_text(" ".join(parts)) for x in ["release", "escape", "came out", "regain control", "way out"]
@@ -331,8 +357,7 @@ def build_core_message(
         parts.append(sentence("The ending shows there is a path of escape, so the warning is serious but not without a way through"))
 
     if seal_message:
-        if not ending_line_n or (seal_message_n not in ending_line_n and ending_line_n not in seal_message_n):
-            parts.append(sentence(seal_message))
+        parts.append(sentence(seal_message))
 
     return merge_natural_paragraphs(parts), focus, event_scenario
 
@@ -370,6 +395,38 @@ def build_layered_support_paragraph(
     return merge_natural_paragraphs(lines)
 
 
+def _collapse_effects(effect_parts: List[str], max_items: int = 4) -> List[str]:
+    cleaned = compress_phrase_list([normalize_effect_phrase(x) for x in effect_parts if x])
+
+    # prefer richer phrases first so weaker ones like "conflict" fall away
+    cleaned.sort(key=lambda x: (-len(normalize_text(x).split()), -len(x)))
+
+    out: List[str] = []
+    for item in cleaned:
+        item_n = _semantic_key(item)
+        skip = False
+        for existing in out:
+            existing_n = _semantic_key(existing)
+            if item_n == existing_n:
+                skip = True
+                break
+            if item_n in existing_n:
+                skip = True
+                break
+            if existing_n in item_n and len(existing_n.split()) >= 1:
+                skip = True
+                break
+        if skip:
+            continue
+        out.append(item)
+        if len(out) >= max_items:
+            break
+
+    # reorder shortest-to-longest after selection for more natural reading
+    out.sort(key=lambda x: (len(normalize_text(x).split()), len(x)))
+    return out
+
+
 def build_real_world_impact_paragraph(
     base_matches,
     behaviors,
@@ -392,14 +449,44 @@ def build_real_world_impact_paragraph(
     if override_hit:
         effect_parts.append((override_hit or {}).get("physical", ""))
 
-    cleaned_effects = compress_phrase_list(
-        [normalize_effect_phrase(x) for x in effect_parts if x]
-    )[:4]
+    cleaned_effects = _collapse_effects(effect_parts, max_items=4)
 
     if not cleaned_effects:
         return "No clear physical effects were generated."
 
     return sentence(f"In practical terms, this may show up as {human_join(cleaned_effects)}")
+
+
+def _collapse_actions(action_parts: List[str], max_items: int = 2) -> List[str]:
+    cleaned = compress_phrase_list([normalize_action_phrase(x) for x in action_parts if x])
+
+    cleaned.sort(key=lambda x: (-len(normalize_text(x).split()), -len(x)))
+
+    out: List[str] = []
+    for item in cleaned:
+        item_n = _semantic_key(item)
+        skip = False
+        for existing in out:
+            existing_n = _semantic_key(existing)
+            if item_n == existing_n:
+                skip = True
+                break
+            if item_n in existing_n:
+                skip = True
+                break
+            if "stay alert" in item_n and "stay alert" in existing_n:
+                skip = True
+                break
+            if "pray" in item_n and "pray" in existing_n and ("stay alert" in item_n or "stay alert" in existing_n):
+                skip = True
+                break
+        if skip:
+            continue
+        out.append(item)
+        if len(out) >= max_items:
+            break
+
+    return out
 
 
 def build_action_guidance_paragraph(
@@ -424,27 +511,15 @@ def build_action_guidance_paragraph(
     if override_hit:
         action_parts.append((override_hit or {}).get("action", ""))
 
-    cleaned_actions = compress_phrase_list(
-        [normalize_action_phrase(x) for x in action_parts if x]
-    )[:3]
+    cleaned_actions = _collapse_actions(action_parts, max_items=2)
 
     if not cleaned_actions:
         return "Pray for wisdom and confirmation."
 
-    # Prefer the strongest phrasing first.
-    cleaned_actions.sort(key=lambda x: (-len(normalize_text(x).split()), -len(x)))
+    if len(cleaned_actions) == 1:
+        return sentence(cleaned_actions[0])
 
-    primary = cleaned_actions[0]
-    remainder = compress_phrase_list(cleaned_actions[1:])
-
-    if not remainder:
-        return sentence(primary)
-
-    joined_remainder = human_join(remainder)
-    if normalize_text(joined_remainder) in normalize_text(primary):
-        return sentence(primary)
-
-    return sentence(f"{primary}, and {joined_remainder}")
+    return sentence(f"{cleaned_actions[0]}, and {cleaned_actions[1]}")
 
 
 def build_final_summary_paragraph(interpretation: Dict[str, str], seal: Dict[str, Any]) -> str:

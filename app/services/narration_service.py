@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from app.config import Config
 from app.utils import compress_phrase_list, human_join, normalize_text
@@ -14,6 +14,35 @@ def _safe_text(value: Any) -> str:
     return str(value).strip()
 
 
+def _sentence(text: str) -> str:
+    text = " ".join((text or "").split()).strip()
+    if not text:
+        return ""
+    text = text[:1].upper() + text[1:]
+    if text[-1] not in ".!?":
+        text += "."
+    return text
+
+
+def _semantic_key(text: str) -> str:
+    text_n = normalize_text(text)
+    replacements = {
+        "repeated or confirmed": "confirmed",
+        "confirms": "confirmed",
+        "major symbol from the dream": "major symbol",
+        "the ending": "ending",
+        "suggests": "points to",
+        "indicates": "points to",
+        "reveals": "points to",
+        "active spiritual pursuit": "active spiritual pressure",
+    }
+    out = text_n
+    for old, new in replacements.items():
+        out = out.replace(old, new)
+    out = " ".join(out.split())
+    return out
+
+
 def _normalize_list(items: List[str], max_items: int = 3) -> List[str]:
     out: List[str] = []
     seen = set()
@@ -23,7 +52,7 @@ def _normalize_list(items: List[str], max_items: int = 3) -> List[str]:
         if not item:
             continue
 
-        key = normalize_text(item)
+        key = _semantic_key(item)
         if not key or key in seen:
             continue
 
@@ -36,14 +65,42 @@ def _normalize_list(items: List[str], max_items: int = 3) -> List[str]:
     return out
 
 
-def _sentence(text: str) -> str:
-    text = " ".join((text or "").split()).strip()
-    if not text:
-        return ""
-    text = text[:1].upper() + text[1:]
-    if text[-1] not in ".!?":
-        text += "."
-    return text
+def _dedupe_sentences(parts: List[str]) -> List[str]:
+    out: List[str] = []
+
+    for part in parts:
+        part = _clean(part)
+        if not part:
+            continue
+
+        key = _semantic_key(part)
+        if not key:
+            continue
+
+        duplicate = False
+        for existing in out:
+            ex_key = _semantic_key(existing)
+
+            if key == ex_key:
+                duplicate = True
+                break
+            if key in ex_key:
+                duplicate = True
+                break
+            if ex_key in key and len(ex_key.split()) >= 4:
+                duplicate = True
+                break
+
+            if "ending" in key and "ending" in ex_key and "major symbol" in key and "major symbol" in ex_key:
+                duplicate = True
+                break
+
+        if duplicate:
+            continue
+
+        out.append(part)
+
+    return out
 
 
 def _should_skip_placeholder(value: str, placeholders: List[str]) -> bool:
@@ -51,74 +108,134 @@ def _should_skip_placeholder(value: str, placeholders: List[str]) -> bool:
     return any(normalize_text(p) in value_n for p in placeholders)
 
 
-def _dedupe_sentences(parts: List[str]) -> List[str]:
-    out: List[str] = []
-    seen = set()
-
-    for part in parts:
-        part = _clean(part)
-        if not part:
-            continue
-
-        key = normalize_text(part)
-        if not key or key in seen:
-            continue
-
-        duplicate = False
-        for existing in out:
-            ex_key = normalize_text(existing)
-            if key == ex_key:
-                duplicate = True
-                break
-            if key in ex_key or ex_key in key:
-                duplicate = True
-                break
-
-        if duplicate:
-            continue
-
-        seen.add(key)
-        out.append(part)
-
-    return out
-
-
 def _phrase_to_natural_clause(text: str) -> str:
-    """
-    Converts literal doctrine fragments into smoother summary language
-    without inventing new doctrine.
-    """
     text = _clean(text)
     if not text:
         return ""
 
-    lower = normalize_text(text)
+    out = text
 
-    replacements = [
+    direct_replacements = [
         (" suggests ", " points to "),
         (" indicate ", " points to "),
         (" indicates ", " points to "),
         (" reveals ", " points to "),
-        (" enemy and pursuit", " enemy pursuit"),
-        (" active spiritual pursuit", " active spiritual pressure"),
     ]
-
-    out = text
-    for old, new in replacements:
+    for old, new in direct_replacements:
         out = out.replace(old, new)
 
-    return out.strip()
+    return " ".join(out.split()).strip()
 
 
-def _build_lead_sentence(lead_message: str) -> str:
+def _extract_symbol_meaning_pairs(top_symbols: List[str], lead_message: str) -> List[Dict[str, str]]:
+    """
+    Reads simple doctrine phrases like:
+    'snake suggests enemy and chasing suggests pursuit'
+    and turns them into structured pairs.
+    """
+    pairs: List[Dict[str, str]] = []
+    lead = _clean(lead_message)
+    if not lead:
+        return pairs
+
+    chunks = [c.strip() for c in lead.split(" and ") if c.strip()]
+    normalized_symbols = [normalize_text(x) for x in top_symbols if x]
+
+    for chunk in chunks:
+        chunk_n = normalize_text(chunk)
+        if " suggests " in chunk_n:
+            parts = chunk.split(" suggests ", 1)
+        elif " points to " in chunk_n:
+            parts = chunk.split(" points to ", 1)
+        else:
+            continue
+
+        if len(parts) != 2:
+            continue
+
+        left = _clean(parts[0])
+        right = _clean(parts[1])
+
+        if not left or not right:
+            continue
+
+        if normalized_symbols and normalize_text(left) not in normalized_symbols:
+            # still allow it, but prefer actual top symbols
+            pass
+
+        pairs.append({"symbol": left, "meaning": right})
+
+    return pairs
+
+
+def _build_smoother_lead_from_pairs(
+    pairs: List[Dict[str, str]],
+    behavior_meaning: str,
+) -> str:
+    """
+    Makes the summary sound less robotic without adding doctrine.
+    Example:
+    snake -> enemy
+    chasing -> pursuit
+    =>
+    This dream points to enemy pursuit.
+    """
+    if not pairs:
+        return ""
+
+    if len(pairs) == 1:
+        meaning = _clean(pairs[0].get("meaning", ""))
+        if meaning:
+            return _sentence(f"This dream points to {meaning}")
+        return ""
+
+    symbol_to_meaning = {normalize_text(p["symbol"]): _clean(p["meaning"]) for p in pairs}
+    behavior_n = normalize_text(behavior_meaning)
+
+    # Common natural compression: main symbol + pursuit/chase behavior
+    if "snake" in symbol_to_meaning and ("pursuit" in behavior_n or "chasing" in symbol_to_meaning):
+        base_meaning = symbol_to_meaning.get("snake", "")
+        if base_meaning and "enemy" in normalize_text(base_meaning):
+            return _sentence("This dream points to enemy pursuit")
+
+    ordered_meanings = []
+    seen = set()
+    for pair in pairs:
+        meaning = _clean(pair.get("meaning", ""))
+        key = _semantic_key(meaning)
+        if meaning and key and key not in seen:
+            seen.add(key)
+            ordered_meanings.append(meaning)
+
+    if not ordered_meanings:
+        return ""
+
+    if len(ordered_meanings) == 1:
+        return _sentence(f"This dream points to {ordered_meanings[0]}")
+
+    return _sentence(f"This dream points to {human_join(ordered_meanings)}")
+
+
+def _build_lead_sentence(
+    lead_message: str,
+    top_symbols: List[str],
+    behavior_meaning: str,
+) -> str:
     lead_message = _phrase_to_natural_clause(lead_message)
     if not lead_message:
         return ""
 
+    pairs = _extract_symbol_meaning_pairs(top_symbols, lead_message)
+    smoother = _build_smoother_lead_from_pairs(pairs, behavior_meaning)
+    if smoother:
+        return smoother
+
     lead_lower = normalize_text(lead_message)
 
     if " points to " in lead_lower:
-        return _sentence(f"This dream points to {lead_message.split(' points to ', 1)[1]}")
+        right = lead_message.split(" points to ", 1)[1].strip()
+        if right:
+            return _sentence(f"This dream points to {right}")
 
     if lead_lower.startswith(("a ", "an ", "the ")):
         return _sentence(f"This dream points to {lead_message}")
@@ -182,19 +299,21 @@ def _build_seal_sentence(seal_type: str, seal_message: str) -> str:
         return ""
 
     seal_type_n = normalize_text(seal_type)
-    seal_message_n = normalize_text(seal_message)
+    seal_message_n = _semantic_key(seal_message)
 
     if seal_type_n == "symbol confirmed":
         return _sentence("The ending confirms a major symbol from the dream")
 
     if seal_type:
         generic = _sentence(f"The ending seals this as {seal_type.lower()}")
+        generic_n = _semantic_key(generic)
+
         if seal_message:
-            # If the message already says basically the same thing, keep only one.
-            if "confirm" in seal_message_n and "symbol" in seal_message_n and seal_type_n in {"symbol confirmed", "confirmed"}:
+            if generic_n == seal_message_n:
                 return generic
-            if normalize_text(generic) in seal_message_n or seal_message_n in normalize_text(generic):
+            if generic_n in seal_message_n or seal_message_n in generic_n:
                 return generic
+
         return generic
 
     return _sentence(seal_message)
@@ -238,7 +357,11 @@ def build_doctrine_bound_summary(
 
     parts: List[str] = []
 
-    lead_sentence = _build_lead_sentence(lead_message)
+    lead_sentence = _build_lead_sentence(
+        lead_message=lead_message,
+        top_symbols=top_symbols,
+        behavior_meaning=behavior_meaning,
+    )
     symbols_sentence = _build_symbols_sentence(top_symbols)
     support_sentence = _build_support_sentence(
         behavior_meaning=behavior_meaning,

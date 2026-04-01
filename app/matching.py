@@ -32,6 +32,44 @@ def symbol_length_penalty(symbol: str) -> int:
     return 18
 
 
+def _is_action_like_base_symbol(row: Dict[str, Any]) -> bool:
+    """
+    Base symbols like 'chasing', 'running', 'crying', etc. should not usually
+    outrank concrete symbols like snake, dog, mother, house, teeth, river.
+    """
+    symbol = normalize_text(get_base_symbol_input(row))
+    category = normalize_text(get_base_symbol_category(row))
+
+    action_like_words = {
+        "chasing",
+        "running",
+        "crying",
+        "fighting",
+        "biting",
+        "watching",
+        "following",
+        "walking",
+        "standing",
+        "speaking",
+        "looking",
+        "looking at",
+        "escaping",
+        "crossing",
+        "falling",
+        "flying",
+        "hiding",
+        "attacking",
+    }
+
+    if category in {"movement", "action", "behavior"}:
+        return True
+
+    if symbol in action_like_words:
+        return True
+
+    return False
+
+
 def score_row_strict(
     dream_norm: str,
     row: Dict[str, Any],
@@ -116,7 +154,15 @@ def match_symbols_legacy(
         sym = get_symbol_cell(row)
         token_len = int((hit or {}).get("token_len", 0))
         sym_len = len(normalize_text(sym))
-        return (-token_len, -score, -sym_len)
+        category = normalize_text(get_base_symbol_category(row))
+        action_like_penalty = 1 if _is_action_like_base_symbol(row) else 0
+        return (
+            action_like_penalty,
+            -category_priority(category),
+            -score,
+            -token_len,
+            -sym_len,
+        )
 
     candidates.sort(key=sort_key)
 
@@ -151,22 +197,27 @@ def match_symbols_legacy(
 
 
 def category_priority(category: str) -> int:
+    """
+    Higher means more likely to be a core symbol users expect to see first.
+    """
     c = normalize_text(category or "") or "unknown"
     priorities = {
-        "ending": 40,
-        "death": 36,
-        "graveyard": 35,
-        "body": 28,
-        "person": 26,
-        "animal": 24,
-        "water": 22,
-        "movement": 20,
-        "nature": 18,
-        "object": 16,
-        "location": 14,
-        "emotion": 12,
+        "ending": 42,
+        "death": 38,
+        "graveyard": 36,
+        "body": 34,
+        "person": 32,
+        "animal": 30,
+        "water": 24,
+        "nature": 22,
+        "object": 20,
+        "location": 18,
+        "emotion": 14,
+        "movement": 8,
+        "action": 8,
+        "behavior": 8,
     }
-    return priorities.get(c, 10)
+    return priorities.get(c, 12)
 
 
 def score_base_candidate(row: Dict[str, Any], match_type: str, symbol_raw: str) -> int:
@@ -181,7 +232,15 @@ def score_base_candidate(row: Dict[str, Any], match_type: str, symbol_raw: str) 
 
     category_bonus = category_priority(get_base_symbol_category(row))
     length_penalty = symbol_length_penalty(symbol_raw)
-    return base + category_bonus - length_penalty
+
+    score = base + category_bonus - length_penalty
+
+    # Action-like base symbols should normally support interpretation,
+    # not dominate it.
+    if _is_action_like_base_symbol(row):
+        score -= 18
+
+    return score
 
 
 def category_conflict_penalty(
@@ -217,6 +276,39 @@ def ending_bonus_for_symbol(row: Dict[str, Any], ending_text: str) -> int:
             return 10
 
     return 0
+
+
+def _candidate_sort_key(item):
+    row, score, hit = item
+    category = normalize_text(get_base_symbol_category(row))
+    symbol = normalize_text(get_base_symbol_input(row))
+    token_len = int((hit or {}).get("token_len", 0))
+    category_rank = category_priority(category)
+    action_like_penalty = 1 if _is_action_like_base_symbol(row) else 0
+
+    return (
+        action_like_penalty,                 # concrete symbols before action-like symbols
+        -category_rank,                      # stronger symbolic categories first
+        -score,                              # then raw score
+        -len(symbol.split()),                # slightly prefer fuller concrete symbols
+        -token_len,
+        -len(symbol),
+    )
+
+
+def _selected_output_sort_key(item):
+    row, score, hit = item
+    category = normalize_text(get_base_symbol_category(row))
+    symbol = normalize_text(get_base_symbol_input(row))
+    action_like_penalty = 1 if _is_action_like_base_symbol(row) else 0
+
+    return (
+        action_like_penalty,
+        -category_priority(category),
+        -score,
+        -len(symbol.split()),
+        -len(symbol),
+    )
 
 
 def match_base_symbols_doctrine(
@@ -283,14 +375,7 @@ def match_base_symbols_doctrine(
             )
             break
 
-    candidates.sort(
-        key=lambda item: (
-            -item[1],
-            -int(item[2].get("token_len", 0)),
-            -category_priority(get_base_symbol_category(item[0])),
-            -len(normalize_text(get_base_symbol_input(item[0]))),
-        )
-    )
+    candidates.sort(key=_candidate_sort_key)
 
     selected: List[Tuple[Dict[str, Any], int, Dict[str, Any]]] = []
     used_spans: List[Tuple[int, int]] = []
@@ -315,5 +400,7 @@ def match_base_symbols_doctrine(
         if len(selected) >= top_k:
             break
 
-    selected.sort(key=lambda item: -item[1])
+    # Final output order should look natural to users:
+    # core concrete symbol first, action-like support symbol later.
+    selected.sort(key=_selected_output_sort_key)
     return selected

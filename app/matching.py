@@ -34,8 +34,8 @@ def symbol_length_penalty(symbol: str) -> int:
 
 def _is_action_like_base_symbol(row: Dict[str, Any]) -> bool:
     """
-    Base symbols like 'chasing', 'running', 'crying', etc. should not usually
-    outrank concrete symbols like snake, dog, mother, house, teeth, river.
+    Base symbols like 'chasing', 'running', 'crying', etc. should usually
+    support interpretation rather than outrank concrete symbols.
     """
     symbol = normalize_text(get_base_symbol_input(row))
     category = normalize_text(get_base_symbol_category(row))
@@ -70,6 +70,26 @@ def _is_action_like_base_symbol(row: Dict[str, Any]) -> bool:
     return False
 
 
+def _normalize_keyword_list(raw_keywords: str) -> List[str]:
+    from app.utils import normalize_text as norm
+    import re
+
+    keywords: List[str] = []
+    seen = set()
+
+    if not raw_keywords:
+        return keywords
+
+    for part in re.split(r"[,|;]+", raw_keywords):
+        part = norm(part)
+        if not part or part in seen:
+            continue
+        seen.add(part)
+        keywords.append(part)
+
+    return keywords
+
+
 def score_row_strict(
     dream_norm: str,
     row: Dict[str, Any],
@@ -83,24 +103,15 @@ def score_row_strict(
     if not symbol:
         return 0, None
 
-    from app.utils import normalize_text as norm
-    import re
-
     raw_keywords = get_keywords_cell(row)
-    keywords = []
-    if raw_keywords:
-        for part in re.split(r"[,|;]+", raw_keywords):
-            part = norm(part)
-            if part:
-                keywords.append(part)
+    keywords = _normalize_keyword_list(raw_keywords)
 
     candidates: List[Tuple[str, str, int]] = []
 
-    if symbol:
-        if len(tokenize_words(symbol)) > 1:
-            candidates.append(("symbol_phrase", symbol, 100 - symbol_length_penalty(symbol_raw)))
-        else:
-            candidates.append(("symbol", symbol, 100))
+    if len(tokenize_words(symbol)) > 1:
+        candidates.append(("symbol_phrase", symbol, 100 - symbol_length_penalty(symbol_raw)))
+    else:
+        candidates.append(("symbol", symbol, 100))
 
     for kw in keywords:
         if len(tokenize_words(kw)) > 1:
@@ -126,74 +137,11 @@ def score_row_strict(
                 "type": match_type,
                 "token": token,
                 "span": chosen_span,
-                "token_len": len(token),
+                "token_len": len(token.split()),
+                "token_chars": len(token),
             }
 
     return 0, None
-
-
-def match_symbols_legacy(
-    dream: str,
-    rows: List[Dict[str, Any]],
-    top_k: int = 3,
-) -> List[Tuple[Dict[str, Any], int, Optional[Dict[str, Any]]]]:
-    dream_norm = normalize_text(dream)
-    if not dream_norm:
-        return []
-
-    candidates: List[Tuple[Dict[str, Any], int, Optional[Dict[str, Any]]]] = []
-    for row in rows:
-        if not row_is_active(row):
-            continue
-        score, hit = score_row_strict(dream_norm, row, used_spans=[])
-        if score > 0 and hit:
-            candidates.append((row, score, hit))
-
-    def sort_key(item):
-        row, score, hit = item
-        sym = get_symbol_cell(row)
-        token_len = int((hit or {}).get("token_len", 0))
-        sym_len = len(normalize_text(sym))
-        category = normalize_text(get_base_symbol_category(row))
-        action_like_penalty = 1 if _is_action_like_base_symbol(row) else 0
-        return (
-            action_like_penalty,
-            -category_priority(category),
-            -score,
-            -token_len,
-            -sym_len,
-        )
-
-    candidates.sort(key=sort_key)
-
-    used_spans: List[Tuple[int, int]] = []
-    seen_symbols = set()
-    out: List[Tuple[Dict[str, Any], int, Optional[Dict[str, Any]]]] = []
-
-    for row, score, hit in candidates:
-        if not hit:
-            continue
-
-        span = hit.get("span")
-        if not span:
-            continue
-
-        sym = get_symbol_cell(row)
-        sym_key = normalize_text(sym)
-
-        if not sym_key or sym_key in seen_symbols:
-            continue
-        if is_span_blocked(span, used_spans):
-            continue
-
-        used_spans.append(span)
-        seen_symbols.add(sym_key)
-        out.append((row, score, hit))
-
-        if len(out) >= top_k:
-            break
-
-    return out
 
 
 def category_priority(category: str) -> int:
@@ -235,8 +183,6 @@ def score_base_candidate(row: Dict[str, Any], match_type: str, symbol_raw: str) 
 
     score = base + category_bonus - length_penalty
 
-    # Action-like base symbols should normally support interpretation,
-    # not dominate it.
     if _is_action_like_base_symbol(row):
         score -= 18
 
@@ -278,25 +224,26 @@ def ending_bonus_for_symbol(row: Dict[str, Any], ending_text: str) -> int:
     return 0
 
 
-def _candidate_sort_key(item):
+def _candidate_sort_key(item: Tuple[Dict[str, Any], int, Dict[str, Any]]):
     row, score, hit = item
     category = normalize_text(get_base_symbol_category(row))
     symbol = normalize_text(get_base_symbol_input(row))
     token_len = int((hit or {}).get("token_len", 0))
+    token_chars = int((hit or {}).get("token_chars", 0))
     category_rank = category_priority(category)
     action_like_penalty = 1 if _is_action_like_base_symbol(row) else 0
 
     return (
-        action_like_penalty,                 # concrete symbols before action-like symbols
-        -category_rank,                      # stronger symbolic categories first
-        -score,                              # then raw score
-        -len(symbol.split()),                # slightly prefer fuller concrete symbols
-        -token_len,
+        action_like_penalty,   # concrete before action-like
+        -category_rank,        # stronger symbolic categories first
+        -score,                # then raw score
+        -token_len,            # then word count in matched token
+        -token_chars,          # then character length
         -len(symbol),
     )
 
 
-def _selected_output_sort_key(item):
+def _selected_output_sort_key(item: Tuple[Dict[str, Any], int, Dict[str, Any]]):
     row, score, hit = item
     category = normalize_text(get_base_symbol_category(row))
     symbol = normalize_text(get_base_symbol_input(row))
@@ -309,6 +256,56 @@ def _selected_output_sort_key(item):
         -len(symbol.split()),
         -len(symbol),
     )
+
+
+def match_symbols_legacy(
+    dream: str,
+    rows: List[Dict[str, Any]],
+    top_k: int = 3,
+) -> List[Tuple[Dict[str, Any], int, Optional[Dict[str, Any]]]]:
+    dream_norm = normalize_text(dream)
+    if not dream_norm:
+        return []
+
+    candidates: List[Tuple[Dict[str, Any], int, Optional[Dict[str, Any]]]] = []
+    for row in rows:
+        if not row_is_active(row):
+            continue
+        score, hit = score_row_strict(dream_norm, row, used_spans=[])
+        if score > 0 and hit:
+            candidates.append((row, score, hit))
+
+    candidates.sort(key=lambda item: _candidate_sort_key(item))  # type: ignore[arg-type]
+
+    used_spans: List[Tuple[int, int]] = []
+    seen_symbols = set()
+    out: List[Tuple[Dict[str, Any], int, Optional[Dict[str, Any]]]] = []
+
+    for row, score, hit in candidates:
+        if not hit:
+            continue
+
+        span = hit.get("span")
+        if not span:
+            continue
+
+        sym = get_symbol_cell(row)
+        sym_key = normalize_text(sym)
+
+        if not sym_key or sym_key in seen_symbols:
+            continue
+        if is_span_blocked(span, used_spans):
+            continue
+
+        used_spans.append(span)
+        seen_symbols.add(sym_key)
+        out.append((row, score, hit))
+
+        if len(out) >= top_k:
+            break
+
+    out.sort(key=lambda item: _selected_output_sort_key(item))  # type: ignore[arg-type]
+    return out
 
 
 def match_base_symbols_doctrine(
@@ -350,7 +347,8 @@ def match_base_symbols_doctrine(
             else:
                 local_candidates.append(("keyword", kw))
 
-        local_candidates.sort(key=lambda x: -len(x[1]))
+        # longest phrases first, so "black dog" beats "dog"
+        local_candidates.sort(key=lambda x: (-len(x[1].split()), -len(x[1])))
 
         for match_type, token in local_candidates:
             spans = find_phrase_spans(dream_norm, token)
@@ -368,7 +366,8 @@ def match_base_symbols_doctrine(
                         "type": match_type,
                         "token": token,
                         "span": spans[0],
-                        "token_len": len(token),
+                        "token_len": len(token.split()),
+                        "token_chars": len(token),
                         "ending_bonus": ending_bonus,
                     },
                 )
@@ -400,7 +399,5 @@ def match_base_symbols_doctrine(
         if len(selected) >= top_k:
             break
 
-    # Final output order should look natural to users:
-    # core concrete symbol first, action-like support symbol later.
     selected.sort(key=_selected_output_sort_key)
     return selected

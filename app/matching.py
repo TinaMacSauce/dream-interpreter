@@ -59,6 +59,8 @@ def _is_action_like_base_symbol(row: Dict[str, Any]) -> bool:
         "flying",
         "hiding",
         "attacking",
+        "smiling",
+        "laughing",
     }
 
     if category in {"movement", "action", "behavior"}:
@@ -90,6 +92,70 @@ def _normalize_keyword_list(raw_keywords: str) -> List[str]:
     return keywords
 
 
+def _row_identity_key(row: Dict[str, Any]) -> str:
+    symbol = normalize_text(get_base_symbol_input(row))
+    if symbol:
+        return symbol
+    return normalize_text(get_symbol_cell(row))
+
+
+def _prefer_literal_symbol_over_action(
+    row: Dict[str, Any],
+    score: int,
+) -> int:
+    """
+    Concrete symbols should usually lead.
+    Action-like rows can still match, but they should rarely dominate.
+    """
+    if _is_action_like_base_symbol(row):
+        score -= 18
+    return score
+
+
+def _relationship_bonus(row: Dict[str, Any]) -> int:
+    category = normalize_text(get_base_symbol_category(row))
+    symbol = normalize_text(get_base_symbol_input(row))
+
+    family_people = {
+        "mother",
+        "father",
+        "sister",
+        "brother",
+        "child",
+        "son",
+        "daughter",
+        "husband",
+        "wife",
+        "spouse",
+        "grandmother",
+        "grandfather",
+        "friend",
+        "relative",
+        "cousin",
+        "aunt",
+        "uncle",
+    }
+
+    if category == "person":
+        return 8
+    if symbol in family_people:
+        return 10
+    return 0
+
+
+def _death_omen_bonus(row: Dict[str, Any]) -> int:
+    symbol = normalize_text(get_base_symbol_input(row))
+    category = normalize_text(get_base_symbol_category(row))
+
+    if symbol in {"teeth", "teeth falling out", "falling", "dead person", "dead people"}:
+        return 14
+
+    if category in {"death", "graveyard", "ending"}:
+        return 10
+
+    return 0
+
+
 def score_row_strict(
     dream_norm: str,
     row: Dict[str, Any],
@@ -119,7 +185,7 @@ def score_row_strict(
         else:
             candidates.append(("keyword", kw, 90))
 
-    candidates.sort(key=lambda x: (-len(x[1]), -x[2]))
+    candidates.sort(key=lambda x: (-len(x[1].split()), -len(x[1]), -x[2]))
 
     for match_type, token, score in candidates:
         spans = find_phrase_spans(dream_norm, token)
@@ -182,9 +248,9 @@ def score_base_candidate(row: Dict[str, Any], match_type: str, symbol_raw: str) 
     length_penalty = symbol_length_penalty(symbol_raw)
 
     score = base + category_bonus - length_penalty
-
-    if _is_action_like_base_symbol(row):
-        score -= 18
+    score = _prefer_literal_symbol_over_action(row, score)
+    score += _relationship_bonus(row)
+    score += _death_omen_bonus(row)
 
     return score
 
@@ -258,6 +324,36 @@ def _selected_output_sort_key(item: Tuple[Dict[str, Any], int, Dict[str, Any]]):
     )
 
 
+def _select_non_overlapping_candidates(
+    candidates: List[Tuple[Dict[str, Any], int, Dict[str, Any]]],
+    top_k: int,
+) -> List[Tuple[Dict[str, Any], int, Dict[str, Any]]]:
+    selected: List[Tuple[Dict[str, Any], int, Dict[str, Any]]] = []
+    used_spans: List[Tuple[int, int]] = []
+    seen_symbols = set()
+
+    for row, score, hit in candidates:
+        span = hit.get("span")
+        if not span:
+            continue
+
+        row_key = _row_identity_key(row)
+        if not row_key or row_key in seen_symbols:
+            continue
+        if is_span_blocked(span, used_spans):
+            continue
+
+        score_after_conflict = score - category_conflict_penalty(row, selected)
+        selected.append((row, score_after_conflict, hit))
+        used_spans.append(span)
+        seen_symbols.add(row_key)
+
+        if len(selected) >= top_k:
+            break
+
+    return selected
+
+
 def match_symbols_legacy(
     dream: str,
     rows: List[Dict[str, Any]],
@@ -289,16 +385,14 @@ def match_symbols_legacy(
         if not span:
             continue
 
-        sym = get_symbol_cell(row)
-        sym_key = normalize_text(sym)
-
-        if not sym_key or sym_key in seen_symbols:
+        row_key = _row_identity_key(row)
+        if not row_key or row_key in seen_symbols:
             continue
         if is_span_blocked(span, used_spans):
             continue
 
         used_spans.append(span)
-        seen_symbols.add(sym_key)
+        seen_symbols.add(row_key)
         out.append((row, score, hit))
 
         if len(out) >= top_k:
@@ -376,28 +470,8 @@ def match_base_symbols_doctrine(
 
     candidates.sort(key=_candidate_sort_key)
 
-    selected: List[Tuple[Dict[str, Any], int, Dict[str, Any]]] = []
-    used_spans: List[Tuple[int, int]] = []
-    seen_symbols = set()
+    selected = _select_non_overlapping_candidates(candidates, top_k=top_k)
 
-    for row, score, hit in candidates:
-        span = hit.get("span")
-        if not span:
-            continue
-
-        sym_key = normalize_text(get_base_symbol_input(row))
-        if not sym_key or sym_key in seen_symbols:
-            continue
-        if is_span_blocked(span, used_spans):
-            continue
-
-        score_after_conflict = score - category_conflict_penalty(row, selected)
-        selected.append((row, score_after_conflict, hit))
-        used_spans.append(span)
-        seen_symbols.add(sym_key)
-
-        if len(selected) >= top_k:
-            break
-
+    # Final output order shown to users should still feel natural.
     selected.sort(key=_selected_output_sort_key)
     return selected

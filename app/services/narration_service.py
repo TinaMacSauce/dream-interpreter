@@ -109,6 +109,10 @@ def _should_skip_placeholder(value: str, placeholders: List[str]) -> bool:
 
 
 def _phrase_to_natural_clause(text: str) -> str:
+    """
+    Small wording cleanup only.
+    This must NEVER change doctrine.
+    """
     text = _clean(text)
     if not text:
         return ""
@@ -127,117 +131,81 @@ def _phrase_to_natural_clause(text: str) -> str:
     return " ".join(out.split()).strip()
 
 
-def _extract_symbol_meaning_pairs(top_symbols: List[str], lead_message: str) -> List[Dict[str, str]]:
-    """
-    Reads simple doctrine phrases like:
-    'snake suggests enemy and chasing suggests pursuit'
-    and turns them into structured pairs.
-    """
-    pairs: List[Dict[str, str]] = []
-    lead = _clean(lead_message)
-    if not lead:
-        return pairs
-
-    chunks = [c.strip() for c in lead.split(" and ") if c.strip()]
-    normalized_symbols = [normalize_text(x) for x in top_symbols if x]
-
-    for chunk in chunks:
-        chunk_n = normalize_text(chunk)
-        if " suggests " in chunk_n:
-            parts = chunk.split(" suggests ", 1)
-        elif " points to " in chunk_n:
-            parts = chunk.split(" points to ", 1)
-        else:
-            continue
-
-        if len(parts) != 2:
-            continue
-
-        left = _clean(parts[0])
-        right = _clean(parts[1])
-
-        if not left or not right:
-            continue
-
-        if normalized_symbols and normalize_text(left) not in normalized_symbols:
-            # still allow it, but prefer actual top symbols
-            pass
-
-        pairs.append({"symbol": left, "meaning": right})
-
-    return pairs
+def _is_attack_or_impersonation_text(text: str) -> bool:
+    text_n = normalize_text(text)
+    trigger_terms = [
+        "spiritual attack",
+        "warfare",
+        "impersonation",
+        "familiar person",
+        "familiar spirit",
+        "appearing in the form",
+        "appearing in the form of",
+    ]
+    return any(term in text_n for term in trigger_terms)
 
 
-def _build_smoother_lead_from_pairs(
-    pairs: List[Dict[str, str]],
-    behavior_meaning: str,
-) -> str:
-    """
-    Makes the summary sound less robotic without adding doctrine.
-    Example:
-    snake -> enemy
-    chasing -> pursuit
-    =>
-    This dream points to enemy pursuit.
-    """
-    if not pairs:
-        return ""
-
-    if len(pairs) == 1:
-        meaning = _clean(pairs[0].get("meaning", ""))
-        if meaning:
-            return _sentence(f"This dream points to {meaning}")
-        return ""
-
-    symbol_to_meaning = {normalize_text(p["symbol"]): _clean(p["meaning"]) for p in pairs}
-    behavior_n = normalize_text(behavior_meaning)
-
-    # Common natural compression: main symbol + pursuit/chase behavior
-    if "snake" in symbol_to_meaning and ("pursuit" in behavior_n or "chasing" in symbol_to_meaning):
-        base_meaning = symbol_to_meaning.get("snake", "")
-        if base_meaning and "enemy" in normalize_text(base_meaning):
-            return _sentence("This dream points to enemy pursuit")
-
-    ordered_meanings = []
-    seen = set()
-    for pair in pairs:
-        meaning = _clean(pair.get("meaning", ""))
-        key = _semantic_key(meaning)
-        if meaning and key and key not in seen:
-            seen.add(key)
-            ordered_meanings.append(meaning)
-
-    if not ordered_meanings:
-        return ""
-
-    if len(ordered_meanings) == 1:
-        return _sentence(f"This dream points to {ordered_meanings[0]}")
-
-    return _sentence(f"This dream points to {human_join(ordered_meanings)}")
+def _is_emotion_reversal_text(text: str) -> bool:
+    text_n = normalize_text(text)
+    trigger_terms = [
+        "joy is near",
+        "sadness is near",
+    ]
+    return any(term in text_n for term in trigger_terms)
 
 
-def _build_lead_sentence(
+def _build_locked_lead_sentence(
     lead_message: str,
     top_symbols: List[str],
     behavior_meaning: str,
+    relationship_meaning: str,
 ) -> str:
-    lead_message = _phrase_to_natural_clause(lead_message)
+    """
+    LOCKED LEAD PRIORITY:
+    1. direct doctrine lead_message
+    2. attack/impersonation wording must stay explicit
+    3. emotion reversal wording must stay explicit
+    4. relationship wording stays direct
+    5. only then allow a general 'This dream points to ...'
+    """
+    lead_message = _clean(lead_message)
     if not lead_message:
         return ""
 
-    pairs = _extract_symbol_meaning_pairs(top_symbols, lead_message)
-    smoother = _build_smoother_lead_from_pairs(pairs, behavior_meaning)
-    if smoother:
-        return smoother
+    lead_n = normalize_text(lead_message)
 
-    lead_lower = normalize_text(lead_message)
+    if _is_attack_or_impersonation_text(lead_message):
+        return _sentence(lead_message)
 
-    if " points to " in lead_lower:
+    if _is_emotion_reversal_text(lead_message):
+        return _sentence(lead_message)
+
+    if relationship_meaning:
+        rel_n = normalize_text(relationship_meaning)
+        if any(
+            term in rel_n
+            for term in [
+                "this concerns your mother",
+                "this concerns your father",
+                "this concerns that person",
+                "this concerns your partner",
+                "this concerns that child",
+                "this concerns that family member",
+            ]
+        ):
+            return _sentence(_phrase_to_natural_clause(lead_message))
+
+    if " points to " in lead_n:
         right = lead_message.split(" points to ", 1)[1].strip()
         if right:
             return _sentence(f"This dream points to {right}")
 
-    if lead_lower.startswith(("a ", "an ", "the ")):
+    if " suggests " in lead_n:
+        right = lead_message.split(" suggests ", 1)[1].strip()
+        if right:
+            return _sentence(f"This dream points to {right}")
+
+    if lead_n.startswith(("a ", "an ", "the ")):
         return _sentence(f"This dream points to {lead_message}")
 
     return _sentence(f"This dream points to {lead_message}")
@@ -342,6 +310,10 @@ def build_doctrine_bound_summary(
 
     This function does NOT invent doctrine.
     It only rewrites doctrine facts already produced by the backend.
+
+    LOCKED RULE:
+    narration may clarify wording, but it may not soften,
+    replace, or reinterpret doctrine facts.
     """
     max_symbols = max(1, Config.NARRATION_MAX_SYMBOLS)
 
@@ -357,10 +329,11 @@ def build_doctrine_bound_summary(
 
     parts: List[str] = []
 
-    lead_sentence = _build_lead_sentence(
+    lead_sentence = _build_locked_lead_sentence(
         lead_message=lead_message,
         top_symbols=top_symbols,
         behavior_meaning=behavior_meaning,
+        relationship_meaning=relationship_meaning,
     )
     symbols_sentence = _build_symbols_sentence(top_symbols)
     support_sentence = _build_support_sentence(

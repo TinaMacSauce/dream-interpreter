@@ -70,7 +70,7 @@ def get_keywords_cell(row: Dict[str, Any]) -> str:
 
 
 def get_priority_cell(row: Dict[str, Any], default: int = 0) -> int:
-    raw = row_get(row, "priority")
+    raw = row_get(row, "priority", "priority_weight", "weight")
     if not raw:
         return default
     try:
@@ -78,6 +78,10 @@ def get_priority_cell(row: Dict[str, Any], default: int = 0) -> int:
     except Exception:
         return default
 
+
+# ============================================================
+# Base symbols
+# ============================================================
 
 def get_base_symbol_input(row: Dict[str, Any]) -> str:
     return row_get(
@@ -123,6 +127,10 @@ def get_base_symbol_action(row: Dict[str, Any]) -> str:
     )
 
 
+# ============================================================
+# Generic rule helpers
+# ============================================================
+
 def get_rule_name(row: Dict[str, Any], *keys: str) -> str:
     return row_get(row, *keys)
 
@@ -151,6 +159,10 @@ def get_rule_keywords(row: Dict[str, Any]) -> List[str]:
 
     return out
 
+
+# ============================================================
+# Behavior rules
+# ============================================================
 
 def get_behavior_name(row: Dict[str, Any]) -> str:
     return get_rule_name(row, "behavior_name", "behavior")
@@ -188,6 +200,49 @@ def get_behavior_action_modifier(row: Dict[str, Any]) -> str:
     )
 
 
+def get_behavior_rule_class(row: Dict[str, Any]) -> str:
+    return row_get(
+        row,
+        "rule_class",
+        "rule class",
+        "class",
+    )
+
+
+def behavior_is_attack(row: Dict[str, Any]) -> bool:
+    raw = row_get(
+        row,
+        "is_attack",
+        "is attack",
+        "attack",
+    )
+    return normalize_yes_no(raw)
+
+
+def behavior_supports_impersonation(row: Dict[str, Any]) -> bool:
+    raw = row_get(
+        row,
+        "supports_impersonation",
+        "supports impersonation",
+        "impersonation",
+    )
+    return normalize_yes_no(raw)
+
+
+def get_behavior_override_target_mode(row: Dict[str, Any]) -> str:
+    return row_get(
+        row,
+        "override_target_mode",
+        "override target mode",
+        "target_mode",
+        "target mode",
+    )
+
+
+# ============================================================
+# State rules
+# ============================================================
+
 def get_state_name(row: Dict[str, Any]) -> str:
     return get_rule_name(row, "state_name", "state")
 
@@ -224,6 +279,10 @@ def get_state_action_modifier(row: Dict[str, Any]) -> str:
     )
 
 
+# ============================================================
+# Location rules
+# ============================================================
+
 def get_location_name(row: Dict[str, Any]) -> str:
     return get_rule_name(row, "location_name", "location")
 
@@ -257,6 +316,10 @@ def get_location_action_modifier(row: Dict[str, Any]) -> str:
         "actions",
     )
 
+
+# ============================================================
+# Relationship rules
+# ============================================================
 
 def get_relationship_name(row: Dict[str, Any]) -> str:
     return get_rule_name(row, "relationship_name", "relationship")
@@ -294,8 +357,64 @@ def get_relationship_action_modifier(row: Dict[str, Any]) -> str:
     )
 
 
+def get_relationship_ownership_default(row: Dict[str, Any]) -> str:
+    return row_get(
+        row,
+        "ownership_default",
+        "ownership default",
+        "default_ownership",
+        "default ownership",
+    )
+
+
+def get_relationship_attack_override_mode(row: Dict[str, Any]) -> str:
+    return row_get(
+        row,
+        "attack_override_mode",
+        "attack override mode",
+        "override_mode",
+        "override mode",
+    )
+
+
+def relationship_literal_when_peaceful(row: Dict[str, Any]) -> bool:
+    raw = row_get(
+        row,
+        "literal_when_peaceful",
+        "literal when peaceful",
+    )
+    if not raw:
+        return False
+    return normalize_yes_no(raw)
+
+
+def relationship_impersonation_when_attacking(row: Dict[str, Any]) -> bool:
+    raw = row_get(
+        row,
+        "impersonation_when_attacking",
+        "impersonation when attacking",
+    )
+    if not raw:
+        return False
+    return normalize_yes_no(raw)
+
+
+# ============================================================
+# Override rules
+# ============================================================
+
 def get_override_name(row: Dict[str, Any]) -> str:
     return row_get(row, "override_name", "override name", "name")
+
+
+def get_override_condition(row: Dict[str, Any]) -> str:
+    return row_get(
+        row,
+        "condition",
+        "conditions",
+        "rule_condition",
+        "rule condition",
+    )
 
 
 def get_override_spiritual(row: Dict[str, Any]) -> str:
@@ -327,6 +446,33 @@ def get_override_action(row: Dict[str, Any]) -> str:
         "actions",
     )
 
+
+def override_is_hard(row: Dict[str, Any]) -> bool:
+    raw = row_get(
+        row,
+        "is_hard_override",
+        "is hard override",
+        "hard_override",
+        "hard override",
+    )
+    if not raw:
+        return False
+    return normalize_yes_no(raw)
+
+
+def get_override_target_mode(row: Dict[str, Any]) -> str:
+    return row_get(
+        row,
+        "target_mode",
+        "target mode",
+        "override_target_mode",
+        "override target mode",
+    )
+
+
+# ============================================================
+# Output templates
+# ============================================================
 
 def get_output_template(rows: List[Dict[str, Any]], template_type: str, fallback: str) -> str:
     from app.utils import normalize_text

@@ -81,6 +81,27 @@ def _check_and_apply_access(session_email: str) -> Tuple[bool, Dict[str, Any], b
     return access_ok, access_meta, is_paid, has_active_dream_pack, free_uses_left, dream_pack_status_after
 
 
+def _extract_override_meta(override_hit: Dict[str, Any]) -> Dict[str, Any]:
+    if not override_hit:
+        return {
+            "applied": False,
+            "name": "",
+            "priority": 0,
+            "condition": "",
+            "target_mode": "",
+            "is_hard_override": False,
+        }
+
+    return {
+        "applied": True,
+        "name": override_hit.get("override_name", "") or "",
+        "priority": int(override_hit.get("priority", 0) or 0),
+        "condition": override_hit.get("condition", "") or "",
+        "target_mode": override_hit.get("target_mode", "") or "",
+        "is_hard_override": bool(override_hit.get("is_hard_override", False)),
+    }
+
+
 def _build_doctrine_payload(
     dream: str,
     session_email: str,
@@ -169,8 +190,11 @@ def _build_doctrine_payload(
         ai_enabled=Config.AI_NARRATION_ENABLED,
     )
 
+    override_meta = _extract_override_meta(override_hit)
+    engine_mode = "override" if override_meta["applied"] else "doctrine"
+
     payload: Dict[str, Any] = {
-        "engine_mode": "doctrine",
+        "engine_mode": engine_mode,
         "access": _access_label(is_paid, has_active_dream_pack),
         "is_paid": bool(is_paid),
         "email": session_email,
@@ -182,8 +206,12 @@ def _build_doctrine_payload(
             "states": [s.get("name", "") for s in states if s.get("name")],
             "locations": [l.get("name", "") for l in locations if l.get("name")],
             "relationships": [r.get("name", "") for r in relationships if r.get("name")],
-            "override_applied": built.get("override_applied", False),
-            "override_name": built.get("override_name", ""),
+            "override_applied": override_meta["applied"],
+            "override_name": override_meta["name"],
+            "override_priority": override_meta["priority"],
+            "override_condition": override_meta["condition"],
+            "override_target_mode": override_meta["target_mode"],
+            "is_hard_override": override_meta["is_hard_override"],
             "template_type": built.get("template_type", "default"),
         },
         "interpretation": built["interpretation"],
@@ -195,11 +223,27 @@ def _build_doctrine_payload(
 
     if Config.DEBUG_MATCH:
         payload["debug"] = {
+            "dream_preview": dream[:300],
             "base_match_count": len(base_matches),
             "behavior_count": len(behaviors),
             "state_count": len(states),
             "location_count": len(locations),
             "relationship_count": len(relationships),
+            "base_matches": [
+                {
+                    "symbol": row.get("symbol", "") or row.get("input", ""),
+                    "score": score,
+                    "match_type": (hit or {}).get("type", ""),
+                    "token": (hit or {}).get("token", ""),
+                }
+                for row, score, hit in base_matches
+            ],
+            "behaviors": [b.get("name", "") for b in behaviors],
+            "states": [s.get("name", "") for s in states],
+            "locations": [l.get("name", "") for l in locations],
+            "relationships": [r.get("name", "") for r in relationships],
+            "override": override_meta,
+            "seal": doctrine_seal,
         }
 
     return payload
@@ -241,7 +285,19 @@ def _build_legacy_payload(
         "free_uses_left": free_uses_left,
         "dream_pack": dream_pack_status_after,
         "seal": seal,
-        "brain": {},
+        "brain": {
+            "behaviors": [],
+            "states": [],
+            "locations": [],
+            "relationships": [],
+            "override_applied": False,
+            "override_name": "",
+            "override_priority": 0,
+            "override_condition": "",
+            "override_target_mode": "",
+            "is_hard_override": False,
+            "template_type": "",
+        },
         "interpretation": built_legacy,
         "full_interpretation": "\n\n".join(
             [
@@ -264,7 +320,18 @@ def _build_legacy_payload(
 
     if Config.DEBUG_MATCH:
         payload["debug"] = {
+            "dream_preview": dream[:300],
             "legacy_match_count": len(matches),
+            "legacy_matches": [
+                {
+                    "symbol": get_symbol_cell(row),
+                    "score": score,
+                    "match_type": (hit or {}).get("type", "") if hit else "",
+                    "token": (hit or {}).get("token", "") if hit else "",
+                }
+                for row, score, hit in matches
+            ],
+            "seal": seal,
         }
 
     return payload

@@ -31,8 +31,13 @@ def clean_sentence(value: str) -> str:
     value = str(value).strip()
     value = re.sub(r"\s+", " ", value)
     value = value.replace(" ,", ",").replace(" .", ".").replace(" :", ":").replace(" ;", ";")
+    value = re.sub(r"\s*,\s*", ", ", value)
+    value = re.sub(r"\s*;\s*", "; ", value)
+    value = re.sub(r"\s*:\s*", ": ", value)
     value = re.sub(r"([.!?]){2,}", r"\1", value)
-    return value
+    value = re.sub(r",\s*,+", ", ", value)
+    value = re.sub(r"\s+,", ",", value)
+    return value.strip()
 
 
 def strip_trailing_punct(value: str) -> str:
@@ -80,21 +85,133 @@ def sentence(text: str) -> str:
     return ensure_terminal_punct(text)
 
 
-def compress_phrase_list(parts: List[str]) -> List[str]:
-    out: List[str] = []
-    seen = set()
+def tokenize_words(value: str) -> List[str]:
+    return [word for word in normalize_text(value).split() if word]
 
+
+def _phrase_token_set(text: str) -> set:
+    return set(tokenize_words(text))
+
+
+def _phrase_contains_phrase(big: str, small: str) -> bool:
+    big_n = normalize_text(big)
+    small_n = normalize_text(small)
+    if not big_n or not small_n:
+        return False
+    if big_n == small_n:
+        return True
+    return f" {small_n} " in f" {big_n} "
+
+
+def _phrase_is_subsumed(candidate: str, existing: str) -> bool:
+    """
+    Returns True if candidate is basically already covered by existing.
+    Examples:
+      pressure  <- subsumed by "pressure, fear"
+      conflict  <- subsumed by "ongoing conflict"
+      stay alert <- subsumed by "pray and stay alert"
+    """
+    cand_n = normalize_text(candidate)
+    exist_n = normalize_text(existing)
+
+    if not cand_n or not exist_n:
+        return False
+
+    if cand_n == exist_n:
+        return True
+
+    if _phrase_contains_phrase(existing, candidate):
+        return True
+
+    cand_tokens = _phrase_token_set(candidate)
+    exist_tokens = _phrase_token_set(existing)
+
+    if not cand_tokens or not exist_tokens:
+        return False
+
+    # If candidate is mostly covered by existing, treat it as redundant.
+    overlap = len(cand_tokens & exist_tokens)
+    coverage = overlap / max(1, len(cand_tokens))
+
+    if coverage >= 0.8 and len(exist_tokens) >= len(cand_tokens):
+        return True
+
+    return False
+
+
+def _choose_better_phrase(a: str, b: str) -> str:
+    """
+    Prefer the phrase that is a little richer but not excessively bloated.
+    """
+    a_clean = strip_trailing_punct(a)
+    b_clean = strip_trailing_punct(b)
+
+    if not a_clean:
+        return b_clean
+    if not b_clean:
+        return a_clean
+
+    a_tokens = tokenize_words(a_clean)
+    b_tokens = tokenize_words(b_clean)
+
+    if len(b_tokens) > len(a_tokens):
+        return b_clean
+    return a_clean
+
+
+def compress_phrase_list(parts: List[str]) -> List[str]:
+    """
+    Stronger phrase compression:
+    - removes exact duplicates
+    - removes shorter phrases already covered by longer phrases
+    - prefers cleaner richer phrases over weak fragments
+    """
+    cleaned_parts: List[str] = []
+
+    # Start with cleaned candidates only.
     for part in parts:
         part = strip_trailing_punct(part)
         if not part:
             continue
+        cleaned_parts.append(part)
+
+    # Sort richer phrases first so they can absorb weaker fragments.
+    cleaned_parts.sort(key=lambda x: (-len(tokenize_words(x)), -len(normalize_text(x)), x.lower()))
+
+    out: List[str] = []
+
+    for part in cleaned_parts:
+        replaced = False
+        skip = False
+
+        for i, existing in enumerate(out):
+            if _phrase_is_subsumed(part, existing):
+                skip = True
+                break
+
+            if _phrase_is_subsumed(existing, part):
+                out[i] = _choose_better_phrase(existing, part)
+                replaced = True
+                break
+
+        if skip:
+            continue
+
+        if not replaced:
+            out.append(part)
+
+    # Final exact-normalized dedupe pass while preserving order.
+    final: List[str] = []
+    seen = set()
+
+    for part in out:
         key = normalize_text(part)
         if not key or key in seen:
             continue
         seen.add(key)
-        out.append(part)
+        final.append(part)
 
-    return out
+    return final
 
 
 def human_join(parts: List[str]) -> str:
@@ -106,10 +223,6 @@ def human_join(parts: List[str]) -> str:
     if len(parts) == 2:
         return f"{parts[0]} and {parts[1]}"
     return ", ".join(parts[:-1]) + f", and {parts[-1]}"
-
-
-def tokenize_words(value: str) -> List[str]:
-    return [word for word in normalize_text(value).split() if word]
 
 
 def compile_boundary_regex(token: str) -> re.Pattern:
@@ -273,7 +386,15 @@ def normalize_action_phrase(text: str) -> str:
         "were standing": "standing",
     }
 
-    return replacements.get(text, text)
+    text = replacements.get(text, text)
+
+    # Normalize repeated connectors and repeated fragments.
+    text = re.sub(r"\b(and\s+)+", "and ", text)
+    text = re.sub(r"\bto\s+be\s+be\b", "to be", text)
+    text = re.sub(r"\bpray and pray\b", "pray", text)
+    text = re.sub(r"\bstay alert and stay alert\b", "stay alert", text)
+
+    return text.strip()
 
 
 def normalize_effect_phrase(text: str) -> str:
@@ -285,4 +406,40 @@ def normalize_effect_phrase(text: str) -> str:
     if not text:
         return ""
 
-    return text[:1].lower() + text[1:]
+    # Lowercase first character for smoother joining.
+    text = text[:1].lower() + text[1:]
+
+    # Normalize punctuation spacing.
+    text = re.sub(r"\s*,\s*", ", ", text)
+
+    # Collapse exact repeated comma blocks:
+    # "pressure, fear, pressure, fear" -> "pressure, fear"
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    deduped_parts: List[str] = []
+    for part in parts:
+      key = normalize_text(part)
+      if not key:
+          continue
+
+      skip = False
+      for existing in deduped_parts:
+          if _phrase_is_subsumed(part, existing):
+              skip = True
+              break
+      if skip:
+          continue
+
+      replaced = False
+      for i, existing in enumerate(deduped_parts):
+          if _phrase_is_subsumed(existing, part):
+              deduped_parts[i] = _choose_better_phrase(existing, part)
+              replaced = True
+              break
+
+      if not replaced:
+          deduped_parts.append(part)
+
+    if deduped_parts:
+        text = ", ".join(deduped_parts)
+
+    return text.strip()

@@ -166,6 +166,12 @@ def compact_spiritual_meaning(
     seal: Dict[str, Any],
     narrative_max_symbols: int,
 ) -> str:
+    """
+    LOCKED DOCTRINE PRIORITY:
+    override > base symbol doctrine > seal fallback
+
+    Do not let behavior/location abstractions replace the symbol doctrine lead.
+    """
     if override_hit and strip_trailing_punct(override_hit.get("spiritual", "")):
         return strip_trailing_punct(override_hit.get("spiritual", ""))
 
@@ -239,6 +245,10 @@ def build_event_scenario(
     relationships: List[Dict[str, Any]],
     narrative_max_symbols: int,
 ) -> Dict[str, str]:
+    """
+    This is SUPPORT only.
+    It must not replace the doctrine lead unless there is no usable lead.
+    """
     behavior_names = {normalize_text(x.get("name", "")) for x in behaviors}
     state_names = {normalize_text(x.get("name", "")) for x in states}
     location_names = {normalize_text(x.get("name", "")) for x in locations}
@@ -329,7 +339,8 @@ def build_core_message(
 
     parts: List[str] = []
 
-    lead = strip_trailing_punct(event_scenario.get("lead", "")) or strip_trailing_punct(focus.get("lead", ""))
+    # LOCKED: lead comes from doctrine symbol focus first, not event abstraction first.
+    lead = strip_trailing_punct(focus.get("lead", "")) or strip_trailing_punct(event_scenario.get("lead", ""))
 
     if lead:
         lead_n = normalize_text(lead)
@@ -401,7 +412,6 @@ def build_layered_support_paragraph(
 
 def _collapse_effects(effect_parts: List[str], max_items: int = 4) -> List[str]:
     cleaned = compress_phrase_list([normalize_effect_phrase(x) for x in effect_parts if x])
-
     cleaned.sort(key=lambda x: (-len(normalize_text(x).split()), -len(x)))
 
     out: List[str] = []
@@ -465,7 +475,6 @@ def build_real_world_impact_paragraph(
 
 def _collapse_actions(action_parts: List[str], max_items: int = 2) -> List[str]:
     cleaned = compress_phrase_list([normalize_action_phrase(x) for x in action_parts if x])
-
     cleaned.sort(key=lambda x: (-len(normalize_text(x).split()), -len(x)))
 
     out: List[str] = []
@@ -625,7 +634,7 @@ def build_doctrine_interpretation(
     seal,
     narrative_max_symbols: int,
 ) -> Dict[str, Any]:
-    # Preserve ranking order from the matcher instead of re-sorting by phrase content.
+    # Preserve matcher order exactly.
     top_symbols = [
         get_base_symbol_input(row)
         for row, _score, _hit in base_matches
@@ -707,8 +716,8 @@ def build_doctrine_interpretation(
 
     compact_symbol = ", ".join([x for x in top_symbols[:2] if x]).strip() or "This dream"
     compact_meaning = (
-        event_scenario.get("lead")
-        or focus.get("lead")
+        focus.get("lead")
+        or event_scenario.get("lead")
         or compact_spiritual_meaning(base_matches, override_hit, seal, narrative_max_symbols)
         or "the main spiritual message here"
     )
@@ -760,21 +769,10 @@ def build_doctrine_interpretation(
         "template_type": template_type,
     }
 
-    # Use narration result as the center of the full interpretation so the long output
-    # stays cleaner than the old raw doctrine-fragment assembly.
-    try:
-        from app.services.narration_service import build_doctrine_bound_summary
-
-        readable_core = build_doctrine_bound_summary(
-            doctrine_facts=doctrine_facts,
-            interpretation=interpretation,
-        )
-    except Exception:
-        readable_core = ""
-
+    # LOCKED: full interpretation stays doctrine-assembled, not narration-led.
     full_parts = [
         sentence(opening_tpl),
-        readable_core or rendered_main,
+        rendered_main,
         support_message,
         interpretation["effects_in_physical_realm"],
         interpretation["what_to_do"],

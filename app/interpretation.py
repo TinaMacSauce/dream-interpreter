@@ -55,9 +55,28 @@ def clean_debug_like_phrase(text: str) -> str:
     return text
 
 
+def _is_duplicate_or_subsumed(candidate: str, existing_parts: List[str]) -> bool:
+    cand_n = normalize_text(candidate)
+    if not cand_n:
+        return True
+
+    for existing in existing_parts:
+        ex_n = normalize_text(existing)
+        if not ex_n:
+            continue
+
+        if cand_n == ex_n:
+            return True
+        if cand_n in ex_n:
+            return True
+        if ex_n in cand_n and len(ex_n.split()) >= 4:
+            return True
+
+    return False
+
+
 def merge_natural_paragraphs(parts: List[str]) -> str:
     cleaned: List[str] = []
-    seen = set()
 
     for part in parts:
         part = clean_debug_like_phrase(part)
@@ -65,11 +84,9 @@ def merge_natural_paragraphs(parts: List[str]) -> str:
         if not part:
             continue
 
-        key = normalize_text(part)
-        if key in seen:
+        if _is_duplicate_or_subsumed(part, cleaned):
             continue
 
-        seen.add(key)
         cleaned.append(part)
 
     return "\n".join(cleaned).strip()
@@ -77,18 +94,15 @@ def merge_natural_paragraphs(parts: List[str]) -> str:
 
 def unique_text_parts(parts: List[str], max_items: Optional[int] = None) -> List[str]:
     out: List[str] = []
-    seen = set()
 
     for part in parts:
         part = strip_trailing_punct(part)
         if not part:
             continue
 
-        key = normalize_text(part)
-        if not key or key in seen:
+        if _is_duplicate_or_subsumed(part, out):
             continue
 
-        seen.add(key)
         out.append(part)
 
         if max_items is not None and len(out) >= max_items:
@@ -284,7 +298,8 @@ def build_core_message(
     lead = strip_trailing_punct(event_scenario.get("lead", "")) or strip_trailing_punct(focus.get("lead", ""))
 
     if lead:
-        if "suggests" in normalize_text(lead) or "indicates" in normalize_text(lead):
+        lead_n = normalize_text(lead)
+        if "suggests" in lead_n or "indicates" in lead_n:
             parts.append(sentence(f"This dream reveals that {lead}"))
         else:
             parts.append(sentence(f"This dream points to {lead}"))
@@ -296,19 +311,28 @@ def build_core_message(
     if event_seal_type:
         seal_type = event_seal_type
 
+    ending_line = ""
     if seal_type:
         if normalize_text(seal_type) in {"symbol confirmed", "confirmed"}:
-            parts.append(sentence("The ending confirms a major symbol from the dream"))
+            ending_line = sentence("The ending confirms a major symbol from the dream")
         else:
-            parts.append(sentence(f"The ending confirms this as {seal_type.lower()}"))
+            ending_line = sentence(f"The ending confirms this as {seal_type.lower()}")
+
+    seal_message_n = normalize_text(seal_message)
+    ending_line_n = normalize_text(ending_line)
+
+    if ending_line:
+        if not seal_message_n or (ending_line_n not in seal_message_n and seal_message_n not in ending_line_n):
+            parts.append(ending_line)
 
     if dream_has_escape_cue(dream) and not any(
         x in normalize_text(" ".join(parts)) for x in ["release", "escape", "came out", "regain control", "way out"]
     ):
         parts.append(sentence("The ending shows there is a path of escape, so the warning is serious but not without a way through"))
 
-    if seal_message and normalize_text(seal_message) not in normalize_text(" ".join(parts)):
-        parts.append(sentence(seal_message))
+    if seal_message:
+        if not ending_line_n or (seal_message_n not in ending_line_n and ending_line_n not in seal_message_n):
+            parts.append(sentence(seal_message))
 
     return merge_natural_paragraphs(parts), focus, event_scenario
 
@@ -319,22 +343,18 @@ def build_layered_support_paragraph(
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
 ) -> str:
-    behavior_parts = unique_text_parts(
-        [get_behavior_meaning_modifier(x["row"]) for x in behaviors],
-        max_items=2,
-    )
-    state_parts = unique_text_parts(
-        [get_state_meaning_modifier(x["row"]) for x in states],
-        max_items=1,
-    )
-    location_parts = unique_text_parts(
-        [get_location_life_area_meaning(x["row"]) for x in locations],
-        max_items=1,
-    )
-    relationship_parts = unique_text_parts(
-        [get_relationship_meaning_modifier(x["row"]) for x in relationships],
-        max_items=1,
-    )
+    behavior_parts = compress_phrase_list(
+        [get_behavior_meaning_modifier(x["row"]) for x in behaviors if get_behavior_meaning_modifier(x["row"])]
+    )[:2]
+    state_parts = compress_phrase_list(
+        [get_state_meaning_modifier(x["row"]) for x in states if get_state_meaning_modifier(x["row"])]
+    )[:1]
+    location_parts = compress_phrase_list(
+        [get_location_life_area_meaning(x["row"]) for x in locations if get_location_life_area_meaning(x["row"])]
+    )[:1]
+    relationship_parts = compress_phrase_list(
+        [get_relationship_meaning_modifier(x["row"]) for x in relationships if get_relationship_meaning_modifier(x["row"])]
+    )[:1]
 
     lines: List[str] = []
 
@@ -372,10 +392,9 @@ def build_real_world_impact_paragraph(
     if override_hit:
         effect_parts.append((override_hit or {}).get("physical", ""))
 
-    cleaned_effects = unique_text_parts(
-        [normalize_effect_phrase(x) for x in effect_parts if x],
-        max_items=4,
-    )
+    cleaned_effects = compress_phrase_list(
+        [normalize_effect_phrase(x) for x in effect_parts if x]
+    )[:4]
 
     if not cleaned_effects:
         return "No clear physical effects were generated."
@@ -405,23 +424,27 @@ def build_action_guidance_paragraph(
     if override_hit:
         action_parts.append((override_hit or {}).get("action", ""))
 
-    cleaned_actions = unique_text_parts(
-        [normalize_action_phrase(x) for x in action_parts if x],
-        max_items=3,
-    )
+    cleaned_actions = compress_phrase_list(
+        [normalize_action_phrase(x) for x in action_parts if x]
+    )[:3]
 
     if not cleaned_actions:
         return "Pray for wisdom and confirmation."
 
-    if len(cleaned_actions) == 1:
-        return sentence(cleaned_actions[0])
+    # Prefer the strongest phrasing first.
+    cleaned_actions.sort(key=lambda x: (-len(normalize_text(x).split()), -len(x)))
 
-    first = cleaned_actions[0]
-    rest = human_join(cleaned_actions[1:])
+    primary = cleaned_actions[0]
+    remainder = compress_phrase_list(cleaned_actions[1:])
 
-    if rest:
-        return sentence(f"{first}, and {rest}")
-    return sentence(first)
+    if not remainder:
+        return sentence(primary)
+
+    joined_remainder = human_join(remainder)
+    if normalize_text(joined_remainder) in normalize_text(primary):
+        return sentence(primary)
+
+    return sentence(f"{primary}, and {joined_remainder}")
 
 
 def build_final_summary_paragraph(interpretation: Dict[str, str], seal: Dict[str, Any]) -> str:
@@ -517,10 +540,9 @@ def build_doctrine_interpretation(
     seal,
     narrative_max_symbols: int,
 ) -> Dict[str, Any]:
-    top_symbols = unique_text_parts(
-        [get_base_symbol_input(row) for row, _score, _hit in base_matches],
-        max_items=max(narrative_max_symbols, 3),
-    )
+    top_symbols = compress_phrase_list(
+        [get_base_symbol_input(row) for row, _score, _hit in base_matches if get_base_symbol_input(row)]
+    )[: max(narrative_max_symbols, 3)]
 
     core_message, focus, event_scenario = build_core_message(
         dream,
@@ -695,9 +717,9 @@ def build_legacy_interpretation(matches, narrative_max_symbols: int) -> Dict[str
         if base_action:
             action_parts.append(normalize_action_phrase(base_action))
 
-    spiritual_parts = unique_text_parts(spiritual_parts, max_items=narrative_max_symbols)
-    physical_parts = unique_text_parts(physical_parts, max_items=4)
-    action_parts = unique_text_parts(action_parts, max_items=3)
+    spiritual_parts = compress_phrase_list(spiritual_parts)[:narrative_max_symbols]
+    physical_parts = compress_phrase_list(physical_parts)[:4]
+    action_parts = compress_phrase_list(action_parts)[:3]
 
     spiritual_text = (
         sentence(f"This dream points to {human_join(spiritual_parts)}")
@@ -712,10 +734,12 @@ def build_legacy_interpretation(matches, narrative_max_symbols: int) -> Dict[str
     )
 
     if action_parts:
-        if len(action_parts) == 1:
-            action_text = sentence(action_parts[0])
+        primary = action_parts[0]
+        remainder = compress_phrase_list(action_parts[1:])
+        if remainder:
+            action_text = sentence(f"{primary}, and {human_join(remainder)}")
         else:
-            action_text = sentence(f"{action_parts[0]}, and {human_join(action_parts[1:])}")
+            action_text = sentence(primary)
     else:
         action_text = "Pray for wisdom and confirmation."
 

@@ -1,7 +1,6 @@
 from flask import Blueprint, jsonify, make_response, redirect, request, url_for
 
 from app.access import (
-    get_dream_pack_status,
     mark_dream_pack_purchase,
     persist_email_to_session,
     set_buyer_session,
@@ -33,54 +32,103 @@ def _safe_return_url(value: str) -> str:
     return Config.RETURN_URL
 
 
+def _empty_dream_pack() -> dict:
+    return {
+        "active": False,
+        "uses_remaining": 0,
+        "expires_at": "",
+    }
+
+
+def _clear_free_cookie(resp):
+    resp.set_cookie(
+        Config.COOKIE_NAME,
+        "0",
+        max_age=0,
+        samesite=Config.SESSION_COOKIE_SAMESITE,
+        secure=Config.SESSION_COOKIE_SECURE,
+    )
+    return resp
+
+
 @billing_bp.route("/check-access", methods=["POST", "OPTIONS"])
 def check_access():
     if request.method == "OPTIONS":
         return make_response("", 204)
 
-    data = request.get_json(silent=True) or {}
-    email = normalize_email(data.get("email") or "")
+    email = _extract_email_from_request()
 
     if not validate_email(email):
-        return jsonify({"ok": False, "error": "Please enter a valid email."}), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "Please enter a valid email.",
+                "access": "invalid",
+                "is_paid": False,
+                "email": "",
+                "free_uses_left": None,
+                "dream_pack": _empty_dream_pack(),
+                "return_url": Config.RETURN_URL,
+            }
+        ), 400
 
     persist_email_to_session(email)
     access_ok, access_meta = has_active_access(email)
+    access_type = (access_meta.get("type") or "").strip().lower()
 
-    if access_ok and access_meta.get("type") == "subscription":
+    if access_ok and access_type == "subscription":
         set_premium_session(email)
-        resp = make_response(jsonify({"ok": True, "access": "active", "return_url": Config.RETURN_URL}))
-        resp.set_cookie(
-            Config.COOKIE_NAME,
-            "0",
-            max_age=0,
-            samesite=Config.SESSION_COOKIE_SAMESITE,
-            secure=Config.SESSION_COOKIE_SECURE,
-        )
-        return resp
 
-    if access_ok and access_meta.get("type") == "dream_pack":
+        resp = make_response(
+            jsonify(
+                {
+                    "ok": True,
+                    "access": "active",
+                    "is_paid": True,
+                    "email": email,
+                    "free_uses_left": None,
+                    "dream_pack": _empty_dream_pack(),
+                    "return_url": Config.RETURN_URL,
+                }
+            )
+        )
+        return _clear_free_cookie(resp)
+
+    if access_ok and access_type == "dream_pack":
+        pack_details = access_meta.get("details") or _empty_dream_pack()
         set_buyer_session(email)
+
         resp = make_response(
             jsonify(
                 {
                     "ok": True,
                     "access": "dream_pack_active",
+                    "is_paid": False,
+                    "email": email,
+                    "free_uses_left": None,
+                    "dream_pack": {
+                        "active": bool(pack_details.get("active", False)),
+                        "uses_remaining": int(pack_details.get("uses_remaining", 0) or 0),
+                        "expires_at": pack_details.get("expires_at", "") or "",
+                    },
                     "return_url": Config.RETURN_URL,
-                    "dream_pack": access_meta.get("details", {}),
                 }
             )
         )
-        resp.set_cookie(
-            Config.COOKIE_NAME,
-            "0",
-            max_age=0,
-            samesite=Config.SESSION_COOKIE_SAMESITE,
-            secure=Config.SESSION_COOKIE_SECURE,
-        )
-        return resp
+        return _clear_free_cookie(resp)
 
-    return jsonify({"ok": False, "access": "inactive", "message": "No active subscription or dream pack found."}), 402
+    return jsonify(
+        {
+            "ok": False,
+            "access": "inactive",
+            "is_paid": False,
+            "email": email,
+            "free_uses_left": None,
+            "dream_pack": _empty_dream_pack(),
+            "message": "No active subscription or dream pack found.",
+            "return_url": Config.RETURN_URL,
+        }
+    ), 402
 
 
 @billing_bp.route("/create-checkout-session", methods=["POST"])
@@ -112,8 +160,14 @@ def create_checkout_session():
                 "email": email,
                 "return_url": requested_return,
             },
-            success_url=url_for("billing.payment_success", _external=True) + f"?email={email}&return={requested_return}",
-            cancel_url=url_for("home.upgrade", _external=True) + f"?email={email}&return={requested_return}",
+            success_url=(
+                url_for("billing.payment_success", _external=True)
+                + f"?email={email}&return={requested_return}"
+            ),
+            cancel_url=(
+                url_for("home.upgrade", _external=True)
+                + f"?email={email}&return={requested_return}"
+            ),
         )
         return redirect(checkout.url, code=303)
     except Exception as e:
@@ -151,8 +205,14 @@ def create_dream_pack_checkout_session():
                 "email": email,
                 "return_url": requested_return,
             },
-            success_url=url_for("billing.dream_pack_success", _external=True) + f"?email={email}&return={requested_return}",
-            cancel_url=url_for("home.upgrade", _external=True) + f"?email={email}&return={requested_return}",
+            success_url=(
+                url_for("billing.dream_pack_success", _external=True)
+                + f"?email={email}&return={requested_return}"
+            ),
+            cancel_url=(
+                url_for("home.upgrade", _external=True)
+                + f"?email={email}&return={requested_return}"
+            ),
         )
         return redirect(checkout.url, code=303)
     except Exception as e:
@@ -167,18 +227,11 @@ def payment_success():
     if validate_email(email):
         persist_email_to_session(email)
         access_ok, access_meta = has_active_access(email)
-        if access_ok and access_meta.get("type") == "subscription":
+        if access_ok and (access_meta.get("type") or "").strip().lower() == "subscription":
             set_premium_session(email)
 
     resp = redirect(requested_return, code=302)
-    resp.set_cookie(
-        Config.COOKIE_NAME,
-        "0",
-        max_age=0,
-        samesite=Config.SESSION_COOKIE_SAMESITE,
-        secure=Config.SESSION_COOKIE_SECURE,
-    )
-    return resp
+    return _clear_free_cookie(resp)
 
 
 @billing_bp.route("/dream-pack-success", methods=["GET"])
@@ -196,14 +249,7 @@ def dream_pack_success():
         )
 
     resp = redirect(requested_return, code=302)
-    resp.set_cookie(
-        Config.COOKIE_NAME,
-        "0",
-        max_age=0,
-        samesite=Config.SESSION_COOKIE_SAMESITE,
-        secure=Config.SESSION_COOKIE_SECURE,
-    )
-    return resp
+    return _clear_free_cookie(resp)
 
 
 @billing_bp.route("/webhook", methods=["POST"])
@@ -216,7 +262,11 @@ def stripe_webhook():
     sig_header = request.headers.get("Stripe-Signature", "")
 
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, Config.STRIPE_WEBHOOK_SECRET)
+        event = stripe.Webhook.construct_event(
+            payload,
+            sig_header,
+            Config.STRIPE_WEBHOOK_SECRET,
+        )
     except Exception:
         return ("bad signature", 400)
 

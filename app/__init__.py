@@ -11,6 +11,13 @@ def create_app() -> Flask:
     )
 
     app.config.from_object(Config)
+
+    app.secret_key = Config.SECRET_KEY
+    app.config["SECRET_KEY"] = Config.SECRET_KEY
+    app.config["SESSION_COOKIE_SAMESITE"] = Config.SESSION_COOKIE_SAMESITE
+    app.config["SESSION_COOKIE_SECURE"] = Config.SESSION_COOKIE_SECURE
+    app.config["MAX_CONTENT_LENGTH"] = Config.MAX_CONTENT_LENGTH
+
     Config.validate()
 
     CORS(

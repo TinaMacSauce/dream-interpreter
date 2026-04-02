@@ -18,6 +18,10 @@ from app.utils import (
 )
 
 
+MatchHit = Dict[str, Any]
+MatchTuple = Tuple[Dict[str, Any], int, MatchHit]
+
+
 def symbol_length_penalty(symbol: str) -> int:
     words = [w for w in normalize_text(symbol).split() if w]
     n = len(words)
@@ -30,46 +34,6 @@ def symbol_length_penalty(symbol: str) -> int:
     if n == 5:
         return 12
     return 18
-
-
-def _is_action_like_base_symbol(row: Dict[str, Any]) -> bool:
-    """
-    Base symbols like 'chasing', 'running', 'crying', etc. should usually
-    support interpretation rather than outrank concrete symbols.
-    """
-    symbol = normalize_text(get_base_symbol_input(row))
-    category = normalize_text(get_base_symbol_category(row))
-
-    action_like_words = {
-        "chasing",
-        "running",
-        "crying",
-        "fighting",
-        "biting",
-        "watching",
-        "following",
-        "walking",
-        "standing",
-        "speaking",
-        "looking",
-        "looking at",
-        "escaping",
-        "crossing",
-        "falling",
-        "flying",
-        "hiding",
-        "attacking",
-        "smiling",
-        "laughing",
-    }
-
-    if category in {"movement", "action", "behavior"}:
-        return True
-
-    if symbol in action_like_words:
-        return True
-
-    return False
 
 
 def _normalize_keyword_list(raw_keywords: str) -> List[str]:
@@ -99,17 +63,45 @@ def _row_identity_key(row: Dict[str, Any]) -> str:
     return normalize_text(get_symbol_cell(row))
 
 
-def _prefer_literal_symbol_over_action(
-    row: Dict[str, Any],
-    score: int,
-) -> int:
+def _is_action_like_base_symbol(row: Dict[str, Any]) -> bool:
     """
-    Concrete symbols should usually lead.
-    Action-like rows can still match, but they should rarely dominate.
+    Action-like rows should usually support interpretation,
+    not dominate the main symbol list.
     """
-    if _is_action_like_base_symbol(row):
-        score -= 18
-    return score
+    symbol = normalize_text(get_base_symbol_input(row))
+    category = normalize_text(get_base_symbol_category(row))
+
+    action_like_words = {
+        "chasing",
+        "running",
+        "crying",
+        "fighting",
+        "biting",
+        "watching",
+        "following",
+        "walking",
+        "standing",
+        "speaking",
+        "looking",
+        "looking at",
+        "escaping",
+        "crossing",
+        "falling",
+        "flying",
+        "hiding",
+        "attacking",
+        "smiling",
+        "laughing",
+        "eating",
+    }
+
+    if category in {"movement", "action", "behavior"}:
+        return True
+
+    if symbol in action_like_words:
+        return True
+
+    return False
 
 
 def _relationship_bonus(row: Dict[str, Any]) -> int:
@@ -134,6 +126,7 @@ def _relationship_bonus(row: Dict[str, Any]) -> int:
         "cousin",
         "aunt",
         "uncle",
+        "family",
     }
 
     if category == "person":
@@ -156,58 +149,44 @@ def _death_omen_bonus(row: Dict[str, Any]) -> int:
     return 0
 
 
-def score_row_strict(
-    dream_norm: str,
-    row: Dict[str, Any],
-    used_spans: Optional[List[Tuple[int, int]]] = None,
-) -> Tuple[int, Optional[Dict[str, Any]]]:
-    symbol_raw = get_symbol_cell(row)
-    if not symbol_raw:
-        return 0, None
+def _threat_symbol_bonus(row: Dict[str, Any]) -> int:
+    """
+    Concrete hostile symbols should stay ahead of reaction-type symbols.
+    """
+    symbol = normalize_text(get_base_symbol_input(row))
+    category = normalize_text(get_base_symbol_category(row))
 
-    symbol = normalize_text(symbol_raw)
-    if not symbol:
-        return 0, None
+    threat_symbols = {
+        "snake",
+        "serpent",
+        "dog",
+        "cat",
+        "duppy",
+        "demon",
+        "enemy",
+        "thief",
+        "attacker",
+        "dead person",
+        "dead people",
+    }
 
-    raw_keywords = get_keywords_cell(row)
-    keywords = _normalize_keyword_list(raw_keywords)
+    if symbol in threat_symbols:
+        return 12
 
-    candidates: List[Tuple[str, str, int]] = []
+    if category in {"animal", "person", "death"}:
+        return 4
 
-    if len(tokenize_words(symbol)) > 1:
-        candidates.append(("symbol_phrase", symbol, 100 - symbol_length_penalty(symbol_raw)))
-    else:
-        candidates.append(("symbol", symbol, 100))
+    return 0
 
-    for kw in keywords:
-        if len(tokenize_words(kw)) > 1:
-            candidates.append(("keyword_phrase", kw, 94))
-        else:
-            candidates.append(("keyword", kw, 90))
 
-    candidates.sort(key=lambda x: (-len(x[1].split()), -len(x[1]), -x[2]))
-
-    for match_type, token, score in candidates:
-        spans = find_phrase_spans(dream_norm, token)
-        if not spans:
-            continue
-
-        chosen_span = None
-        for sp in spans:
-            if not used_spans or not is_span_blocked(sp, used_spans):
-                chosen_span = sp
-                break
-
-        if chosen_span:
-            return score, {
-                "type": match_type,
-                "token": token,
-                "span": chosen_span,
-                "token_len": len(token.split()),
-                "token_chars": len(token),
-            }
-
-    return 0, None
+def _prefer_literal_symbol_over_action(row: Dict[str, Any], score: int) -> int:
+    """
+    Concrete symbols should usually lead.
+    Action-like rows can still match, but should rarely dominate.
+    """
+    if _is_action_like_base_symbol(row):
+        score -= 28
+    return score
 
 
 def category_priority(category: str) -> int:
@@ -251,13 +230,14 @@ def score_base_candidate(row: Dict[str, Any], match_type: str, symbol_raw: str) 
     score = _prefer_literal_symbol_over_action(row, score)
     score += _relationship_bonus(row)
     score += _death_omen_bonus(row)
+    score += _threat_symbol_bonus(row)
 
     return score
 
 
 def category_conflict_penalty(
     row: Dict[str, Any],
-    already_selected: List[Tuple[Dict[str, Any], int, Dict[str, Any]]],
+    already_selected: List[MatchTuple],
 ) -> int:
     current_cat = normalize_text(get_base_symbol_category(row))
     if current_cat == "unknown":
@@ -290,7 +270,7 @@ def ending_bonus_for_symbol(row: Dict[str, Any], ending_text: str) -> int:
     return 0
 
 
-def _candidate_sort_key(item: Tuple[Dict[str, Any], int, Dict[str, Any]]):
+def _candidate_sort_key(item: MatchTuple):
     row, score, hit = item
     category = normalize_text(get_base_symbol_category(row))
     symbol = normalize_text(get_base_symbol_input(row))
@@ -309,8 +289,8 @@ def _candidate_sort_key(item: Tuple[Dict[str, Any], int, Dict[str, Any]]):
     )
 
 
-def _selected_output_sort_key(item: Tuple[Dict[str, Any], int, Dict[str, Any]]):
-    row, score, hit = item
+def _selected_output_sort_key(item: MatchTuple):
+    row, score, _hit = item
     category = normalize_text(get_base_symbol_category(row))
     symbol = normalize_text(get_base_symbol_input(row))
     action_like_penalty = 1 if _is_action_like_base_symbol(row) else 0
@@ -325,10 +305,10 @@ def _selected_output_sort_key(item: Tuple[Dict[str, Any], int, Dict[str, Any]]):
 
 
 def _select_non_overlapping_candidates(
-    candidates: List[Tuple[Dict[str, Any], int, Dict[str, Any]]],
+    candidates: List[MatchTuple],
     top_k: int,
-) -> List[Tuple[Dict[str, Any], int, Dict[str, Any]]]:
-    selected: List[Tuple[Dict[str, Any], int, Dict[str, Any]]] = []
+) -> List[MatchTuple]:
+    selected: List[MatchTuple] = []
     used_spans: List[Tuple[int, int]] = []
     seen_symbols = set()
 
@@ -354,19 +334,153 @@ def _select_non_overlapping_candidates(
     return selected
 
 
+def _drop_action_symbols_when_concrete_exists(selected: List[MatchTuple]) -> List[MatchTuple]:
+    """
+    Locked doctrine behavior:
+    if at least one concrete symbol exists, action-like base symbols
+    should not occupy the limited top symbol slots.
+    """
+    if not selected:
+        return selected
+
+    concrete = [item for item in selected if not _is_action_like_base_symbol(item[0])]
+    action_like = [item for item in selected if _is_action_like_base_symbol(item[0])]
+
+    if not concrete:
+        return selected
+
+    # Keep concrete symbols only. Action layers should be expressed by behavior rules,
+    # not by dominating top base symbols.
+    return concrete if concrete else action_like
+
+
+def _build_candidate_hit(
+    dream_norm: str,
+    row: Dict[str, Any],
+    symbol_raw: str,
+    ending_text: str,
+) -> Optional[MatchTuple]:
+    symbol = normalize_text(symbol_raw)
+    if not symbol:
+        return None
+
+    keywords = get_rule_keywords(row)
+    local_candidates: List[Tuple[str, str]] = []
+
+    if len(tokenize_words(symbol)) > 1:
+        local_candidates.append(("symbol_phrase", symbol))
+    else:
+        local_candidates.append(("symbol", symbol))
+
+    for kw in keywords:
+        if len(tokenize_words(kw)) > 1:
+            local_candidates.append(("keyword_phrase", kw))
+        else:
+            local_candidates.append(("keyword", kw))
+
+    # Longest / fullest tokens first so "black dog" beats "dog"
+    local_candidates.sort(key=lambda x: (-len(x[1].split()), -len(x[1])))
+
+    for match_type, token in local_candidates:
+        spans = find_phrase_spans(dream_norm, token)
+        if not spans:
+            continue
+
+        ending_bonus = ending_bonus_for_symbol(row, ending_text)
+        score = score_base_candidate(row, match_type, symbol_raw) + ending_bonus
+
+        return (
+            row,
+            score,
+            {
+                "type": match_type,
+                "token": token,
+                "span": spans[0],
+                "token_len": len(token.split()),
+                "token_chars": len(token),
+                "ending_bonus": ending_bonus,
+            },
+        )
+
+    return None
+
+
+def score_row_strict(
+    dream_norm: str,
+    row: Dict[str, Any],
+    used_spans: Optional[List[Tuple[int, int]]] = None,
+) -> Tuple[int, Optional[MatchHit]]:
+    """
+    Legacy-compatible scorer.
+    """
+    symbol_raw = get_symbol_cell(row)
+    if not symbol_raw:
+        return 0, None
+
+    symbol = normalize_text(symbol_raw)
+    if not symbol:
+        return 0, None
+
+    raw_keywords = get_keywords_cell(row)
+    keywords = _normalize_keyword_list(raw_keywords)
+
+    candidates: List[Tuple[str, str, int]] = []
+
+    if len(tokenize_words(symbol)) > 1:
+        candidates.append(("symbol_phrase", symbol, 100 - symbol_length_penalty(symbol_raw)))
+    else:
+        candidates.append(("symbol", symbol, 100))
+
+    for kw in keywords:
+        if len(tokenize_words(kw)) > 1:
+            candidates.append(("keyword_phrase", kw, 94))
+        else:
+            candidates.append(("keyword", kw, 90))
+
+    candidates.sort(key=lambda x: (-len(x[1].split()), -len(x[1]), -x[2]))
+
+    for match_type, token, score in candidates:
+        spans = find_phrase_spans(dream_norm, token)
+        if not spans:
+            continue
+
+        chosen_span = None
+        for sp in spans:
+            if not used_spans or not is_span_blocked(sp, used_spans):
+                chosen_span = sp
+                break
+
+        if chosen_span:
+            adjusted_score = score
+            if _is_action_like_base_symbol(row):
+                adjusted_score -= 28
+
+            return adjusted_score, {
+                "type": match_type,
+                "token": token,
+                "span": chosen_span,
+                "token_len": len(token.split()),
+                "token_chars": len(token),
+            }
+
+    return 0, None
+
+
 def match_symbols_legacy(
     dream: str,
     rows: List[Dict[str, Any]],
     top_k: int = 3,
-) -> List[Tuple[Dict[str, Any], int, Optional[Dict[str, Any]]]]:
+) -> List[Tuple[Dict[str, Any], int, Optional[MatchHit]]]:
     dream_norm = normalize_text(dream)
     if not dream_norm:
         return []
 
-    candidates: List[Tuple[Dict[str, Any], int, Optional[Dict[str, Any]]]] = []
+    candidates: List[Tuple[Dict[str, Any], int, Optional[MatchHit]]] = []
+
     for row in rows:
         if not row_is_active(row):
             continue
+
         score, hit = score_row_strict(dream_norm, row, used_spans=[])
         if score > 0 and hit:
             candidates.append((row, score, hit))
@@ -375,7 +489,7 @@ def match_symbols_legacy(
 
     used_spans: List[Tuple[int, int]] = []
     seen_symbols = set()
-    out: List[Tuple[Dict[str, Any], int, Optional[Dict[str, Any]]]] = []
+    out: List[Tuple[Dict[str, Any], int, Optional[MatchHit]]] = []
 
     for row, score, hit in candidates:
         if not hit:
@@ -398,6 +512,11 @@ def match_symbols_legacy(
         if len(out) >= top_k:
             break
 
+    # Lock action-like rows out if concrete rows exist.
+    concrete = [item for item in out if not _is_action_like_base_symbol(item[0])]
+    if concrete:
+        out = concrete[:top_k]
+
     out.sort(key=lambda item: _selected_output_sort_key(item))  # type: ignore[arg-type]
     return out
 
@@ -406,14 +525,14 @@ def match_base_symbols_doctrine(
     dream: str,
     base_rows: List[Dict[str, Any]],
     top_k: int = 3,
-) -> List[Tuple[Dict[str, Any], int, Dict[str, Any]]]:
+) -> List[MatchTuple]:
     dream_norm = normalize_text(dream)
     ending_text = extract_dream_ending_text(dream)
 
     if not dream_norm:
         return []
 
-    candidates: List[Tuple[Dict[str, Any], int, Dict[str, Any]]] = []
+    candidates: List[MatchTuple] = []
 
     for row in base_rows:
         if not row_is_active(row):
@@ -423,55 +542,20 @@ def match_base_symbols_doctrine(
         if not symbol_raw:
             continue
 
-        symbol = normalize_text(symbol_raw)
-        if not symbol:
-            continue
-
-        keywords = get_rule_keywords(row)
-        local_candidates: List[Tuple[str, str]] = []
-
-        if len(tokenize_words(symbol)) > 1:
-            local_candidates.append(("symbol_phrase", symbol))
-        else:
-            local_candidates.append(("symbol", symbol))
-
-        for kw in keywords:
-            if len(tokenize_words(kw)) > 1:
-                local_candidates.append(("keyword_phrase", kw))
-            else:
-                local_candidates.append(("keyword", kw))
-
-        # longest phrases first, so "black dog" beats "dog"
-        local_candidates.sort(key=lambda x: (-len(x[1].split()), -len(x[1])))
-
-        for match_type, token in local_candidates:
-            spans = find_phrase_spans(dream_norm, token)
-            if not spans:
-                continue
-
-            ending_bonus = ending_bonus_for_symbol(row, ending_text)
-            score = score_base_candidate(row, match_type, symbol_raw) + ending_bonus
-
-            candidates.append(
-                (
-                    row,
-                    score,
-                    {
-                        "type": match_type,
-                        "token": token,
-                        "span": spans[0],
-                        "token_len": len(token.split()),
-                        "token_chars": len(token),
-                        "ending_bonus": ending_bonus,
-                    },
-                )
-            )
-            break
+        candidate = _build_candidate_hit(
+            dream_norm=dream_norm,
+            row=row,
+            symbol_raw=symbol_raw,
+            ending_text=ending_text,
+        )
+        if candidate:
+            candidates.append(candidate)
 
     candidates.sort(key=_candidate_sort_key)
 
     selected = _select_non_overlapping_candidates(candidates, top_k=top_k)
-
-    # Final output order shown to users should still feel natural.
+    selected = _drop_action_symbols_when_concrete_exists(selected)
+    selected = selected[:top_k]
     selected.sort(key=_selected_output_sort_key)
+
     return selected

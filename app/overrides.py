@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from app.fields import (
     behavior_is_attack,
@@ -10,17 +10,21 @@ from app.fields import (
     get_override_condition,
     get_override_name,
     get_override_physical,
-    get_override_priority_cell if False else None,
     get_override_spiritual,
     get_override_target_mode,
     get_relationship_name,
     override_is_hard,
     relationship_impersonation_when_attacking,
     relationship_literal_when_peaceful,
-    row_get,
     row_is_active,
 )
-from app.utils import clean_sentence, contains_phrase, extract_dream_ending_text, normalize_text
+from app.utils import (
+    clean_sentence,
+    contains_phrase,
+    extract_dream_ending_text,
+    normalize_text,
+    row_get,
+)
 
 
 def _priority_from_row(row: Dict[str, Any]) -> int:
@@ -30,8 +34,8 @@ def _priority_from_row(row: Dict[str, Any]) -> int:
         return 0
 
 
-def _normalized_set(values: List[str]) -> set:
-    out = set()
+def _normalized_set(values: List[str]) -> Set[str]:
+    out: Set[str] = set()
     for value in values:
         v = normalize_text(value)
         if v:
@@ -39,51 +43,65 @@ def _normalized_set(values: List[str]) -> set:
     return out
 
 
-def _base_symbol_names(base_matches) -> List[str]:
-    return [
-        normalize_text(get_base_symbol_input(row))
-        for row, _score, _hit in base_matches
-        if get_base_symbol_input(row)
-    ]
+def _base_symbol_names(
+    base_matches: List[Tuple[Dict[str, Any], int, Dict[str, Any]]]
+) -> List[str]:
+    out: List[str] = []
+    for row, _score, _hit in base_matches:
+        symbol = get_base_symbol_input(row)
+        if symbol:
+            out.append(normalize_text(symbol))
+    return out
 
 
-def _base_symbol_categories(base_matches) -> List[str]:
-    return [
-        normalize_text(get_base_symbol_category(row)) or "unknown"
-        for row, _score, _hit in base_matches
-    ]
+def _base_symbol_categories(
+    base_matches: List[Tuple[Dict[str, Any], int, Dict[str, Any]]]
+) -> List[str]:
+    out: List[str] = []
+    for row, _score, _hit in base_matches:
+        category = normalize_text(get_base_symbol_category(row)) or "unknown"
+        out.append(category)
+    return out
 
 
 def _behavior_names(behaviors: List[Dict[str, Any]]) -> List[str]:
-    return [
-        normalize_text(x.get("name") or get_behavior_name(x.get("row", {})))
-        for x in behaviors
-        if x.get("name") or get_behavior_name(x.get("row", {}))
-    ]
+    out: List[str] = []
+    for hit in behaviors:
+        row = hit.get("row", {})
+        name = hit.get("name") or get_behavior_name(row)
+        name_n = normalize_text(name)
+        if name_n:
+            out.append(name_n)
+    return out
 
 
 def _state_names(states: List[Dict[str, Any]]) -> List[str]:
-    return [
-        normalize_text(x.get("name", ""))
-        for x in states
-        if x.get("name")
-    ]
+    out: List[str] = []
+    for hit in states:
+        name_n = normalize_text(hit.get("name", ""))
+        if name_n:
+            out.append(name_n)
+    return out
 
 
 def _location_names(locations: List[Dict[str, Any]]) -> List[str]:
-    return [
-        normalize_text(x.get("name", ""))
-        for x in locations
-        if x.get("name")
-    ]
+    out: List[str] = []
+    for hit in locations:
+        name_n = normalize_text(hit.get("name", ""))
+        if name_n:
+            out.append(name_n)
+    return out
 
 
 def _relationship_names(relationships: List[Dict[str, Any]]) -> List[str]:
-    return [
-        normalize_text(x.get("name") or get_relationship_name(x.get("row", {})))
-        for x in relationships
-        if x.get("name") or get_relationship_name(x.get("row", {}))
-    ]
+    out: List[str] = []
+    for hit in relationships:
+        row = hit.get("row", {})
+        name = hit.get("name") or get_relationship_name(row)
+        name_n = normalize_text(name)
+        if name_n:
+            out.append(name_n)
+    return out
 
 
 def _has_attack_behavior(behaviors: List[Dict[str, Any]]) -> bool:
@@ -102,8 +120,8 @@ def _has_attack_behavior(behaviors: List[Dict[str, Any]]) -> bool:
     }
 
     for hit in behaviors:
-        name = normalize_text(hit.get("name") or get_behavior_name(hit.get("row", {})))
         row = hit.get("row", {})
+        name = normalize_text(hit.get("name") or get_behavior_name(row))
 
         if name in hard_attack_names:
             return True
@@ -164,7 +182,7 @@ def override_context(
 def parse_override_groups(condition: str) -> List[List[str]]:
     import re
 
-    groups = []
+    groups: List[List[str]] = []
     for raw_group in re.split(r"\|\|", condition or ""):
         tokens = [
             clean_sentence(x).strip()
@@ -234,16 +252,19 @@ def token_matches_context(token: str, ctx: Dict[str, Any]) -> Tuple[bool, int]:
         return matched, specificity
 
     exists_plain = False
+
     for field_name in ["symbol", "category", "behavior", "state", "location", "relationship"]:
         if raw_norm in ctx.get(field_name, set()):
             exists_plain = True
             break
 
     if not exists_plain:
-        if contains_phrase(ctx.get("text", ""), raw_norm) or contains_phrase(ctx.get("ending", ""), raw_norm):
+        if contains_phrase(ctx.get("text", ""), raw_norm):
+            exists_plain = True
+        elif contains_phrase(ctx.get("ending", ""), raw_norm):
             exists_plain = True
 
-    matched_plain = not exists_plain if negative else exists_plain
+    matched_plain = (not exists_plain) if negative else exists_plain
     return matched_plain, 2
 
 
@@ -256,22 +277,22 @@ def _build_locked_doctrine_override(
     relationships,
 ) -> Optional[Dict[str, Any]]:
     """
-    Hard-coded doctrine resolver for your non-negotiable rules.
+    Hard-locked doctrine overrides.
 
     Priority:
     1. dead people / familiar spirit logic
     2. eating in dreams
-    3. family-member attack impersonation
-    4. emotion reversals on known people
+    3. family-member or familiar-person attack impersonation
+    4. literal family/friend emotion reversals
     """
     symbol_names = set(_base_symbol_names(base_matches))
     relationship_names = set(_relationship_names(relationships))
     behavior_names = set(_behavior_names(behaviors))
-    ending_text = normalize_text(extract_dream_ending_text(dream))
     dream_text = normalize_text(dream)
 
-    # 1) Dead people / deceased logic
     dead_terms = {"dead person", "dead people", "deceased", "corpse"}
+
+    # 1. Dead people / deceased visit logic
     if dead_terms & symbol_names:
         if any(x in dream_text for x in ["recently deceased", "recent dead", "just died", "newly dead"]):
             return {
@@ -281,7 +302,7 @@ def _build_locked_doctrine_override(
                 "action": "tell them they are dead, reject the encounter, and pray against any familiar spirit",
                 "priority": 1000,
                 "row": None,
-                "condition": "hard_locked_dead_person",
+                "condition": "hard_locked_dead_person_recent",
                 "target_mode": "spiritual_warning",
                 "is_hard_override": True,
             }
@@ -298,7 +319,7 @@ def _build_locked_doctrine_override(
             "is_hard_override": True,
         }
 
-    # 2) Eating in dreams
+    # 2. Eating in dreams
     if "eating" in behavior_names or contains_phrase(dream_text, "eating"):
         return {
             "override_name": "eating_rule",
@@ -312,7 +333,7 @@ def _build_locked_doctrine_override(
             "is_hard_override": True,
         }
 
-    # 3) Family-member / familiar-person attack impersonation
+    # 3. Familiar person attacking = impersonation / attack
     if relationship_names and _has_attack_behavior(behaviors):
         if _relationship_impersonation_enabled(relationships) or relationship_names:
             return {
@@ -327,9 +348,9 @@ def _build_locked_doctrine_override(
                 "is_hard_override": True,
             }
 
-    # 4) Emotion reversals on known people / relationship-targeted people
-    if relationship_names:
-        target = next(iter(relationship_names))
+    # 4. Literal person rules for peaceful appearance
+    if relationship_names and (_relationship_literal_enabled(relationships) or not _has_attack_behavior(behaviors)):
+        target = next(iter(sorted(relationship_names)))
 
         if "crying" in behavior_names:
             return {
@@ -369,7 +390,7 @@ def apply_override_rules(
     dream: str,
     override_rows: List[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
-    # First: locked doctrine overrides
+    # 1. Locked doctrine overrides come first
     locked = _build_locked_doctrine_override(
         dream=dream,
         base_matches=base_matches,
@@ -381,7 +402,7 @@ def apply_override_rules(
     if locked:
         return locked
 
-    # Second: sheet-driven overrides
+    # 2. Sheet-driven overrides
     ctx = override_context(dream, base_matches, behaviors, states, locations, relationships)
 
     best: Optional[Dict[str, Any]] = None
@@ -431,14 +452,14 @@ def apply_override_rules(
     if not best:
         return None
 
-    pr = _priority_from_row(best)
+    priority = _priority_from_row(best)
 
     return {
         "override_name": get_override_name(best) or row_get(best, "condition"),
         "spiritual": get_override_spiritual(best) or row_get(best, "override_effect", "effect", "effects"),
         "physical": get_override_physical(best),
         "action": get_override_action(best),
-        "priority": pr,
+        "priority": priority,
         "row": best,
         "condition": get_override_condition(best),
         "target_mode": get_override_target_mode(best),

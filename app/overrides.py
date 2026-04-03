@@ -282,25 +282,42 @@ def _build_locked_doctrine_override(
     Priority:
     1. dead people / familiar spirit logic
     2. eating in dreams
-    3. family-member or familiar-person attack impersonation
-    4. literal family/friend emotion reversals
+    3. hair doctrine
+    4. family-member or familiar-person attack impersonation
+    5. literal family/friend emotion reversals
     """
     symbol_names = set(_base_symbol_names(base_matches))
     relationship_names = set(_relationship_names(relationships))
     behavior_names = set(_behavior_names(behaviors))
+    state_names = set(_state_names(states))
+    location_names = set(_location_names(locations))
     dream_text = normalize_text(dream)
+    ending_text = normalize_text(extract_dream_ending_text(dream))
 
-    dead_terms = {"dead person", "dead people", "deceased", "corpse"}
-
+    # ------------------------------------------------------------
     # 1. Dead people / deceased visit logic
-    if dead_terms & symbol_names:
-        if any(x in dream_text for x in ["recently deceased", "recent dead", "just died", "newly dead"]):
+    # ------------------------------------------------------------
+    dead_terms = {
+        "dead person",
+        "dead people",
+        "deceased",
+        "corpse",
+        "dead relative",
+        "deceased relative",
+        "dead",
+    }
+
+    if dead_terms & symbol_names or any(
+        contains_phrase(dream_text, x)
+        for x in ["recently died", "recently deceased", "just died", "newly dead"]
+    ):
+        if any(x in dream_text for x in ["recently died", "recently deceased", "recent dead", "just died", "newly dead"]):
             return {
                 "override_name": "recent_dead_return",
-                "spiritual": "this may point to a returning familiar spirit and should not be accepted",
-                "physical": "spiritual deception, heaviness, or death-linked pressure",
-                "action": "tell them they are dead, reject the encounter, and pray against any familiar spirit",
-                "priority": 1000,
+                "spiritual": "this points to a familiar spirit appearing in the form of someone who has died",
+                "physical": "spiritual deception or interference attempting to appear familiar",
+                "action": "reject the encounter, do not engage, and pray against any familiar spirit",
+                "priority": 2000,
                 "row": None,
                 "condition": "hard_locked_dead_person_recent",
                 "target_mode": "spiritual_warning",
@@ -309,31 +326,178 @@ def _build_locked_doctrine_override(
 
         return {
             "override_name": "dead_person_rule",
-            "spiritual": "this dream carries a serious warning around death or spiritual danger",
-            "physical": "spiritual heaviness, danger, or death-linked pressure",
-            "action": "do not accept anything from the dead and cover yourself in prayer",
-            "priority": 1000,
+            "spiritual": "this dream carries a serious warning connected to death or spiritual danger",
+            "physical": "spiritual heaviness, warning, or danger",
+            "action": "do not accept anything from the dead and stay spiritually guarded",
+            "priority": 1900,
             "row": None,
             "condition": "hard_locked_dead_person",
             "target_mode": "spiritual_warning",
             "is_hard_override": True,
         }
 
+    # ------------------------------------------------------------
     # 2. Eating in dreams
+    # ------------------------------------------------------------
     if "eating" in behavior_names or contains_phrase(dream_text, "eating"):
         return {
             "override_name": "eating_rule",
             "spiritual": "this may point to something spiritually harmful trying to take root",
             "physical": "spiritual contamination, heaviness, or negative influence",
             "action": "pray against it immediately and reject what is not of God",
-            "priority": 950,
+            "priority": 1800,
             "row": None,
             "condition": "hard_locked_eating",
             "target_mode": "spiritual_warning",
             "is_hard_override": True,
         }
 
-    # 3. Familiar person attacking = impersonation / attack
+    # ------------------------------------------------------------
+    # 3. Hair doctrine
+    # Hair = problems
+    # Less hair = fewer problems
+    # Braiding = the person is helping cause / shape the problems
+    # Same hairstyle = similar problems repeating
+    # Cutting = problems being removed
+    # ------------------------------------------------------------
+    hair_present = (
+        "hair" in symbol_names
+        or "hair falling out" in symbol_names
+        or "braiding hair" in symbol_names
+        or "same hairstyle" in symbol_names
+        or "cutting hair" in symbol_names
+        or contains_phrase(dream_text, "hair")
+    )
+
+    if hair_present:
+        # someone doing / braiding the hair
+        if (
+            "braiding hair" in symbol_names
+            or contains_phrase(dream_text, "braiding my hair")
+            or contains_phrase(dream_text, "plaiting my hair")
+            or contains_phrase(dream_text, "doing my hair")
+        ):
+            target = next(iter(sorted(relationship_names))) if relationship_names else "someone"
+            return {
+                "override_name": "hair_braiding_rule",
+                "spiritual": f"this dream points to problems being shaped or tied together through {target}",
+                "physical": f"burdens may be forming, repeating, or becoming organized around the influence of {target}",
+                "action": f"discern the role of {target}, pray against added burdens, and do not ignore the source of the problem",
+                "priority": 1700,
+                "row": None,
+                "condition": "hard_locked_hair_braiding",
+                "target_mode": "literal_person" if relationship_names else "spiritual_warning",
+                "is_hard_override": True,
+            }
+
+        # same hairstyle repeating
+        if (
+            "same hairstyle" in symbol_names
+            or contains_phrase(dream_text, "same hairstyle")
+            or contains_phrase(dream_text, "same hair style")
+            or contains_phrase(dream_text, "same braid")
+            or contains_phrase(dream_text, "same braids")
+            or contains_phrase(dream_text, "same hairdo")
+        ):
+            return {
+                "override_name": "same_hairstyle_rule",
+                "spiritual": "this dream points to similar problems repeating",
+                "physical": "recurring issues, repeated stress patterns, or the same kind of burden resurfacing",
+                "action": "look for repeated patterns, break cycles in prayer, and do not treat the issue as new if it has appeared before",
+                "priority": 1680,
+                "row": None,
+                "condition": "hard_locked_same_hairstyle",
+                "target_mode": "spiritual_warning",
+                "is_hard_override": True,
+            }
+
+        # cutting hair
+        if (
+            "cutting hair" in symbol_names
+            or "cutting" in state_names
+            or contains_phrase(dream_text, "cut my hair")
+            or contains_phrase(dream_text, "cutting my hair")
+            or contains_phrase(dream_text, "hair was cut")
+        ):
+            return {
+                "override_name": "cutting_hair_rule",
+                "spiritual": "this dream points to problems being removed",
+                "physical": "burdens may be reducing and a stressful matter may be losing strength",
+                "action": "pray for complete removal and wisdom during the change",
+                "priority": 1660,
+                "row": None,
+                "condition": "hard_locked_cutting_hair",
+                "target_mode": "spiritual_warning",
+                "is_hard_override": True,
+            }
+
+        # less hair / hair falling out / scalp exposed
+        if (
+            "hair falling out" in symbol_names
+            or "falling out" in state_names
+            or contains_phrase(dream_text, "hair falling out")
+            or contains_phrase(dream_text, "chunks of hair")
+            or contains_phrase(dream_text, "losing hair")
+            or contains_phrase(dream_text, "balding")
+            or contains_phrase(dream_text, "saw my scalp")
+            or contains_phrase(ending_text, "saw my scalp")
+        ):
+            return {
+                "override_name": "hair_falling_out_rule",
+                "spiritual": "this dream points to problems being reduced",
+                "physical": "pressure may be easing and the burden may be becoming less",
+                "action": "stay prayerful and steady as the issue weakens, and watch the matter carefully as it loosens",
+                "priority": 1650,
+                "row": None,
+                "condition": "hard_locked_hair_falling_out",
+                "target_mode": "spiritual_warning",
+                "is_hard_override": True,
+            }
+
+        # long hair
+        if "long" in state_names:
+            return {
+                "override_name": "long_hair_rule",
+                "spiritual": "this dream points to prolonged problems",
+                "physical": "a burden may last longer than expected or continue without quick resolution",
+                "action": "pray for endurance, wisdom, and shortening of the matter",
+                "priority": 1600,
+                "row": None,
+                "condition": "hard_locked_long_hair",
+                "target_mode": "spiritual_warning",
+                "is_hard_override": True,
+            }
+
+        # short hair / less hair
+        if "short" in state_names:
+            return {
+                "override_name": "short_hair_rule",
+                "spiritual": "this dream points to reduced or shortened problems",
+                "physical": "the burden may be lighter, shorter, or less severe than before",
+                "action": "pray through the matter and stay observant as it reduces",
+                "priority": 1590,
+                "row": None,
+                "condition": "hard_locked_short_hair",
+                "target_mode": "spiritual_warning",
+                "is_hard_override": True,
+            }
+
+        # plain hair fallback
+        return {
+            "override_name": "hair_rule",
+            "spiritual": "this dream points to problems",
+            "physical": "stress, burdens, or ongoing issues may be active",
+            "action": "pray and stay steady while the matter is being worked out",
+            "priority": 1500,
+            "row": None,
+            "condition": "hard_locked_hair",
+            "target_mode": "spiritual_warning",
+            "is_hard_override": True,
+        }
+
+    # ------------------------------------------------------------
+    # 4. Familiar person attacking = impersonation / attack
+    # ------------------------------------------------------------
     if relationship_names and _has_attack_behavior(behaviors):
         if _relationship_impersonation_enabled(relationships) or relationship_names:
             return {
@@ -348,7 +512,9 @@ def _build_locked_doctrine_override(
                 "is_hard_override": True,
             }
 
-    # 4. Literal person rules for peaceful appearance
+    # ------------------------------------------------------------
+    # 5. Literal person rules for peaceful appearance
+    # ------------------------------------------------------------
     if relationship_names and (_relationship_literal_enabled(relationships) or not _has_attack_behavior(behaviors)):
         target = next(iter(sorted(relationship_names)))
 
@@ -390,7 +556,6 @@ def apply_override_rules(
     dream: str,
     override_rows: List[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
-    # 1. Locked doctrine overrides come first
     locked = _build_locked_doctrine_override(
         dream=dream,
         base_matches=base_matches,
@@ -402,7 +567,6 @@ def apply_override_rules(
     if locked:
         return locked
 
-    # 2. Sheet-driven overrides
     ctx = override_context(dream, base_matches, behaviors, states, locations, relationships)
 
     best: Optional[Dict[str, Any]] = None

@@ -98,7 +98,13 @@ def worksheet_to_rows(ws) -> Tuple[List[str], List[Dict[str, str]]]:
         if len(r) < len(headers):
             r = r + [""] * (len(headers) - len(r))
 
-        rows.append({headers[i]: (r[i] or "").strip() for i in range(len(headers))})
+        row = {headers[i]: (r[i] or "").strip() for i in range(len(headers))}
+
+        # Skip fully empty rows.
+        if not any(row.values()):
+            continue
+
+        rows.append(row)
 
     return headers, rows
 
@@ -141,6 +147,7 @@ def load_doctrine_sheets(force: bool = False) -> Dict[str, List[Dict]]:
 
     sheets_data: Dict[str, List[Dict]] = {}
     headers_map: Dict[str, List[str]] = {}
+    errors: Dict[str, str] = {}
 
     for name in Config.DOCTRINE_SHEET_NAMES:
         try:
@@ -148,12 +155,15 @@ def load_doctrine_sheets(force: bool = False) -> Dict[str, List[Dict]]:
             headers, rows = worksheet_to_rows(ws)
             sheets_data[name] = rows
             headers_map[name] = headers
-        except Exception:
+        except Exception as e:
             sheets_data[name] = []
             headers_map[name] = []
+            errors[name] = str(e)
 
+    # Store errors for debugging without crashing the user-facing interpreter.
     DOCTRINE_CACHE["sheets"] = sheets_data
     DOCTRINE_CACHE["headers"] = headers_map
+    DOCTRINE_CACHE["errors"] = errors
     DOCTRINE_CACHE["loaded_at"] = now
 
     return sheets_data
@@ -165,6 +175,16 @@ def doctrine_available() -> bool:
         return len(sheets.get(Config.SHEET_BASE_SYMBOLS, [])) > 0
     except Exception:
         return False
+
+
+def get_doctrine_headers() -> Dict[str, List[str]]:
+    load_doctrine_sheets()
+    return DOCTRINE_CACHE.get("headers", {}) or {}
+
+
+def get_doctrine_load_errors() -> Dict[str, str]:
+    load_doctrine_sheets()
+    return DOCTRINE_CACHE.get("errors", {}) or {}
 
 
 # ============================================================

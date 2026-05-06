@@ -39,11 +39,16 @@ def _semantic_key(text: str) -> str:
     return " ".join(out.split())
 
 
-def _normalize_list(items: List[str], max_items: int = 3) -> List[str]:
+def _normalize_list(items: Any, max_items: int = 3) -> List[str]:
     out: List[str] = []
     seen = set()
 
+    if isinstance(items, str):
+        items = [items]
+
     for item in items or []:
+        if isinstance(item, dict):
+            item = item.get("name") or item.get("symbol") or item.get("value") or ""
         item = _clean(item)
         if not item:
             continue
@@ -139,16 +144,43 @@ def _is_emotion_reversal_text(text: str) -> bool:
 
 
 def _get_event_context(doctrine_facts: Dict[str, Any]) -> Dict[str, Any]:
-    return doctrine_facts.get("event_context", {}) or {}
+    event_context = (doctrine_facts or {}).get("event_context", {}) or {}
+    return event_context if isinstance(event_context, dict) else {}
 
 
 def _get_event_summary(doctrine_facts: Dict[str, Any]) -> str:
-    return _safe_text(doctrine_facts.get("event_summary"))
+    return _safe_text((doctrine_facts or {}).get("event_summary"))
 
 
-def _event_value(event_context: Dict[str, Any], section: str, field: str) -> str:
-    block = event_context.get(section, {}) or {}
-    return _safe_text(block.get(field))
+def _event_value(event_context: Dict[str, Any], section: str, field: str = "") -> str:
+    """
+    Safe event value getter.
+
+    Handles:
+    primary_action = {"name": "..."}
+    primary_subject = "dog"
+    primary_place = {"name": "..."}
+    primary_ending = {"name": "escaped"}
+    """
+    if not isinstance(event_context, dict):
+        return ""
+
+    value = event_context.get(section, "")
+
+    if value is None:
+        return ""
+
+    if isinstance(value, str):
+        if field in ("", "name", "value"):
+            return _safe_text(value)
+        return ""
+
+    if isinstance(value, dict):
+        if not field:
+            return _safe_text(value.get("name") or value.get("value") or "")
+        return _safe_text(value.get(field))
+
+    return _safe_text(value)
 
 
 def _build_event_lead_sentence(
@@ -157,15 +189,6 @@ def _build_event_lead_sentence(
     behavior_meaning: str,
     relationship_meaning: str,
 ) -> str:
-    """
-    Human-first lead sentence.
-
-    Priority:
-    1. Protected doctrine warnings stay explicit.
-    2. Primary action leads the interpretation.
-    3. Subject/place/ending support the action.
-    4. Fallback to doctrine lead message.
-    """
     lead_message = _safe_text(lead_message)
 
     if lead_message and _is_attack_or_impersonation_text(lead_message):
@@ -176,8 +199,7 @@ def _build_event_lead_sentence(
 
     action_name = _event_value(event_context, "primary_action", "name")
     action_meaning = _event_value(event_context, "primary_action", "meaning")
-    subject = _event_value(event_context, "primary_subject", "")
-    place_name = _event_value(event_context, "primary_place", "name")
+    subject = _event_value(event_context, "primary_subject", "name")
     place_meaning = _event_value(event_context, "primary_place", "meaning")
     ending_name = _event_value(event_context, "primary_ending", "name")
     ending_meaning = _event_value(event_context, "primary_ending", "meaning")
@@ -255,8 +277,9 @@ def _build_action_sentence(event_context: Dict[str, Any], behavior_meaning: str)
 
 
 def _build_subject_sentence(event_context: Dict[str, Any], top_symbols: List[str]) -> str:
-    subject = _event_value(event_context, "primary_subject", "")
-    subjects = event_context.get("subjects", []) or top_symbols or []
+    subject = _event_value(event_context, "primary_subject", "name")
+    subjects = event_context.get("subjects", []) if isinstance(event_context, dict) else []
+    subjects = subjects or top_symbols or []
     subjects = _normalize_list(subjects, max_items=max(1, Config.NARRATION_MAX_SYMBOLS))
 
     if subject:
@@ -408,13 +431,6 @@ def build_doctrine_bound_summary(
     doctrine_facts: Dict[str, Any],
     interpretation: Dict[str, str],
 ) -> str:
-    """
-    Deterministic narration layer.
-
-    Locked rule:
-    This function may clarify wording, but it must not invent new doctrine.
-    It uses backend doctrine facts and event_context only.
-    """
     max_symbols = max(1, Config.NARRATION_MAX_SYMBOLS)
 
     doctrine_facts = doctrine_facts or {}
@@ -434,56 +450,15 @@ def build_doctrine_bound_summary(
 
     parts: List[str] = []
 
-    lead_sentence = _build_event_lead_sentence(
-        lead_message=lead_message,
-        event_context=event_context,
-        behavior_meaning=behavior_meaning,
-        relationship_meaning=relationship_meaning,
-    )
-
-    action_sentence = _build_action_sentence(
-        event_context=event_context,
-        behavior_meaning=behavior_meaning,
-    )
-
-    subject_sentence = _build_subject_sentence(
-        event_context=event_context,
-        top_symbols=top_symbols,
-    )
-
-    place_sentence = _build_place_sentence(
-        event_context=event_context,
-        location_meaning=location_meaning,
-    )
-
-    state_relationship_sentence = _build_state_relationship_sentence(
-        event_context=event_context,
-        state_meaning=state_meaning,
-        relationship_meaning=relationship_meaning,
-    )
-
-    ending_sentence = _build_ending_sentence(
-        event_context=event_context,
-        seal_type=seal_type,
-        seal_message=seal_message,
-    )
-
-    guidance_sentence = _build_guidance_sentence(
-        event_context=event_context,
-        interpretation=interpretation,
-    )
-
-    risk_sentence = _build_risk_sentence(risk)
-
     for item in [
-        lead_sentence,
-        action_sentence,
-        subject_sentence,
-        place_sentence,
-        state_relationship_sentence,
-        ending_sentence,
-        guidance_sentence,
-        risk_sentence,
+        _build_event_lead_sentence(lead_message, event_context, behavior_meaning, relationship_meaning),
+        _build_action_sentence(event_context, behavior_meaning),
+        _build_subject_sentence(event_context, top_symbols),
+        _build_place_sentence(event_context, location_meaning),
+        _build_state_relationship_sentence(event_context, state_meaning, relationship_meaning),
+        _build_ending_sentence(event_context, seal_type, seal_message),
+        _build_guidance_sentence(event_context, interpretation),
+        _build_risk_sentence(risk),
     ]:
         if item:
             parts.append(item)
@@ -503,10 +478,6 @@ def build_ai_prompt_payload(
     doctrine_facts: Dict[str, Any],
     interpretation: Dict[str, str],
 ) -> Dict[str, Any]:
-    """
-    Structured payload for future AI narration.
-    It must stay grounded in doctrine facts only.
-    """
     max_input_chars = max(500, Config.AI_NARRATION_MAX_INPUT_CHARS)
 
     instruction = (
@@ -560,15 +531,6 @@ def build_narration_result(
     interpretation: Dict[str, str],
     ai_enabled: bool = False,
 ) -> Dict[str, Any]:
-    """
-    Main narration entry point.
-
-    Current behavior:
-    - honors Config.NARRATION_ENABLED
-    - produces deterministic doctrine-bound narration
-    - optionally includes prompt payload for future AI narration
-    - keeps response shape stable
-    """
     if not Config.NARRATION_ENABLED:
         return _build_disabled_result()
 

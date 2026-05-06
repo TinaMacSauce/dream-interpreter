@@ -77,7 +77,7 @@ class Config:
     # Narration Layer
     # ============================================================
     NARRATION_ENABLED = _env_bool("NARRATION_ENABLED", True)
-    NARRATION_MODE = os.getenv("NARRATION_MODE", "deterministic").strip().lower()
+    NARRATION_MODE = os.getenv("NARRATION_MODE", "deterministic_event").strip().lower()
     NARRATION_MAX_SYMBOLS = int(os.getenv("NARRATION_MAX_SYMBOLS", "3"))
     NARRATION_INCLUDE_PROMPT_PAYLOAD = _env_bool("NARRATION_INCLUDE_PROMPT_PAYLOAD", True)
 
@@ -93,7 +93,6 @@ class Config:
     AI_NARRATION_TEMPERATURE = float(os.getenv("AI_NARRATION_TEMPERATURE", "0.2"))
     AI_NARRATION_STRICT_DOCTRINE = _env_bool("AI_NARRATION_STRICT_DOCTRINE", True)
 
-    # Optional future API key slots
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 
     # ============================================================
@@ -104,6 +103,7 @@ class Config:
     SHEET_SIZE_STATE_RULES = os.getenv("SHEET_SIZE_STATE_RULES", "SizeStateRules").strip()
     SHEET_LOCATION_RULES = os.getenv("SHEET_LOCATION_RULES", "LocationRules").strip()
     SHEET_RELATIONSHIP_RULES = os.getenv("SHEET_RELATIONSHIP_RULES", "RelationshipRules").strip()
+    SHEET_ENDING_RULES = os.getenv("SHEET_ENDING_RULES", "EndingRules").strip()
     SHEET_OVERRIDE_RULES = os.getenv("SHEET_OVERRIDE_RULES", "OverrideRules").strip()
     SHEET_OUTPUT_TEMPLATES = os.getenv("SHEET_OUTPUT_TEMPLATES", "OutputTemplates").strip()
     SHEET_DREAM_JOURNAL = os.getenv("SHEET_DREAM_JOURNAL", "DreamJournal").strip()
@@ -114,6 +114,7 @@ class Config:
         SHEET_SIZE_STATE_RULES,
         SHEET_LOCATION_RULES,
         SHEET_RELATIONSHIP_RULES,
+        SHEET_ENDING_RULES,
         SHEET_OVERRIDE_RULES,
         SHEET_OUTPUT_TEMPLATES,
     ]
@@ -219,6 +220,15 @@ class Config:
             "relationship_name",
             "keywords",
             "meaning_modifier",
+            "physical_modifier",
+            "action_modifier",
+            "priority",
+            "active",
+        ],
+        SHEET_ENDING_RULES: [
+            "ending_name",
+            "keywords",
+            "outcome_meaning",
             "physical_modifier",
             "action_modifier",
             "priority",

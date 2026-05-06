@@ -87,7 +87,7 @@ def _check_and_apply_access(session_email: str) -> Tuple[bool, Dict[str, Any], b
 
 
 # ---------------------------------------------------------
-# GENERAL NORMALIZATION HELPERS
+# GENERAL HELPERS
 # ---------------------------------------------------------
 
 def _clean_text(value: Any) -> str:
@@ -105,7 +105,42 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def _row_name(row: Dict[str, Any]) -> str:
+def _row_name(row: Any) -> str:
+    """
+    Safe name extractor.
+
+    Important:
+    detect_rule_hits usually returns:
+      {"name": "...", "row": {...}}
+
+    But during refactors, strings may accidentally pass through.
+    This function prevents:
+      'str' object has no attribute 'get'
+    """
+    if row is None:
+        return ""
+
+    if isinstance(row, str):
+        return row.strip()
+
+    if not isinstance(row, dict):
+        return str(row).strip()
+
+    inner_row = row.get("row")
+    if isinstance(inner_row, dict):
+        return (
+            _clean_text(row.get("name"))
+            or _clean_text(inner_row.get("name"))
+            or _clean_text(inner_row.get("behavior_name"))
+            or _clean_text(inner_row.get("location_name"))
+            or _clean_text(inner_row.get("state_name"))
+            or _clean_text(inner_row.get("relationship_name"))
+            or _clean_text(inner_row.get("ending_name"))
+            or _clean_text(inner_row.get("symbol"))
+            or _clean_text(inner_row.get("condition"))
+            or _clean_text(inner_row.get("input"))
+        )
+
     return (
         _clean_text(row.get("name"))
         or _clean_text(row.get("behavior_name"))
@@ -119,14 +154,55 @@ def _row_name(row: Dict[str, Any]) -> str:
     )
 
 
-def _row_priority(row: Dict[str, Any]) -> int:
-    return _safe_int(row.get("priority"), 0)
+def _row_priority(row: Any) -> int:
+    if not isinstance(row, dict):
+        return 0
+
+    if row.get("priority"):
+        return _safe_int(row.get("priority"), 0)
+
+    inner_row = row.get("row")
+    if isinstance(inner_row, dict):
+        return _safe_int(inner_row.get("priority"), 0)
+
+    return 0
+
+
+def _row_get_value(item: Any, *keys: str) -> str:
+    """
+    Safe getter for either:
+    - direct dict
+    - hit dict containing row
+    - string fallback
+    """
+    if item is None:
+        return ""
+
+    if isinstance(item, str):
+        return item
+
+    if not isinstance(item, dict):
+        return str(item)
+
+    for key in keys:
+        value = item.get(key)
+        if value:
+            return _clean_text(value)
+
+    inner_row = item.get("row")
+    if isinstance(inner_row, dict):
+        for key in keys:
+            value = inner_row.get(key)
+            if value:
+                return _clean_text(value)
+
+    return ""
 
 
 def _sort_hits_by_priority(hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return sorted(
         hits or [],
-        key=lambda row: (_row_priority(row), len(_row_name(row))),
+        key=lambda row: (_row_priority(row), _safe_int(row.get("score", 0) if isinstance(row, dict) else 0), len(_row_name(row))),
         reverse=True,
     )
 
@@ -134,6 +210,40 @@ def _sort_hits_by_priority(hits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def _first_hit(hits: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     ordered = _sort_hits_by_priority(hits)
     return ordered[0] if ordered else None
+
+
+def _normalize_rule_hits(items: Any, kind: str = "") -> List[Dict[str, Any]]:
+    """
+    Ensures every rule hit is a dict with:
+      name, row, kind, priority
+
+    This protects the whole engine from mixed string/dict data.
+    """
+    normalized: List[Dict[str, Any]] = []
+
+    for item in items or []:
+        if isinstance(item, dict):
+            inner_row = item.get("row") if isinstance(item.get("row"), dict) else item
+
+            clean_item = dict(item)
+            clean_item["row"] = inner_row
+            clean_item["name"] = _row_name(item)
+            clean_item["kind"] = clean_item.get("kind") or kind
+            clean_item["priority"] = _row_priority(clean_item)
+
+            normalized.append(clean_item)
+        else:
+            normalized.append(
+                {
+                    "name": str(item),
+                    "row": {},
+                    "kind": kind,
+                    "priority": 0,
+                    "score": 0,
+                }
+            )
+
+    return normalized
 
 
 def _split_keywords(value: Any) -> List[str]:
@@ -150,12 +260,19 @@ def _phrase_exists(dream: str, phrase: str) -> bool:
 
     dream_l = _clean_lower(dream)
 
-    # Multi-word phrase: exact phrase match.
     if " " in phrase:
         return phrase in dream_l
 
-    # Single word: word-boundary match to avoid weak collisions.
     return re.search(rf"\b{re.escape(phrase)}\b", dream_l) is not None
+
+
+def _safe_names(items: Any) -> List[str]:
+    names: List[str] = []
+    for item in items or []:
+        name = _row_name(item)
+        if name:
+            names.append(name)
+    return names
 
 
 # ---------------------------------------------------------
@@ -166,8 +283,9 @@ def _phrase_exists(dream: str, phrase: str) -> bool:
 
 def _detect_endings(dream: str, ending_rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    EndingRules is a new optional Google Sheet.
-    Columns should include:
+    EndingRules is an optional Google Sheet.
+
+    Columns:
     ending_name, keywords, outcome_meaning, physical_modifier,
     action_modifier, priority, active
     """
@@ -177,7 +295,11 @@ def _detect_endings(dream: str, ending_rows: List[Dict[str, Any]]) -> List[Dict[
     hits: List[Dict[str, Any]] = []
 
     for row in ending_rows:
-        if _clean_lower(row.get("active")) not in ("yes", "true", "1", "active"):
+        if not isinstance(row, dict):
+            continue
+
+        active = _clean_lower(row.get("active"))
+        if active and active not in ("yes", "true", "1", "active", "on"):
             continue
 
         keywords = _split_keywords(row.get("keywords"))
@@ -188,21 +310,19 @@ def _detect_endings(dream: str, ending_rows: List[Dict[str, Any]]) -> List[Dict[
         for phrase in possible_phrases:
             if _phrase_exists(dream, phrase):
                 hit = dict(row)
+                hit["row"] = row
                 hit["name"] = _clean_text(row.get("ending_name")) or phrase
                 hit["matched_keyword"] = phrase
+                hit["kind"] = "ending"
                 hit["layer"] = "ending"
+                hit["priority"] = _row_priority(row)
                 hits.append(hit)
                 break
 
-    return _sort_hits_by_priority(hits)
+    return _sort_hits_by_priority(_normalize_rule_hits(hits, "ending"))
 
 
 def _detect_old_place_cluster(dream: str) -> Optional[Dict[str, Any]]:
-    """
-    Safety net for your doctrine:
-    old school / old house / old places = backwardness, stagnation, regression.
-    This helps even if the Google Sheet row is missing or not loaded yet.
-    """
     old_place_keywords = [
         "old school",
         "old house",
@@ -221,7 +341,7 @@ def _detect_old_place_cluster(dream: str) -> Optional[Dict[str, Any]]:
 
     for phrase in old_place_keywords:
         if _phrase_exists(dream, phrase):
-            return {
+            row = {
                 "name": "old_place",
                 "location_name": "old_place",
                 "keywords": ", ".join(old_place_keywords),
@@ -233,20 +353,30 @@ def _detect_old_place_cluster(dream: str) -> Optional[Dict[str, Any]]:
                 "matched_keyword": phrase,
                 "layer": "location",
             }
+            return {
+                "name": "old_place",
+                "row": row,
+                "kind": "location",
+                "priority": 100,
+                "matched_keyword": phrase,
+                **row,
+            }
 
     return None
 
 
 def _ensure_old_place_location(dream: str, locations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    locations = _normalize_rule_hits(locations, "location")
     old_place = _detect_old_place_cluster(dream)
+
     if not old_place:
-        return locations
+        return _sort_hits_by_priority(locations)
 
     existing_names = {_clean_lower(_row_name(row)) for row in locations}
     if "old_place" not in existing_names and "old place" not in existing_names:
-        return _sort_hits_by_priority([old_place] + (locations or []))
+        locations = [old_place] + locations
 
-    return _sort_hits_by_priority(locations)
+    return _sort_hits_by_priority(_normalize_rule_hits(locations, "location"))
 
 
 def _match_base_symbols_with_context(
@@ -257,14 +387,6 @@ def _match_base_symbols_with_context(
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
 ):
-    """
-    Some older versions of match_base_symbols_doctrine only accept:
-    dream, base_rows, top_k.
-
-    Some newer versions may accept contextual layers.
-    This helper tries the better context-aware call first,
-    then safely falls back to the older call.
-    """
     try:
         return match_base_symbols_doctrine(
             dream,
@@ -286,6 +408,8 @@ def _match_base_symbols_with_context(
 def _base_match_symbol_name(match: Any) -> str:
     try:
         row, _score, _hit = match
+        if not isinstance(row, dict):
+            return ""
         return get_symbol_cell(row) or row.get("symbol", "") or row.get("input", "")
     except Exception:
         return ""
@@ -300,13 +424,19 @@ def _build_event_context(
     relationships: List[Dict[str, Any]],
     endings: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
+    behaviors = _normalize_rule_hits(behaviors, "behavior")
+    locations = _normalize_rule_hits(locations, "location")
+    states = _normalize_rule_hits(states, "state")
+    relationships = _normalize_rule_hits(relationships, "relationship")
+    endings = _normalize_rule_hits(endings, "ending")
+
     primary_action = _first_hit(behaviors)
     primary_place = _first_hit(locations)
     primary_state = _first_hit(states)
     primary_relationship = _first_hit(relationships)
     primary_ending = _first_hit(endings)
 
-    subjects = []
+    subjects: List[str] = []
     for match in base_matches or []:
         symbol = _base_match_symbol_name(match)
         if symbol:
@@ -317,79 +447,60 @@ def _build_event_context(
     return {
         "priority_order": ["action", "subject", "place", "ending"],
         "primary_action": {
-            "name": _row_name(primary_action) if primary_action else "",
+            "name": _row_name(primary_action),
             "meaning": _clean_text(
-                (primary_action or {}).get("meaning_modifier")
-                or (primary_action or {}).get("behavior_effect")
-                or (primary_action or {}).get("spiritual_meaning")
-                or (primary_action or {}).get("effect")
+                _row_get_value(primary_action, "meaning_modifier", "behavior_effect", "spiritual_meaning", "effect")
             ),
             "action": _clean_text(
-                (primary_action or {}).get("action_modifier")
-                or (primary_action or {}).get("base_action")
-                or (primary_action or {}).get("what_to_do")
+                _row_get_value(primary_action, "action_modifier", "base_action", "what_to_do", "action")
             ),
-            "priority": _row_priority(primary_action or {}),
+            "priority": _row_priority(primary_action),
         },
         "primary_subject": primary_subject,
         "subjects": subjects[: Config.NARRATIVE_MAX_SYMBOLS],
         "primary_place": {
-            "name": _row_name(primary_place) if primary_place else "",
+            "name": _row_name(primary_place),
             "meaning": _clean_text(
-                (primary_place or {}).get("life_area_meaning")
-                or (primary_place or {}).get("location_effect")
-                or (primary_place or {}).get("spiritual_meaning")
-                or (primary_place or {}).get("effect")
+                _row_get_value(primary_place, "life_area_meaning", "location_effect", "spiritual_meaning", "effect")
             ),
             "physical_area": _clean_text(
-                (primary_place or {}).get("physical_area_meaning")
-                or (primary_place or {}).get("physical_effects")
+                _row_get_value(primary_place, "physical_area_meaning", "physical_effects", "physical_modifier")
             ),
             "action": _clean_text(
-                (primary_place or {}).get("action_modifier")
-                or (primary_place or {}).get("base_action")
+                _row_get_value(primary_place, "action_modifier", "base_action", "what_to_do", "action")
             ),
-            "priority": _row_priority(primary_place or {}),
+            "priority": _row_priority(primary_place),
         },
         "primary_state": {
-            "name": _row_name(primary_state) if primary_state else "",
+            "name": _row_name(primary_state),
             "meaning": _clean_text(
-                (primary_state or {}).get("state_effect")
-                or (primary_state or {}).get("spiritual_meaning")
-                or (primary_state or {}).get("effect")
+                _row_get_value(primary_state, "meaning_modifier", "state_effect", "spiritual_meaning", "effect")
             ),
-            "priority": _row_priority(primary_state or {}),
+            "priority": _row_priority(primary_state),
         },
         "primary_relationship": {
-            "name": _row_name(primary_relationship) if primary_relationship else "",
+            "name": _row_name(primary_relationship),
             "meaning": _clean_text(
-                (primary_relationship or {}).get("relationship_effect")
-                or (primary_relationship or {}).get("spiritual_meaning")
-                or (primary_relationship or {}).get("effect")
+                _row_get_value(primary_relationship, "meaning_modifier", "relationship_effect", "spiritual_meaning", "effect")
             ),
-            "priority": _row_priority(primary_relationship or {}),
+            "priority": _row_priority(primary_relationship),
         },
         "primary_ending": {
-            "name": _row_name(primary_ending) if primary_ending else "",
-            "meaning": _clean_text((primary_ending or {}).get("outcome_meaning")),
-            "physical_modifier": _clean_text((primary_ending or {}).get("physical_modifier")),
-            "action": _clean_text((primary_ending or {}).get("action_modifier")),
-            "matched_keyword": _clean_text((primary_ending or {}).get("matched_keyword")),
-            "priority": _row_priority(primary_ending or {}),
+            "name": _row_name(primary_ending),
+            "meaning": _clean_text(_row_get_value(primary_ending, "outcome_meaning", "meaning_modifier", "meaning")),
+            "physical_modifier": _clean_text(_row_get_value(primary_ending, "physical_modifier", "physical_effect")),
+            "action": _clean_text(_row_get_value(primary_ending, "action_modifier", "base_action", "what_to_do", "action")),
+            "matched_keyword": _clean_text(_row_get_value(primary_ending, "matched_keyword")),
+            "priority": _row_priority(primary_ending),
         },
     }
 
 
 def _build_event_summary(event_context: Dict[str, Any]) -> str:
-    """
-    Human-readable event summary.
-    This does not replace the full doctrine interpretation yet.
-    It gives the frontend and narration layer a cleaner human logic summary.
-    """
-    action = event_context.get("primary_action", {})
+    action = event_context.get("primary_action", {}) or {}
     subject = event_context.get("primary_subject", "")
-    place = event_context.get("primary_place", {})
-    ending = event_context.get("primary_ending", {})
+    place = event_context.get("primary_place", {}) or {}
+    ending = event_context.get("primary_ending", {}) or {}
 
     lines: List[str] = []
 
@@ -416,10 +527,7 @@ def _build_event_summary(event_context: Dict[str, Any]) -> str:
             ending_line += f" This suggests {ending['meaning']}."
         lines.append(ending_line)
 
-    if not lines:
-        return ""
-
-    return " ".join(lines)
+    return " ".join(lines).strip()
 
 
 # ---------------------------------------------------------
@@ -430,7 +538,6 @@ def _override_condition_exactly_matches(dream: str, override_hit: Dict[str, Any]
     if not override_hit:
         return False
 
-    # Hard override still allowed, but only if your override system marks it that way.
     if bool(override_hit.get("is_hard_override", False)):
         return True
 
@@ -438,7 +545,11 @@ def _override_condition_exactly_matches(dream: str, override_hit: Dict[str, Any]
     if not condition:
         return False
 
-    # If condition has comma-separated pieces, require at least one full phrase.
+    # Conditions like "symbol=dog+behavior=being chased" are not literal dream phrases.
+    # If the override engine matched them, allow them here.
+    if "=" in condition or "+" in condition or "||" in condition:
+        return True
+
     phrases = _split_keywords(condition) if "," in condition else [condition.lower()]
 
     for phrase in phrases:
@@ -457,11 +568,6 @@ def _apply_safe_override(
     dream: str,
     override_rows: List[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
-    """
-    Overrides should not dominate the dream from weak keyword collisions.
-    They only survive if the override condition actually appears in the dream
-    or the rule is explicitly marked as hard override.
-    """
     override_hit = apply_override_rules(
         base_matches,
         behaviors,
@@ -481,7 +587,7 @@ def _apply_safe_override(
     return None
 
 
-def _extract_override_meta(override_hit: Dict[str, Any]) -> Dict[str, Any]:
+def _extract_override_meta(override_hit: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not override_hit:
         return {
             "applied": False,
@@ -534,16 +640,16 @@ def _build_doctrine_payload(
         "behavior",
         max_hits=Config.MAX_RULE_HITS_PER_LAYER,
     )
-    behaviors = _sort_hits_by_priority(behaviors)
+    behaviors = _sort_hits_by_priority(_normalize_rule_hits(behaviors, "behavior"))
 
-    # 2. PLACE / STATE / RELATIONSHIP CONTEXT
+    # 2. CONTEXT LAYERS
     states = detect_rule_hits(
         dream,
         state_rows,
         "state",
         max_hits=Config.MAX_RULE_HITS_PER_LAYER,
     )
-    states = _sort_hits_by_priority(states)
+    states = _sort_hits_by_priority(_normalize_rule_hits(states, "state"))
 
     locations = detect_rule_hits(
         dream,
@@ -551,7 +657,11 @@ def _build_doctrine_payload(
         "location",
         max_hits=Config.MAX_RULE_HITS_PER_LAYER,
     )
-    locations = _ensure_old_place_location(dream, _sort_hits_by_priority(locations))
+    locations = _ensure_old_place_location(
+        dream,
+        _sort_hits_by_priority(_normalize_rule_hits(locations, "location")),
+    )
+    locations = _sort_hits_by_priority(_normalize_rule_hits(locations, "location"))
 
     relationships = detect_rule_hits(
         dream,
@@ -559,12 +669,12 @@ def _build_doctrine_payload(
         "relationship",
         max_hits=Config.MAX_RULE_HITS_PER_LAYER,
     )
-    relationships = _sort_hits_by_priority(relationships)
+    relationships = _sort_hits_by_priority(_normalize_rule_hits(relationships, "relationship"))
 
-    # 3. ENDING LAST, BUT IT CHANGES THE FINAL WEIGHT
-    endings = _detect_endings(dream, ending_rows)
+    # 3. ENDING LAST
+    endings = _sort_hits_by_priority(_normalize_rule_hits(_detect_endings(dream, ending_rows), "ending"))
 
-    # 4. SUBJECT SECOND IN MEANING, BUT MATCHED AFTER ACTION CONTEXT
+    # 4. SUBJECT SECOND, MATCHED WITH ACTION CONTEXT
     base_matches = _match_base_symbols_with_context(
         dream=dream,
         base_rows=base_rows,
@@ -574,7 +684,7 @@ def _build_doctrine_payload(
         relationships=relationships,
     )
 
-    # 5. OVERRIDE ONLY IF SAFE / EXACT
+    # 5. SAFE OVERRIDE
     override_hit = _apply_safe_override(
         base_matches=base_matches,
         behaviors=behaviors,
@@ -619,7 +729,7 @@ def _build_doctrine_payload(
     )
     event_summary = _build_event_summary(event_context)
 
-    doctrine_facts = built.get("doctrine_facts", {})
+    doctrine_facts = built.get("doctrine_facts", {}) or {}
     doctrine_facts["event_context"] = event_context
     doctrine_facts["event_summary"] = event_summary
 
@@ -646,11 +756,11 @@ def _build_doctrine_payload(
             "primary_subject": event_context["primary_subject"],
             "primary_place": event_context["primary_place"],
             "primary_ending": event_context["primary_ending"],
-            "behaviors": [b.get("name", "") or _row_name(b) for b in behaviors if _row_name(b)],
-            "states": [s.get("name", "") or _row_name(s) for s in states if _row_name(s)],
-            "locations": [l.get("name", "") or _row_name(l) for l in locations if _row_name(l)],
-            "relationships": [r.get("name", "") or _row_name(r) for r in relationships if _row_name(r)],
-            "endings": [e.get("name", "") or _row_name(e) for e in endings if _row_name(e)],
+            "behaviors": _safe_names(behaviors),
+            "states": _safe_names(states),
+            "locations": _safe_names(locations),
+            "relationships": _safe_names(relationships),
+            "endings": _safe_names(endings),
             "override_applied": override_meta["applied"],
             "override_name": override_meta["name"],
             "override_priority": override_meta["priority"],
@@ -685,11 +795,11 @@ def _build_doctrine_payload(
                 }
                 for row, score, hit in base_matches
             ],
-            "behaviors": [b.get("name", "") or _row_name(b) for b in behaviors],
-            "states": [s.get("name", "") or _row_name(s) for s in states],
-            "locations": [l.get("name", "") or _row_name(l) for l in locations],
-            "relationships": [r.get("name", "") or _row_name(r) for r in relationships],
-            "endings": [e.get("name", "") or _row_name(e) for e in endings],
+            "behaviors": _safe_names(behaviors),
+            "states": _safe_names(states),
+            "locations": _safe_names(locations),
+            "relationships": _safe_names(relationships),
+            "endings": _safe_names(endings),
             "event_context": event_context,
             "event_summary": event_summary,
             "override": override_meta,

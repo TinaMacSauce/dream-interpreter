@@ -36,14 +36,6 @@ from app.utils import (
 )
 
 
-# ============================================================
-# Safe helpers
-# ============================================================
-
-def _safe_dict(value: Any) -> Dict[str, Any]:
-    return value if isinstance(value, dict) else {}
-
-
 def _hit_row(hit: Any) -> Dict[str, Any]:
     if isinstance(hit, dict):
         row = hit.get("row")
@@ -53,9 +45,32 @@ def _hit_row(hit: Any) -> Dict[str, Any]:
     return {}
 
 
+def _safe_score(hit: Any, key: str) -> int:
+    try:
+        if isinstance(hit, dict):
+            return int(hit.get(key, 0) or 0)
+    except Exception:
+        pass
+    return 0
+
+
+def _pretty_action_name(name: str) -> str:
+    n = normalize_text(name)
+    mapping = {
+        "chasing": "being chased",
+        "chased": "being chased",
+        "being chased": "being chased",
+        "attacking": "being attacked",
+        "being attacked": "being attacked",
+        "biting": "being bitten",
+        "being bitten": "being bitten",
+    }
+    return mapping.get(n, name)
+
+
 def _hit_name(hit: Any) -> str:
     if isinstance(hit, str):
-        return strip_trailing_punct(hit)
+        return _pretty_action_name(strip_trailing_punct(hit))
 
     if not isinstance(hit, dict):
         return ""
@@ -79,43 +94,6 @@ def _hit_name(hit: Any) -> str:
     )
 
 
-def _safe_get(row: Any, key: str, default: Any = "") -> Any:
-    if isinstance(row, dict):
-        return row.get(key, default)
-    return default
-
-
-def _safe_score(hit: Any, key: str) -> int:
-    try:
-        if isinstance(hit, dict):
-            return int(hit.get(key, 0) or 0)
-    except Exception:
-        pass
-    return 0
-
-
-def _pretty_action_name(name: str) -> str:
-    n = normalize_text(name)
-
-    mapping = {
-        "chasing": "being chased",
-        "chased": "being chased",
-        "running": "running",
-        "escaping": "escaping",
-        "fighting": "fighting",
-        "falling": "falling",
-        "eating": "eating",
-        "drinking": "drinking",
-        "hiding": "hiding",
-        "being attacked": "being attacked",
-        "attacking": "being attacked",
-        "being bitten": "being bitten",
-        "biting": "being bitten",
-    }
-
-    return mapping.get(n, name)
-
-
 def _is_placeholder(text: str) -> bool:
     t = normalize_text(text)
     placeholders = [
@@ -137,9 +115,11 @@ def _clean_output_phrase(text: str) -> str:
         "state is from a previous season": "a previous season or old pattern is involved",
         "old points to state is from a previous season": "this connects to a previous season or old pattern",
         "old mindset,stagnant pattern": "old mindset or stagnant pattern",
+        "old mindset, stagnant pattern": "old mindset or stagnant pattern",
         "dog, school represents": "the dog and school point to",
         "dog, school points to": "the dog and school point to",
-        "chasing points to active spiritual pursuit": "being chased points to active spiritual pursuit",
+        "chasing points to active spiritual pursuit": "being chased points to enemy pursuit or spiritual pursuit",
+        "being chased points to active spiritual pursuit": "being chased points to enemy pursuit or spiritual pursuit",
     }
 
     for old, new in replacements.items():
@@ -154,6 +134,7 @@ def clean_debug_like_phrase(text: str) -> str:
     if not text:
         return ""
 
+    lower = text.lower()
     banned_starts = [
         "logic layer",
         "behavior detected",
@@ -162,7 +143,6 @@ def clean_debug_like_phrase(text: str) -> str:
         "relationship detected",
     ]
 
-    lower = text.lower()
     for banned in banned_starts:
         if lower.startswith(banned):
             return ""
@@ -185,7 +165,8 @@ def _semantic_key(text: str) -> str:
         "the setting connects": "place connects",
         "the ending confirms": "ending confirms",
         "the ending seals": "ending seals",
-        "active spiritual pursuit": "active spiritual pressure",
+        "active spiritual pursuit": "spiritual pursuit",
+        "enemy pursuit": "spiritual pursuit",
         "being chased": "chasing",
     }
 
@@ -245,27 +226,19 @@ def merge_natural_paragraphs(parts: List[str]) -> str:
             continue
         cleaned.append(part)
 
-    return "\n".join(cleaned).strip()
+    return "\n\n".join(cleaned).strip()
 
 
 def unique_text_parts(parts: List[str], max_items: Optional[int] = None) -> List[str]:
     return _strong_unique_parts(parts, max_items=max_items)
 
 
-# ============================================================
-# Primary selection
-# ============================================================
-
 def _primary_behavior(behaviors: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     if not behaviors:
         return None
     return sorted(
         behaviors,
-        key=lambda x: (
-            _safe_score(x, "score"),
-            _safe_score(x, "priority"),
-            _safe_score(x, "token_len"),
-        ),
+        key=lambda x: (_safe_score(x, "score"), _safe_score(x, "priority"), _safe_score(x, "token_len")),
         reverse=True,
     )[0]
 
@@ -275,11 +248,7 @@ def _primary_location(locations: List[Dict[str, Any]]) -> Optional[Dict[str, Any
         return None
     return sorted(
         locations,
-        key=lambda x: (
-            _safe_score(x, "score"),
-            _safe_score(x, "priority"),
-            _safe_score(x, "token_len"),
-        ),
+        key=lambda x: (_safe_score(x, "score"), _safe_score(x, "priority"), _safe_score(x, "token_len")),
         reverse=True,
     )[0]
 
@@ -289,11 +258,7 @@ def _primary_state(states: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         return None
     return sorted(
         states,
-        key=lambda x: (
-            _safe_score(x, "score"),
-            _safe_score(x, "priority"),
-            _safe_score(x, "token_len"),
-        ),
+        key=lambda x: (_safe_score(x, "score"), _safe_score(x, "priority"), _safe_score(x, "token_len")),
         reverse=True,
     )[0]
 
@@ -303,18 +268,10 @@ def _primary_relationship(relationships: List[Dict[str, Any]]) -> Optional[Dict[
         return None
     return sorted(
         relationships,
-        key=lambda x: (
-            _safe_score(x, "score"),
-            _safe_score(x, "priority"),
-            _safe_score(x, "token_len"),
-        ),
+        key=lambda x: (_safe_score(x, "score"), _safe_score(x, "priority"), _safe_score(x, "token_len")),
         reverse=True,
     )[0]
 
-
-# ============================================================
-# Clause builders
-# ============================================================
 
 def compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: int = 2) -> str:
     parts: List[str] = []
@@ -324,7 +281,7 @@ def compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: i
             part = _clean_output_phrase(getter(_hit_row(hit)))
         except Exception:
             part = ""
-        if part:
+        if part and not _is_placeholder(part):
             parts.append(part)
 
     parts = _strong_unique_parts(parts, max_items=max_items)
@@ -370,10 +327,6 @@ def compact_spiritual_meaning(
     symbol_clause = build_base_symbol_clause(base_matches, narrative_max_symbols)
     return symbol_clause or _clean_output_phrase(seal.get("message", "")) or "the main symbolic message in the dream"
 
-
-# ============================================================
-# Event interpretation
-# ============================================================
 
 def build_primary_focus(
     dream: str,
@@ -436,7 +389,7 @@ def build_primary_focus(
 
     return {
         "mode": mode,
-        "lead": lead,
+        "lead": _clean_output_phrase(lead),
         "behavior": action_meaning,
         "behavior_name": action_name,
         "state": state_meaning,
@@ -446,6 +399,10 @@ def build_primary_focus(
         "relationship_name": _hit_name(primary_relationship) if primary_relationship else "",
         "subject": subject_clause,
     }
+
+
+def _dream_escaped(dream: str) -> bool:
+    return dream_has_escape_cue(dream)
 
 
 def build_event_scenario(
@@ -493,9 +450,9 @@ def build_event_scenario(
     behavior_names = {normalize_text(_hit_name(x)) for x in behaviors or []}
     location_names = {normalize_text(_hit_name(x)) for x in locations or []}
 
-    seal_type = ""
-
-    if {"being chased", "chased", "chasing", "being attacked", "being bitten", "fighting", "stabbing"} & behavior_names:
+    if _dream_escaped(dream):
+        seal_type = "Deliverance"
+    elif {"being chased", "chased", "chasing", "being attacked", "being bitten", "fighting", "stabbing"} & behavior_names:
         seal_type = "Warfare"
     elif {"escaping", "crossing", "finding"} & behavior_names:
         seal_type = "Breakthrough"
@@ -505,6 +462,8 @@ def build_event_scenario(
         seal_type = "Backwardness"
     elif relationship_meaning:
         seal_type = "Relational"
+    else:
+        seal_type = ""
 
     lead_parts: List[str] = []
     support_parts: List[str] = []
@@ -581,7 +540,6 @@ def build_core_message(
     seal_message = _clean_output_phrase(seal.get("message", ""))
 
     parts: List[str] = []
-
     lead = _clean_output_phrase(focus.get("lead", "")) or _clean_output_phrase(event_scenario.get("lead", ""))
 
     if lead:
@@ -599,16 +557,19 @@ def build_core_message(
         seal_type = event_seal_type
 
     if seal_type:
-        if normalize_text(seal_type) in {"symbol confirmed", "confirmed"}:
+        seal_n = normalize_text(seal_type)
+        if seal_n in {"symbol confirmed", "confirmed"}:
             parts.append(sentence("The ending confirms a major symbol from the dream"))
-        elif normalize_text(seal_type) == "backwardness":
+        elif seal_n == "backwardness":
             parts.append(sentence("The place gives this dream a backwardness, stagnation, or regression theme"))
+        elif seal_n == "deliverance":
+            parts.append(sentence("The ending points to escape, protection, or deliverance"))
         else:
             parts.append(sentence(f"The ending confirms this as {seal_type.lower()}"))
 
     if dream_has_escape_cue(dream) and not any(
         x in normalize_text(" ".join(parts))
-        for x in ["release", "escape", "escaped", "came out", "regain control", "way out", "deliverance"]
+        for x in ["release", "escape", "escaped", "came out", "regain control", "way out", "deliverance", "protection"]
     ):
         parts.append(sentence("There is a way of escape, so the situation is serious but not final"))
 
@@ -619,10 +580,6 @@ def build_core_message(
 
     return merge_natural_paragraphs(parts), focus, event_scenario
 
-
-# ============================================================
-# Support, effects, actions
-# ============================================================
 
 def build_layered_support_paragraph(
     behaviors: List[Dict[str, Any]],
@@ -674,6 +631,9 @@ def _collapse_effects(effect_parts: List[str], max_items: int = 3) -> List[str]:
             if item_n == existing_n or item_n in existing_n or existing_n in item_n:
                 skip = True
                 break
+            if "relationship matters" in item_n and "relationship" not in existing_n:
+                skip = True
+                break
 
         if skip:
             continue
@@ -704,7 +664,9 @@ def build_real_world_impact_paragraph(
 
     effect_parts.extend([get_location_physical_area_meaning(_hit_row(x)) for x in locations or []])
     effect_parts.extend([get_state_physical_modifier(_hit_row(x)) for x in states or []])
-    effect_parts.extend([get_relationship_physical_modifier(_hit_row(x)) for x in relationships or []])
+
+    if relationships:
+        effect_parts.extend([get_relationship_physical_modifier(_hit_row(x)) for x in relationships or []])
 
     if override_hit:
         effect_parts.insert(0, (override_hit or {}).get("physical", ""))
@@ -769,7 +731,9 @@ def build_action_guidance_paragraph(
 
     action_parts.extend([get_location_action_modifier(_hit_row(x)) for x in locations or []])
     action_parts.extend([get_state_action_modifier(_hit_row(x)) for x in states or []])
-    action_parts.extend([get_relationship_action_modifier(_hit_row(x)) for x in relationships or []])
+
+    if relationships:
+        action_parts.extend([get_relationship_action_modifier(_hit_row(x)) for x in relationships or []])
 
     if override_hit:
         action_parts.insert(0, (override_hit or {}).get("action", ""))
@@ -797,10 +761,6 @@ def build_final_summary_paragraph(interpretation: Dict[str, str], seal: Dict[str
 
     return ""
 
-
-# ============================================================
-# Templates
-# ============================================================
 
 def render_template_text(template_text: str, context: Dict[str, str]) -> str:
     text = template_text or ""
@@ -863,10 +823,6 @@ def choose_template_type(
     return "default"
 
 
-# ============================================================
-# Main doctrine build
-# ============================================================
-
 def build_doctrine_interpretation(
     dream: str,
     base_matches,
@@ -922,7 +878,6 @@ def build_doctrine_interpretation(
     }
 
     summary_message = build_final_summary_paragraph(interpretation, seal)
-
     effective_seal_type = event_scenario.get("seal_type") or seal.get("type", "a layered message")
 
     template_type = choose_template_type(
@@ -962,7 +917,6 @@ def build_doctrine_interpretation(
     compact_location = focus.get("location") or compact_rule_meaning_clause(locations, get_location_life_area_meaning, max_items=1)
     compact_relationship = focus.get("relationship") or compact_rule_meaning_clause(relationships, get_relationship_meaning_modifier, max_items=1)
 
-    # Safer human main paragraph instead of relying on robotic templates.
     human_main_parts: List[str] = []
 
     if compact_meaning:
@@ -984,7 +938,11 @@ def build_doctrine_interpretation(
         human_main_parts.append(f"The people involved point to {compact_relationship}")
 
     if effective_seal_type:
-        human_main_parts.append(f"The ending seals this as {str(effective_seal_type).lower()}")
+        seal_phrase = str(effective_seal_type).lower()
+        if normalize_text(seal_phrase) == "deliverance":
+            human_main_parts.append("The ending points to escape, protection, or deliverance")
+        else:
+            human_main_parts.append(f"The ending seals this as {seal_phrase}")
 
     rendered_main = merge_natural_paragraphs(human_main_parts)
 
@@ -1025,10 +983,6 @@ def build_doctrine_interpretation(
         "doctrine_facts": doctrine_facts,
     }
 
-
-# ============================================================
-# Legacy fallback
-# ============================================================
 
 def build_legacy_interpretation(matches, narrative_max_symbols: int) -> Dict[str, str]:
     spiritual_parts: List[str] = []

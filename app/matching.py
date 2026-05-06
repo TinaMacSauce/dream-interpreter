@@ -37,7 +37,6 @@ def symbol_length_penalty(symbol: str) -> int:
 
 
 def _normalize_keyword_list(raw_keywords: str) -> List[str]:
-    from app.utils import normalize_text as norm
     import re
 
     keywords: List[str] = []
@@ -47,7 +46,7 @@ def _normalize_keyword_list(raw_keywords: str) -> List[str]:
         return keywords
 
     for part in re.split(r"[,|;]+", raw_keywords):
-        part = norm(part)
+        part = normalize_text(part)
         if not part or part in seen:
             continue
         seen.add(part)
@@ -64,35 +63,15 @@ def _row_identity_key(row: Dict[str, Any]) -> str:
 
 
 def _is_action_like_base_symbol(row: Dict[str, Any]) -> bool:
-    """
-    Action-like rows should usually support interpretation,
-    not dominate the main symbol list.
-    """
     symbol = normalize_text(get_base_symbol_input(row))
     category = normalize_text(get_base_symbol_category(row))
 
     action_like_words = {
-        "chasing",
-        "running",
-        "crying",
-        "fighting",
-        "biting",
-        "watching",
-        "following",
-        "walking",
-        "standing",
-        "speaking",
-        "looking",
-        "looking at",
-        "escaping",
-        "crossing",
-        "falling",
-        "flying",
-        "hiding",
-        "attacking",
-        "smiling",
-        "laughing",
-        "eating",
+        "chasing", "running", "crying", "fighting", "biting", "watching",
+        "following", "walking", "standing", "speaking", "looking",
+        "looking at", "escaping", "crossing", "falling", "flying",
+        "hiding", "attacking", "smiling", "laughing", "eating",
+        "drinking", "driving", "swimming", "jumping", "climbing",
     }
 
     if category in {"movement", "action", "behavior"}:
@@ -109,24 +88,10 @@ def _relationship_bonus(row: Dict[str, Any]) -> int:
     symbol = normalize_text(get_base_symbol_input(row))
 
     family_people = {
-        "mother",
-        "father",
-        "sister",
-        "brother",
-        "child",
-        "son",
-        "daughter",
-        "husband",
-        "wife",
-        "spouse",
-        "grandmother",
-        "grandfather",
-        "friend",
-        "relative",
-        "cousin",
-        "aunt",
-        "uncle",
-        "family",
+        "mother", "father", "sister", "brother", "child", "son",
+        "daughter", "husband", "wife", "spouse", "grandmother",
+        "grandfather", "friend", "relative", "cousin", "aunt",
+        "uncle", "family",
     }
 
     if category == "person":
@@ -140,7 +105,7 @@ def _death_omen_bonus(row: Dict[str, Any]) -> int:
     symbol = normalize_text(get_base_symbol_input(row))
     category = normalize_text(get_base_symbol_category(row))
 
-    if symbol in {"teeth", "teeth falling out", "falling", "dead person", "dead people"}:
+    if symbol in {"teeth", "teeth falling out", "dead person", "dead people"}:
         return 14
 
     if category in {"death", "graveyard", "ending"}:
@@ -150,49 +115,31 @@ def _death_omen_bonus(row: Dict[str, Any]) -> int:
 
 
 def _threat_symbol_bonus(row: Dict[str, Any]) -> int:
-    """
-    Concrete hostile symbols should stay ahead of reaction-type symbols.
-    """
     symbol = normalize_text(get_base_symbol_input(row))
     category = normalize_text(get_base_symbol_category(row))
 
     threat_symbols = {
-        "snake",
-        "serpent",
-        "dog",
-        "cat",
-        "duppy",
-        "demon",
-        "enemy",
-        "thief",
-        "attacker",
-        "dead person",
-        "dead people",
+        "snake", "serpent", "dog", "cat", "duppy", "demon", "enemy",
+        "thief", "attacker", "dead person", "dead people", "shadow",
+        "witch", "witchcraft", "obeah",
     }
 
     if symbol in threat_symbols:
         return 12
 
-    if category in {"animal", "person", "death"}:
+    if category in {"animal", "person", "death", "spirit"}:
         return 4
 
     return 0
 
 
 def _prefer_literal_symbol_over_action(row: Dict[str, Any], score: int) -> int:
-    """
-    Concrete symbols should usually lead.
-    Action-like rows can still match, but should rarely dominate.
-    """
     if _is_action_like_base_symbol(row):
-        score -= 28
+        score -= 35
     return score
 
 
 def category_priority(category: str) -> int:
-    """
-    Higher means more likely to be a core symbol users expect to see first.
-    """
     c = normalize_text(category or "") or "unknown"
     priorities = {
         "ending": 42,
@@ -201,6 +148,7 @@ def category_priority(category: str) -> int:
         "body": 34,
         "person": 32,
         "animal": 30,
+        "spirit": 30,
         "water": 24,
         "nature": 22,
         "object": 20,
@@ -213,7 +161,58 @@ def category_priority(category: str) -> int:
     return priorities.get(c, 12)
 
 
-def score_base_candidate(row: Dict[str, Any], match_type: str, symbol_raw: str) -> int:
+def _context_bonus_for_symbol(
+    row: Dict[str, Any],
+    behaviors: Optional[List[Dict[str, Any]]] = None,
+    locations: Optional[List[Dict[str, Any]]] = None,
+    relationships: Optional[List[Dict[str, Any]]] = None,
+) -> int:
+    """
+    Context may boost a subject, but it must not make actions dominate.
+    ACTION remains in BehaviorRules. BaseSymbols remain the SUBJECT layer.
+    """
+    symbol = normalize_text(get_base_symbol_input(row))
+    category = normalize_text(get_base_symbol_category(row))
+    bonus = 0
+
+    behavior_names = {normalize_text(x.get("name", "")) for x in behaviors or []}
+    location_names = {normalize_text(x.get("name", "")) for x in locations or []}
+    relationship_names = {normalize_text(x.get("name", "")) for x in relationships or []}
+
+    chase_or_attack = bool(
+        {"being chased", "chased", "chasing", "being attacked", "attacking", "fighting", "stabbing"}
+        & behavior_names
+    )
+
+    if chase_or_attack and category in {"animal", "person", "spirit", "death"}:
+        bonus += 8
+
+    if chase_or_attack and symbol in {
+        "dog", "snake", "serpent", "duppy", "demon", "enemy", "attacker", "dead person", "shadow"
+    }:
+        bonus += 10
+
+    if relationship_names and category == "person":
+        bonus += 6
+
+    if any(x in location_names for x in {"old_place", "old place", "old school", "old house", "old neighborhood"}):
+        if category in {"person", "object", "location", "animal", "spirit"}:
+            bonus += 4
+
+    if _is_action_like_base_symbol(row):
+        bonus -= 20
+
+    return bonus
+
+
+def score_base_candidate(
+    row: Dict[str, Any],
+    match_type: str,
+    symbol_raw: str,
+    behaviors: Optional[List[Dict[str, Any]]] = None,
+    locations: Optional[List[Dict[str, Any]]] = None,
+    relationships: Optional[List[Dict[str, Any]]] = None,
+) -> int:
     if match_type == "symbol_phrase":
         base = 120
     elif match_type == "symbol":
@@ -231,14 +230,12 @@ def score_base_candidate(row: Dict[str, Any], match_type: str, symbol_raw: str) 
     score += _relationship_bonus(row)
     score += _death_omen_bonus(row)
     score += _threat_symbol_bonus(row)
+    score += _context_bonus_for_symbol(row, behaviors, locations, relationships)
 
     return score
 
 
-def category_conflict_penalty(
-    row: Dict[str, Any],
-    already_selected: List[MatchTuple],
-) -> int:
+def category_conflict_penalty(row: Dict[str, Any], already_selected: List[MatchTuple]) -> int:
     current_cat = normalize_text(get_base_symbol_category(row))
     if current_cat == "unknown":
         return 0
@@ -280,11 +277,11 @@ def _candidate_sort_key(item: MatchTuple):
     action_like_penalty = 1 if _is_action_like_base_symbol(row) else 0
 
     return (
-        action_like_penalty,   # concrete before action-like
-        -category_rank,        # stronger symbolic categories first
-        -score,                # then raw score
-        -token_len,            # then word count in matched token
-        -token_chars,          # then character length
+        action_like_penalty,
+        -category_rank,
+        -score,
+        -token_len,
+        -token_chars,
         -len(symbol),
     )
 
@@ -304,10 +301,7 @@ def _selected_output_sort_key(item: MatchTuple):
     )
 
 
-def _select_non_overlapping_candidates(
-    candidates: List[MatchTuple],
-    top_k: int,
-) -> List[MatchTuple]:
+def _select_non_overlapping_candidates(candidates: List[MatchTuple], top_k: int) -> List[MatchTuple]:
     selected: List[MatchTuple] = []
     used_spans: List[Tuple[int, int]] = []
     seen_symbols = set()
@@ -335,11 +329,6 @@ def _select_non_overlapping_candidates(
 
 
 def _drop_action_symbols_when_concrete_exists(selected: List[MatchTuple]) -> List[MatchTuple]:
-    """
-    Locked doctrine behavior:
-    if at least one concrete symbol exists, action-like base symbols
-    should not occupy the limited top symbol slots.
-    """
     if not selected:
         return selected
 
@@ -349,8 +338,6 @@ def _drop_action_symbols_when_concrete_exists(selected: List[MatchTuple]) -> Lis
     if not concrete:
         return selected
 
-    # Keep concrete symbols only. Action layers should be expressed by behavior rules,
-    # not by dominating top base symbols.
     return concrete if concrete else action_like
 
 
@@ -359,6 +346,9 @@ def _build_candidate_hit(
     row: Dict[str, Any],
     symbol_raw: str,
     ending_text: str,
+    behaviors: Optional[List[Dict[str, Any]]] = None,
+    locations: Optional[List[Dict[str, Any]]] = None,
+    relationships: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[MatchTuple]:
     symbol = normalize_text(symbol_raw)
     if not symbol:
@@ -378,7 +368,6 @@ def _build_candidate_hit(
         else:
             local_candidates.append(("keyword", kw))
 
-    # Longest / fullest tokens first so "black dog" beats "dog"
     local_candidates.sort(key=lambda x: (-len(x[1].split()), -len(x[1])))
 
     for match_type, token in local_candidates:
@@ -387,7 +376,14 @@ def _build_candidate_hit(
             continue
 
         ending_bonus = ending_bonus_for_symbol(row, ending_text)
-        score = score_base_candidate(row, match_type, symbol_raw) + ending_bonus
+        score = score_base_candidate(
+            row=row,
+            match_type=match_type,
+            symbol_raw=symbol_raw,
+            behaviors=behaviors,
+            locations=locations,
+            relationships=relationships,
+        ) + ending_bonus
 
         return (
             row,
@@ -410,9 +406,6 @@ def score_row_strict(
     row: Dict[str, Any],
     used_spans: Optional[List[Tuple[int, int]]] = None,
 ) -> Tuple[int, Optional[MatchHit]]:
-    """
-    Legacy-compatible scorer.
-    """
     symbol_raw = get_symbol_cell(row)
     if not symbol_raw:
         return 0, None
@@ -453,7 +446,7 @@ def score_row_strict(
         if chosen_span:
             adjusted_score = score
             if _is_action_like_base_symbol(row):
-                adjusted_score -= 28
+                adjusted_score -= 35
 
             return adjusted_score, {
                 "type": match_type,
@@ -512,7 +505,6 @@ def match_symbols_legacy(
         if len(out) >= top_k:
             break
 
-    # Lock action-like rows out if concrete rows exist.
     concrete = [item for item in out if not _is_action_like_base_symbol(item[0])]
     if concrete:
         out = concrete[:top_k]
@@ -525,6 +517,10 @@ def match_base_symbols_doctrine(
     dream: str,
     base_rows: List[Dict[str, Any]],
     top_k: int = 3,
+    behaviors: Optional[List[Dict[str, Any]]] = None,
+    states: Optional[List[Dict[str, Any]]] = None,
+    locations: Optional[List[Dict[str, Any]]] = None,
+    relationships: Optional[List[Dict[str, Any]]] = None,
 ) -> List[MatchTuple]:
     dream_norm = normalize_text(dream)
     ending_text = extract_dream_ending_text(dream)
@@ -547,6 +543,9 @@ def match_base_symbols_doctrine(
             row=row,
             symbol_raw=symbol_raw,
             ending_text=ending_text,
+            behaviors=behaviors,
+            locations=locations,
+            relationships=relationships,
         )
         if candidate:
             candidates.append(candidate)

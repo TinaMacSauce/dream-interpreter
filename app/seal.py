@@ -24,13 +24,67 @@ def dream_has_escape_cue(dream: str) -> bool:
     return contains_any_phrase(dream, cues)
 
 
+def dream_has_caught_cue(dream: str) -> bool:
+    cues = [
+        "caught",
+        "grabbed",
+        "captured",
+        "trapped",
+        "could not escape",
+        "couldn't escape",
+        "they caught me",
+        "it caught me",
+        "held me down",
+    ]
+    return contains_any_phrase(dream, cues)
+
+
+def dream_has_continued_cue(dream: str) -> bool:
+    cues = [
+        "kept chasing",
+        "never ended",
+        "still running",
+        "continued chasing",
+        "no ending",
+        "i was still running",
+        "it kept going",
+    ]
+    return contains_any_phrase(dream, cues)
+
+
+def dream_has_helped_cue(dream: str) -> bool:
+    cues = [
+        "someone helped me",
+        "someone rescued me",
+        "they helped me",
+        "he helped me",
+        "she helped me",
+        "pulled me out",
+        "saved me",
+        "rescued me",
+    ]
+    return contains_any_phrase(dream, cues)
+
+
+def dream_has_fightback_cue(dream: str) -> bool:
+    cues = [
+        "fought back",
+        "fight back",
+        "i fought",
+        "i hit back",
+        "i resisted",
+        "i defeated",
+        "i won",
+        "overcame",
+    ]
+    return contains_any_phrase(dream, cues)
+
+
 def _normalized_names(items: List[Dict[str, Any]]) -> set:
     return {normalize_text(x.get("name", "")) for x in items if x.get("name")}
 
 
-def _base_symbol_names(
-    base_matches: List[Tuple[Dict[str, Any], int, Dict[str, Any]]]
-) -> set:
+def _base_symbol_names(base_matches: List[Tuple[Dict[str, Any], int, Dict[str, Any]]]) -> set:
     out = set()
     for row, _score, _hit in base_matches:
         symbol = normalize_text(get_base_symbol_input(row))
@@ -54,14 +108,10 @@ def _override_text(override_hit: Optional[Dict[str, Any]]) -> str:
     )
 
 
-def _has_death_omen_signal(
-    base_symbol_names: set,
-    override_text: str,
-) -> bool:
+def _has_death_omen_signal(base_symbol_names: set, override_text: str) -> bool:
     death_terms = {
         "teeth",
         "teeth falling out",
-        "falling",
         "dead person",
         "dead people",
         "deceased",
@@ -71,20 +121,14 @@ def _has_death_omen_signal(
     if death_terms & base_symbol_names:
         return True
 
-    if any(term in override_text for term in ["death omen", "death", "grave"]):
-        return True
-
-    return False
+    return any(term in override_text for term in ["death omen", "death", "grave"])
 
 
 def _has_dead_person_signal(base_symbol_names: set, override_text: str) -> bool:
     if {"dead person", "dead people", "deceased", "corpse"} & base_symbol_names:
         return True
 
-    if any(term in override_text for term in ["dead person", "deceased", "familiar spirit"]):
-        return True
-
-    return False
+    return any(term in override_text for term in ["dead person", "deceased", "familiar spirit"])
 
 
 def _has_attack_signal(behavior_names: set, override_text: str) -> bool:
@@ -95,6 +139,7 @@ def _has_attack_signal(behavior_names: set, override_text: str) -> bool:
         "biting",
         "being chased",
         "chasing",
+        "chased",
         "fighting",
         "stabbing",
         "shooting",
@@ -105,10 +150,23 @@ def _has_attack_signal(behavior_names: set, override_text: str) -> bool:
     if attack_terms & behavior_names:
         return True
 
-    if any(term in override_text for term in ["attack", "warfare", "spiritual warfare"]):
-        return True
+    return any(term in override_text for term in ["attack", "warfare", "spiritual warfare"])
 
-    return False
+
+def _has_old_place_signal(location_names: set) -> bool:
+    old_place_terms = {
+        "old_place",
+        "old place",
+        "old school",
+        "old house",
+        "old neighborhood",
+        "old job",
+        "childhood home",
+        "former workplace",
+        "old classroom",
+        "primary school",
+    }
+    return bool(old_place_terms & location_names)
 
 
 def _has_relationship_focus(relationship_names: set) -> bool:
@@ -135,6 +193,63 @@ def _has_relationship_focus(relationship_names: set) -> bool:
     return bool(focus_terms & relationship_names)
 
 
+def _ending_outcome(dream: str) -> Dict[str, str]:
+    ending_text = extract_dream_ending_text(dream) or dream
+
+    if dream_has_caught_cue(ending_text):
+        return {
+            "outcome": "caught",
+            "status": "Contested",
+            "type": "Attack Reaching",
+            "risk": "High",
+            "message": "The ending suggests the pressure reached the dreamer and should be handled urgently in prayer.",
+        }
+
+    if dream_has_escape_cue(ending_text):
+        return {
+            "outcome": "escaped",
+            "status": "Open",
+            "type": "Deliverance",
+            "risk": "Low",
+            "message": "The ending suggests protection, escape, or movement away from what was pursuing the dreamer.",
+        }
+
+    if dream_has_fightback_cue(ending_text):
+        return {
+            "outcome": "fought_back",
+            "status": "Resisting",
+            "type": "Overcoming",
+            "risk": "Medium",
+            "message": "The ending suggests resistance, spiritual authority, or movement toward overcoming the issue.",
+        }
+
+    if dream_has_helped_cue(ending_text):
+        return {
+            "outcome": "helped",
+            "status": "Assisted",
+            "type": "Intervention",
+            "risk": "Medium",
+            "message": "The ending suggests help, covering, or intervention around the matter.",
+        }
+
+    if dream_has_continued_cue(ending_text):
+        return {
+            "outcome": "continued",
+            "status": "Unresolved",
+            "type": "Ongoing Pressure",
+            "risk": "High",
+            "message": "The ending suggests the matter is ongoing, unresolved, or still applying pressure.",
+        }
+
+    return {
+        "outcome": "",
+        "status": "",
+        "type": "",
+        "risk": "",
+        "message": "",
+    }
+
+
 def compute_doctrine_seal(
     dream: str,
     base_matches: List[Tuple[Dict[str, Any], int, Dict[str, Any]]],
@@ -145,17 +260,18 @@ def compute_doctrine_seal(
     override_hit: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """
-    LOCKED SEAL HIERARCHY
+    Seal hierarchy:
 
-    Priority:
-    1. hard override / death omen / dead person
-    2. attack / warfare
-    3. escape / breakthrough
-    4. state corruption
-    5. restrictive location
-    6. relationship focus
-    7. ending symbol confirmation
-    8. generic symbol-count fallback
+    1. hard override / death / dead person
+    2. ending outcome if attack/chase is present
+    3. attack / warfare
+    4. escape / breakthrough
+    5. old place backwardness/stagnation
+    6. state corruption
+    7. restrictive location
+    8. relationship focus
+    9. ending symbol confirmation
+    10. generic fallback
     """
     ending_text = extract_dream_ending_text(dream)
     ending_norm = normalize_text(ending_text)
@@ -165,6 +281,7 @@ def compute_doctrine_seal(
     location_names = _normalized_names(locations)
     relationship_names = _normalized_names(relationships)
     base_symbol_names = _base_symbol_names(base_matches)
+    override_text = _override_text(override_hit)
 
     ending_hits: List[str] = []
     for row, _score, _hit in base_matches:
@@ -172,14 +289,13 @@ def compute_doctrine_seal(
         if symbol and contains_phrase(ending_norm, symbol):
             ending_hits.append(symbol)
 
-    override_text = _override_text(override_hit)
+    outcome = _ending_outcome(dream)
 
     status = "Processing"
     seal_type = "Layered"
     risk = "Medium"
     message = "The ending suggests the dream should be taken seriously in prayer."
 
-    # 1) Hard death / dead-person level warnings
     if _has_dead_person_signal(base_symbol_names, override_text):
         status = "Sealed"
         seal_type = "Death Warning"
@@ -192,49 +308,54 @@ def compute_doctrine_seal(
         risk = "High"
         message = "The ending points to a sealed warning that should be taken seriously in prayer."
 
-    # 2) Warfare before everything else relational/state/location
+    elif _has_attack_signal(behavior_names, override_text) and outcome.get("type"):
+        status = outcome["status"]
+        seal_type = outcome["type"]
+        risk = outcome["risk"]
+        message = outcome["message"]
+
     elif _has_attack_signal(behavior_names, override_text):
         status = "Contested"
         seal_type = "Warfare"
         risk = "High"
-        message = "The ending shows active contention around the message and calls for prayer."
+        message = "The action shows active contention around the message and calls for prayer."
 
-    # 3) Escape / breakthrough
     elif {"escaping", "crossing", "finding"} & behavior_names or dream_has_escape_cue(dream):
         status = "Open"
         seal_type = "Breakthrough"
         risk = "Low"
         message = "The ending shows movement toward escape, transition, or release."
 
-    # 4) State warning
+    elif _has_old_place_signal(location_names):
+        status = "Warning"
+        seal_type = "Backwardness"
+        risk = "Medium"
+        message = "The place connects the dream to backwardness, stagnation, regression, or old cycles."
+
     elif {"dirty", "murky", "broken", "bleeding", "dark", "stuck", "heavy"} & state_names:
         status = "Warning"
         seal_type = "Corrupted"
         risk = "High"
         message = "The ending carries warning signs of confusion, damage, or obstruction."
 
-    # 5) Restrictive locations
     elif {"graveyard", "prison", "darkness"} & location_names:
         status = "Warning"
         seal_type = "Bound"
         risk = "High"
         message = "The ending places the message in a heavy or restrictive spiritual environment."
 
-    # 6) Relationship focus
     elif _has_relationship_focus(relationship_names):
         status = "Focused"
         seal_type = "Relational"
         risk = "Medium"
         message = "The dream ending keeps the message centered on a specific person or relationship."
 
-    # 7) Ending repeats a major symbol
     elif ending_hits:
         status = "Sealed"
         seal_type = "Symbol Confirmed"
         risk = "Medium"
         message = "The ending repeated or confirmed a major symbol from the dream."
 
-    # 8) Generic fallback
     elif len(base_matches) == 1:
         status = "Live"
         seal_type = "Focused"
@@ -254,6 +375,7 @@ def compute_doctrine_seal(
         "message": message,
         "ending_text": ending_text,
         "ending_hits": ending_hits,
+        "outcome": outcome.get("outcome", ""),
     }
 
 

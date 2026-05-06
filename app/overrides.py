@@ -43,22 +43,18 @@ def _normalized_set(values: List[str]) -> Set[str]:
     return out
 
 
-def _base_symbol_names(
-    base_matches: List[Tuple[Dict[str, Any], int, Dict[str, Any]]]
-) -> List[str]:
+def _base_symbol_names(base_matches) -> List[str]:
     out: List[str] = []
-    for row, _score, _hit in base_matches:
+    for row, _score, _hit in base_matches or []:
         symbol = get_base_symbol_input(row)
         if symbol:
             out.append(normalize_text(symbol))
     return out
 
 
-def _base_symbol_categories(
-    base_matches: List[Tuple[Dict[str, Any], int, Dict[str, Any]]]
-) -> List[str]:
+def _base_symbol_categories(base_matches) -> List[str]:
     out: List[str] = []
-    for row, _score, _hit in base_matches:
+    for row, _score, _hit in base_matches or []:
         category = normalize_text(get_base_symbol_category(row)) or "unknown"
         out.append(category)
     return out
@@ -66,7 +62,7 @@ def _base_symbol_categories(
 
 def _behavior_names(behaviors: List[Dict[str, Any]]) -> List[str]:
     out: List[str] = []
-    for hit in behaviors:
+    for hit in behaviors or []:
         row = hit.get("row", {})
         name = hit.get("name") or get_behavior_name(row)
         name_n = normalize_text(name)
@@ -77,7 +73,7 @@ def _behavior_names(behaviors: List[Dict[str, Any]]) -> List[str]:
 
 def _state_names(states: List[Dict[str, Any]]) -> List[str]:
     out: List[str] = []
-    for hit in states:
+    for hit in states or []:
         name_n = normalize_text(hit.get("name", ""))
         if name_n:
             out.append(name_n)
@@ -86,7 +82,7 @@ def _state_names(states: List[Dict[str, Any]]) -> List[str]:
 
 def _location_names(locations: List[Dict[str, Any]]) -> List[str]:
     out: List[str] = []
-    for hit in locations:
+    for hit in locations or []:
         name_n = normalize_text(hit.get("name", ""))
         if name_n:
             out.append(name_n)
@@ -95,7 +91,7 @@ def _location_names(locations: List[Dict[str, Any]]) -> List[str]:
 
 def _relationship_names(relationships: List[Dict[str, Any]]) -> List[str]:
     out: List[str] = []
-    for hit in relationships:
+    for hit in relationships or []:
         row = hit.get("row", {})
         name = hit.get("name") or get_relationship_name(row)
         name_n = normalize_text(name)
@@ -112,6 +108,7 @@ def _has_attack_behavior(behaviors: List[Dict[str, Any]]) -> bool:
         "biting",
         "being chased",
         "chasing",
+        "chased",
         "fighting",
         "stabbing",
         "shooting",
@@ -119,7 +116,7 @@ def _has_attack_behavior(behaviors: List[Dict[str, Any]]) -> bool:
         "threatening",
     }
 
-    for hit in behaviors:
+    for hit in behaviors or []:
         row = hit.get("row", {})
         name = normalize_text(hit.get("name") or get_behavior_name(row))
 
@@ -134,7 +131,7 @@ def _has_attack_behavior(behaviors: List[Dict[str, Any]]) -> bool:
 
 
 def _relationship_impersonation_enabled(relationships: List[Dict[str, Any]]) -> bool:
-    for hit in relationships:
+    for hit in relationships or []:
         row = hit.get("row", {})
         if row and relationship_impersonation_when_attacking(row):
             return True
@@ -142,7 +139,7 @@ def _relationship_impersonation_enabled(relationships: List[Dict[str, Any]]) -> 
 
 
 def _relationship_literal_enabled(relationships: List[Dict[str, Any]]) -> bool:
-    for hit in relationships:
+    for hit in relationships or []:
         row = hit.get("row", {})
         if row and relationship_literal_when_peaceful(row):
             return True
@@ -183,6 +180,7 @@ def parse_override_groups(condition: str) -> List[List[str]]:
     import re
 
     groups: List[List[str]] = []
+
     for raw_group in re.split(r"\|\|", condition or ""):
         tokens = [
             clean_sentence(x).strip()
@@ -191,10 +189,25 @@ def parse_override_groups(condition: str) -> List[List[str]]:
         ]
         if tokens:
             groups.append(tokens)
+
     return groups
 
 
 def token_matches_context(token: str, ctx: Dict[str, Any]) -> Tuple[bool, int]:
+    """
+    Safer override matcher.
+
+    Supports:
+    - symbol=snake
+    - behavior=being chased
+    - location=old_place
+    - text=being chased by a dog
+    - ending=escaped
+    - !symbol=snake
+    - has_attack_behavior=yes
+
+    Plain one-word tokens are restricted so weak overrides do not hijack dreams.
+    """
     raw = (token or "").strip()
     if not raw:
         return False, 0
@@ -222,8 +235,12 @@ def token_matches_context(token: str, ctx: Dict[str, Any]) -> Tuple[bool, int]:
 
         if field_n in {"symbol", "category", "behavior", "state", "location", "relationship"}:
             exists = value_n in ctx.get(field_n, set())
+            specificity = 8
+
         elif field_n in {"text", "ending"}:
             exists = contains_phrase(ctx.get(field_n, ""), value_n)
+            specificity = 5 if len(value_n.split()) >= 2 else 2
+
         elif field_n in {
             "has_attack_behavior",
             "relationship_impersonation_enabled",
@@ -231,41 +248,38 @@ def token_matches_context(token: str, ctx: Dict[str, Any]) -> Tuple[bool, int]:
         }:
             truthy = value_n in {"1", "true", "yes", "on"}
             exists = bool(ctx.get(field_n, False)) == truthy
+            specificity = 6
+
         else:
             exists = False
+            specificity = 0
 
         matched = (not exists) if op == "!=" else exists
         if negative:
             matched = not matched
 
-        specificity = 6 if field_n in {
-            "symbol",
-            "category",
-            "behavior",
-            "state",
-            "location",
-            "relationship",
-            "has_attack_behavior",
-            "relationship_impersonation_enabled",
-            "relationship_literal_enabled",
-        } else 3
         return matched, specificity
 
     exists_plain = False
+    specificity = 0
 
     for field_name in ["symbol", "category", "behavior", "state", "location", "relationship"]:
         if raw_norm in ctx.get(field_name, set()):
             exists_plain = True
+            specificity = 6
             break
 
-    if not exists_plain:
+    # Plain dream-text matching must be phrase-level, not weak one-word matching.
+    if not exists_plain and len(raw_norm.split()) >= 2:
         if contains_phrase(ctx.get("text", ""), raw_norm):
             exists_plain = True
+            specificity = 4
         elif contains_phrase(ctx.get("ending", ""), raw_norm):
             exists_plain = True
+            specificity = 5
 
     matched_plain = (not exists_plain) if negative else exists_plain
-    return matched_plain, 2
+    return matched_plain, specificity
 
 
 def _build_locked_doctrine_override(
@@ -279,24 +293,20 @@ def _build_locked_doctrine_override(
     """
     Hard-locked doctrine overrides.
 
-    Priority:
+    These protect doctrine that should not be softened:
     1. dead people / familiar spirit logic
     2. eating in dreams
     3. hair doctrine
-    4. family-member or familiar-person attack impersonation
+    4. familiar-person attack impersonation
     5. literal family/friend emotion reversals
     """
     symbol_names = set(_base_symbol_names(base_matches))
     relationship_names = set(_relationship_names(relationships))
     behavior_names = set(_behavior_names(behaviors))
     state_names = set(_state_names(states))
-    location_names = set(_location_names(locations))
     dream_text = normalize_text(dream)
     ending_text = normalize_text(extract_dream_ending_text(dream))
 
-    # ------------------------------------------------------------
-    # 1. Dead people / deceased visit logic
-    # ------------------------------------------------------------
     dead_terms = {
         "dead person",
         "dead people",
@@ -311,7 +321,10 @@ def _build_locked_doctrine_override(
         contains_phrase(dream_text, x)
         for x in ["recently died", "recently deceased", "just died", "newly dead"]
     ):
-        if any(x in dream_text for x in ["recently died", "recently deceased", "recent dead", "just died", "newly dead"]):
+        if any(
+            x in dream_text
+            for x in ["recently died", "recently deceased", "recent dead", "just died", "newly dead"]
+        ):
             return {
                 "override_name": "recent_dead_return",
                 "spiritual": "this points to a familiar spirit appearing in the form of someone who has died",
@@ -336,9 +349,6 @@ def _build_locked_doctrine_override(
             "is_hard_override": True,
         }
 
-    # ------------------------------------------------------------
-    # 2. Eating in dreams
-    # ------------------------------------------------------------
     if "eating" in behavior_names or contains_phrase(dream_text, "eating"):
         return {
             "override_name": "eating_rule",
@@ -352,14 +362,6 @@ def _build_locked_doctrine_override(
             "is_hard_override": True,
         }
 
-    # ------------------------------------------------------------
-    # 3. Hair doctrine
-    # Hair = problems
-    # Less hair = fewer problems
-    # Braiding = the person is helping cause / shape the problems
-    # Same hairstyle = similar problems repeating
-    # Cutting = problems being removed
-    # ------------------------------------------------------------
     hair_present = (
         "hair" in symbol_names
         or "hair falling out" in symbol_names
@@ -370,7 +372,6 @@ def _build_locked_doctrine_override(
     )
 
     if hair_present:
-        # someone doing / braiding the hair
         if (
             "braiding hair" in symbol_names
             or contains_phrase(dream_text, "braiding my hair")
@@ -390,7 +391,6 @@ def _build_locked_doctrine_override(
                 "is_hard_override": True,
             }
 
-        # same hairstyle repeating
         if (
             "same hairstyle" in symbol_names
             or contains_phrase(dream_text, "same hairstyle")
@@ -411,7 +411,6 @@ def _build_locked_doctrine_override(
                 "is_hard_override": True,
             }
 
-        # cutting hair
         if (
             "cutting hair" in symbol_names
             or "cutting" in state_names
@@ -431,7 +430,6 @@ def _build_locked_doctrine_override(
                 "is_hard_override": True,
             }
 
-        # less hair / hair falling out / scalp exposed
         if (
             "hair falling out" in symbol_names
             or "falling out" in state_names
@@ -454,7 +452,6 @@ def _build_locked_doctrine_override(
                 "is_hard_override": True,
             }
 
-        # long hair
         if "long" in state_names:
             return {
                 "override_name": "long_hair_rule",
@@ -468,7 +465,6 @@ def _build_locked_doctrine_override(
                 "is_hard_override": True,
             }
 
-        # short hair / less hair
         if "short" in state_names:
             return {
                 "override_name": "short_hair_rule",
@@ -482,7 +478,6 @@ def _build_locked_doctrine_override(
                 "is_hard_override": True,
             }
 
-        # plain hair fallback
         return {
             "override_name": "hair_rule",
             "spiritual": "this dream points to problems",
@@ -495,9 +490,6 @@ def _build_locked_doctrine_override(
             "is_hard_override": True,
         }
 
-    # ------------------------------------------------------------
-    # 4. Familiar person attacking = impersonation / attack
-    # ------------------------------------------------------------
     if relationship_names and _has_attack_behavior(behaviors):
         if _relationship_impersonation_enabled(relationships) or relationship_names:
             return {
@@ -512,9 +504,6 @@ def _build_locked_doctrine_override(
                 "is_hard_override": True,
             }
 
-    # ------------------------------------------------------------
-    # 5. Literal person rules for peaceful appearance
-    # ------------------------------------------------------------
     if relationship_names and (_relationship_literal_enabled(relationships) or not _has_attack_behavior(behaviors)):
         target = next(iter(sorted(relationship_names)))
 
@@ -572,7 +561,7 @@ def apply_override_rules(
     best: Optional[Dict[str, Any]] = None
     best_score = -10**9
 
-    for row in override_rows:
+    for row in override_rows or []:
         if not row_is_active(row):
             continue
 
@@ -606,7 +595,14 @@ def apply_override_rules(
             continue
 
         priority = _priority_from_row(row)
-        hard_bonus = 10000 if override_is_hard(row) else 0
+        is_hard = override_is_hard(row)
+        hard_bonus = 10000 if is_hard else 0
+
+        # Normal overrides must be specific enough.
+        # This blocks weak one-word override conditions from hijacking the interpretation.
+        if not is_hard and group_score < 6:
+            continue
+
         score = hard_bonus + (priority * 100) + group_score
 
         if score > best_score:

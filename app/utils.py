@@ -104,13 +104,6 @@ def _phrase_contains_phrase(big: str, small: str) -> bool:
 
 
 def _phrase_is_subsumed(candidate: str, existing: str) -> bool:
-    """
-    Returns True if candidate is basically already covered by existing.
-    Examples:
-      pressure  <- subsumed by "pressure, fear"
-      conflict  <- subsumed by "ongoing conflict"
-      stay alert <- subsumed by "pray and stay alert"
-    """
     cand_n = normalize_text(candidate)
     exist_n = normalize_text(existing)
 
@@ -129,20 +122,13 @@ def _phrase_is_subsumed(candidate: str, existing: str) -> bool:
     if not cand_tokens or not exist_tokens:
         return False
 
-    # If candidate is mostly covered by existing, treat it as redundant.
     overlap = len(cand_tokens & exist_tokens)
     coverage = overlap / max(1, len(cand_tokens))
 
-    if coverage >= 0.8 and len(exist_tokens) >= len(cand_tokens):
-        return True
-
-    return False
+    return coverage >= 0.8 and len(exist_tokens) >= len(cand_tokens)
 
 
 def _choose_better_phrase(a: str, b: str) -> str:
-    """
-    Prefer the phrase that is a little richer but not excessively bloated.
-    """
     a_clean = strip_trailing_punct(a)
     b_clean = strip_trailing_punct(b)
 
@@ -151,31 +137,19 @@ def _choose_better_phrase(a: str, b: str) -> str:
     if not b_clean:
         return a_clean
 
-    a_tokens = tokenize_words(a_clean)
-    b_tokens = tokenize_words(b_clean)
-
-    if len(b_tokens) > len(a_tokens):
+    if len(tokenize_words(b_clean)) > len(tokenize_words(a_clean)):
         return b_clean
     return a_clean
 
 
 def compress_phrase_list(parts: List[str]) -> List[str]:
-    """
-    Stronger phrase compression:
-    - removes exact duplicates
-    - removes shorter phrases already covered by longer phrases
-    - prefers cleaner richer phrases over weak fragments
-    """
     cleaned_parts: List[str] = []
 
-    # Start with cleaned candidates only.
     for part in parts:
         part = strip_trailing_punct(part)
-        if not part:
-            continue
-        cleaned_parts.append(part)
+        if part:
+            cleaned_parts.append(part)
 
-    # Sort richer phrases first so they can absorb weaker fragments.
     cleaned_parts.sort(key=lambda x: (-len(tokenize_words(x)), -len(normalize_text(x)), x.lower()))
 
     out: List[str] = []
@@ -200,7 +174,6 @@ def compress_phrase_list(parts: List[str]) -> List[str]:
         if not replaced:
             out.append(part)
 
-    # Final exact-normalized dedupe pass while preserving order.
     final: List[str] = []
     seen = set()
 
@@ -235,7 +208,11 @@ def compile_boundary_regex(token: str) -> re.Pattern:
 def contains_phrase(text_norm: str, phrase: str) -> bool:
     if not text_norm or not phrase:
         return False
-    return bool(compile_boundary_regex(phrase).search(text_norm))
+    text_n = normalize_text(text_norm)
+    phrase_n = normalize_text(phrase)
+    if not text_n or not phrase_n:
+        return False
+    return bool(compile_boundary_regex(phrase_n).search(text_n))
 
 
 def find_phrase_spans(text: str, phrase: str) -> List[Tuple[int, int]]:
@@ -254,10 +231,7 @@ def spans_overlap(a: Tuple[int, int], b: Tuple[int, int]) -> bool:
 
 
 def is_span_blocked(span: Tuple[int, int], used_spans: List[Tuple[int, int]]) -> bool:
-    for used in used_spans:
-        if spans_overlap(span, used):
-            return True
-    return False
+    return any(spans_overlap(span, used) for used in used_spans)
 
 
 def split_sentences(text: str) -> List[str]:
@@ -269,11 +243,84 @@ def split_sentences(text: str) -> List[str]:
 
 
 def extract_dream_ending_text(dream: str) -> str:
-    sentences = split_sentences(dream)
+    """
+    Stronger ending extraction.
+
+    Looks for outcome phrases first:
+    - but I escaped
+    - then they caught me
+    - I woke up scared
+    - it kept chasing me
+
+    If no strong cue exists, falls back to the last 2 sentences.
+    """
+    dream_raw = (dream or "").strip()
+    if not dream_raw:
+        return ""
+
+    dream_norm = normalize_text(dream_raw)
+
+    ending_markers = [
+        "in the end",
+        "at the end",
+        "finally",
+        "then",
+        "after that",
+        "but",
+        "until",
+        "when i woke up",
+        "i woke up",
+        "before i woke up",
+    ]
+
+    outcome_phrases = [
+        "escaped",
+        "got away",
+        "made it out",
+        "survived",
+        "caught",
+        "grabbed",
+        "captured",
+        "trapped",
+        "fought back",
+        "i fought",
+        "i won",
+        "defeated",
+        "someone helped me",
+        "rescued me",
+        "saved me",
+        "kept chasing",
+        "never ended",
+        "still running",
+        "no ending",
+        "woke up scared",
+        "woke up crying",
+        "woke up sweating",
+    ]
+
+    marker_positions: List[int] = []
+
+    for marker in ending_markers + outcome_phrases:
+        marker_n = normalize_text(marker)
+        if not marker_n:
+            continue
+
+        match = re.search(rf"(?<!\w){re.escape(marker_n)}(?!\w)", dream_norm)
+        if match:
+            marker_positions.append(match.start())
+
+    if marker_positions:
+        start = max(0, min(marker_positions) - 80)
+        words = dream_norm[start:].split()
+        return " ".join(words[-80:]).strip()
+
+    sentences = split_sentences(dream_raw)
     if not sentences:
-        return dream.strip()
+        return dream_raw
     if len(sentences) == 1:
-        return sentences[-1]
+        words = sentences[-1].split()
+        return " ".join(words[-80:]).strip()
+
     return " ".join(sentences[-2:]).strip()
 
 
@@ -388,7 +435,6 @@ def normalize_action_phrase(text: str) -> str:
 
     text = replacements.get(text, text)
 
-    # Normalize repeated connectors and repeated fragments.
     text = re.sub(r"\b(and\s+)+", "and ", text)
     text = re.sub(r"\bto\s+be\s+be\b", "to be", text)
     text = re.sub(r"\bpray and pray\b", "pray", text)
@@ -406,38 +452,35 @@ def normalize_effect_phrase(text: str) -> str:
     if not text:
         return ""
 
-    # Lowercase first character for smoother joining.
     text = text[:1].lower() + text[1:]
-
-    # Normalize punctuation spacing.
     text = re.sub(r"\s*,\s*", ", ", text)
 
-    # Collapse exact repeated comma blocks:
-    # "pressure, fear, pressure, fear" -> "pressure, fear"
     parts = [p.strip() for p in text.split(",") if p.strip()]
     deduped_parts: List[str] = []
+
     for part in parts:
-      key = normalize_text(part)
-      if not key:
-          continue
+        key = normalize_text(part)
+        if not key:
+            continue
 
-      skip = False
-      for existing in deduped_parts:
-          if _phrase_is_subsumed(part, existing):
-              skip = True
-              break
-      if skip:
-          continue
+        skip = False
+        for existing in deduped_parts:
+            if _phrase_is_subsumed(part, existing):
+                skip = True
+                break
 
-      replaced = False
-      for i, existing in enumerate(deduped_parts):
-          if _phrase_is_subsumed(existing, part):
-              deduped_parts[i] = _choose_better_phrase(existing, part)
-              replaced = True
-              break
+        if skip:
+            continue
 
-      if not replaced:
-          deduped_parts.append(part)
+        replaced = False
+        for i, existing in enumerate(deduped_parts):
+            if _phrase_is_subsumed(existing, part):
+                deduped_parts[i] = _choose_better_phrase(existing, part)
+                replaced = True
+                break
+
+        if not replaced:
+            deduped_parts.append(part)
 
     if deduped_parts:
         text = ", ".join(deduped_parts)

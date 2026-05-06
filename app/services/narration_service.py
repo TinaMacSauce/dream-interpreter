@@ -1,17 +1,15 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from app.config import Config
 from app.utils import compress_phrase_list, human_join, normalize_text
 
 
-def _clean(value: str) -> str:
-    return (value or "").strip()
+def _clean(value: Any) -> str:
+    return str(value or "").strip()
 
 
 def _safe_text(value: Any) -> str:
-    if value is None:
-        return ""
-    return str(value).strip()
+    return "" if value is None else str(value).strip()
 
 
 def _sentence(text: str) -> str:
@@ -27,20 +25,18 @@ def _sentence(text: str) -> str:
 def _semantic_key(text: str) -> str:
     text_n = normalize_text(text)
     replacements = {
-        "repeated or confirmed": "confirmed",
-        "confirms": "confirmed",
-        "major symbol from the dream": "major symbol",
-        "the ending": "ending",
         "suggests": "points to",
         "indicates": "points to",
         "reveals": "points to",
+        "shows": "points to",
+        "the behavior shows": "the action points to",
+        "the setting connects this to": "the place points to",
         "active spiritual pursuit": "active spiritual pressure",
     }
     out = text_n
     for old, new in replacements.items():
         out = out.replace(old, new)
-    out = " ".join(out.split())
-    return out
+    return " ".join(out.split())
 
 
 def _normalize_list(items: List[str], max_items: int = 3) -> List[str]:
@@ -79,56 +75,49 @@ def _dedupe_sentences(parts: List[str]) -> List[str]:
 
         duplicate = False
         for existing in out:
-            ex_key = _semantic_key(existing)
+            existing_key = _semantic_key(existing)
 
-            if key == ex_key:
-                duplicate = True
-                break
-            if key in ex_key:
-                duplicate = True
-                break
-            if ex_key in key and len(ex_key.split()) >= 4:
+            if key == existing_key:
                 duplicate = True
                 break
 
-            if "ending" in key and "ending" in ex_key and "major symbol" in key and "major symbol" in ex_key:
+            if key in existing_key:
                 duplicate = True
                 break
 
-        if duplicate:
-            continue
+            if existing_key in key and len(existing_key.split()) >= 4:
+                duplicate = True
+                break
 
-        out.append(part)
+        if not duplicate:
+            out.append(part)
 
     return out
+
+
+def _phrase_to_natural_clause(text: str) -> str:
+    text = _clean(text)
+    if not text:
+        return ""
+
+    replacements = [
+        (" suggests ", " points to "),
+        (" indicate ", " point to "),
+        (" indicates ", " points to "),
+        (" reveals ", " points to "),
+        (" shows ", " points to "),
+    ]
+
+    out = text
+    for old, new in replacements:
+        out = out.replace(old, new)
+
+    return " ".join(out.split()).strip()
 
 
 def _should_skip_placeholder(value: str, placeholders: List[str]) -> bool:
     value_n = normalize_text(value)
     return any(normalize_text(p) in value_n for p in placeholders)
-
-
-def _phrase_to_natural_clause(text: str) -> str:
-    """
-    Small wording cleanup only.
-    This must NEVER change doctrine.
-    """
-    text = _clean(text)
-    if not text:
-        return ""
-
-    out = text
-
-    direct_replacements = [
-        (" suggests ", " points to "),
-        (" indicate ", " points to "),
-        (" indicates ", " points to "),
-        (" reveals ", " points to "),
-    ]
-    for old, new in direct_replacements:
-        out = out.replace(old, new)
-
-    return " ".join(out.split()).strip()
 
 
 def _is_attack_or_impersonation_text(text: str) -> bool:
@@ -140,51 +129,86 @@ def _is_attack_or_impersonation_text(text: str) -> bool:
         "familiar person",
         "familiar spirit",
         "appearing in the form",
-        "appearing in the form of",
     ]
     return any(term in text_n for term in trigger_terms)
 
 
 def _is_emotion_reversal_text(text: str) -> bool:
     text_n = normalize_text(text)
-    trigger_terms = [
-        "joy is near",
-        "sadness is near",
-    ]
-    return any(term in text_n for term in trigger_terms)
+    return "joy is near" in text_n or "sadness is near" in text_n
 
 
-def _build_locked_lead_sentence(
+def _get_event_context(doctrine_facts: Dict[str, Any]) -> Dict[str, Any]:
+    return doctrine_facts.get("event_context", {}) or {}
+
+
+def _get_event_summary(doctrine_facts: Dict[str, Any]) -> str:
+    return _safe_text(doctrine_facts.get("event_summary"))
+
+
+def _event_value(event_context: Dict[str, Any], section: str, field: str) -> str:
+    block = event_context.get(section, {}) or {}
+    return _safe_text(block.get(field))
+
+
+def _build_event_lead_sentence(
     lead_message: str,
-    top_symbols: List[str],
+    event_context: Dict[str, Any],
     behavior_meaning: str,
     relationship_meaning: str,
 ) -> str:
     """
-    LOCKED LEAD PRIORITY:
-    1. direct doctrine lead_message
-    2. attack/impersonation wording must stay explicit
-    3. emotion reversal wording must stay explicit
-    4. relationship wording stays direct
-    5. only then allow a general 'This dream points to ...'
+    Human-first lead sentence.
+
+    Priority:
+    1. Protected doctrine warnings stay explicit.
+    2. Primary action leads the interpretation.
+    3. Subject/place/ending support the action.
+    4. Fallback to doctrine lead message.
     """
-    lead_message = _clean(lead_message)
-    if not lead_message:
-        return ""
+    lead_message = _safe_text(lead_message)
 
-    lead_n = normalize_text(lead_message)
-
-    if _is_attack_or_impersonation_text(lead_message):
+    if lead_message and _is_attack_or_impersonation_text(lead_message):
         return _sentence(lead_message)
 
-    if _is_emotion_reversal_text(lead_message):
+    if lead_message and _is_emotion_reversal_text(lead_message):
         return _sentence(lead_message)
 
-    if relationship_meaning:
-        rel_n = normalize_text(relationship_meaning)
-        if any(
-            term in rel_n
-            for term in [
+    action_name = _event_value(event_context, "primary_action", "name")
+    action_meaning = _event_value(event_context, "primary_action", "meaning")
+    subject = _event_value(event_context, "primary_subject", "")
+    place_name = _event_value(event_context, "primary_place", "name")
+    place_meaning = _event_value(event_context, "primary_place", "meaning")
+    ending_name = _event_value(event_context, "primary_ending", "name")
+    ending_meaning = _event_value(event_context, "primary_ending", "meaning")
+
+    if action_name:
+        if subject and place_meaning:
+            return _sentence(
+                f"This dream centers on {action_name}, with {subject} involved, and the place connects it to {place_meaning}"
+            )
+
+        if subject:
+            return _sentence(
+                f"This dream centers on {action_name}, and {subject} shows what the action is affecting or revealing"
+            )
+
+        if place_meaning:
+            return _sentence(
+                f"This dream centers on {action_name}, and the place connects it to {place_meaning}"
+            )
+
+        if action_meaning:
+            return _sentence(f"This dream centers on {action_name}, which points to {action_meaning}")
+
+        return _sentence(f"This dream centers on {action_name}")
+
+    if lead_message:
+        lead_n = normalize_text(lead_message)
+
+        if relationship_meaning:
+            rel_n = normalize_text(relationship_meaning)
+            relationship_terms = [
                 "this concerns your mother",
                 "this concerns your father",
                 "this concerns that person",
@@ -192,76 +216,132 @@ def _build_locked_lead_sentence(
                 "this concerns that child",
                 "this concerns that family member",
             ]
-        ):
-            return _sentence(_phrase_to_natural_clause(lead_message))
+            if any(term in rel_n for term in relationship_terms):
+                return _sentence(_phrase_to_natural_clause(lead_message))
 
-    if " points to " in lead_n:
-        right = lead_message.split(" points to ", 1)[1].strip()
-        if right:
-            return _sentence(f"This dream points to {right}")
+        if " points to " in lead_n:
+            right = lead_message.split(" points to ", 1)[1].strip()
+            if right:
+                return _sentence(f"This dream points to {right}")
 
-    if " suggests " in lead_n:
-        right = lead_message.split(" suggests ", 1)[1].strip()
-        if right:
-            return _sentence(f"This dream points to {right}")
+        if " suggests " in lead_n:
+            right = lead_message.split(" suggests ", 1)[1].strip()
+            if right:
+                return _sentence(f"This dream points to {right}")
 
-    if lead_n.startswith(("a ", "an ", "the ")):
         return _sentence(f"This dream points to {lead_message}")
 
-    return _sentence(f"This dream points to {lead_message}")
+    if ending_name and ending_meaning:
+        return _sentence(f"The ending of this dream points to {ending_meaning}")
+
+    return ""
 
 
-def _build_symbols_sentence(top_symbols: List[str]) -> str:
-    top_symbols = _normalize_list(top_symbols, max_items=max(1, Config.NARRATION_MAX_SYMBOLS))
-    if not top_symbols:
+def _build_action_sentence(event_context: Dict[str, Any], behavior_meaning: str) -> str:
+    action_name = _event_value(event_context, "primary_action", "name")
+    action_meaning = _event_value(event_context, "primary_action", "meaning")
+
+    meaning = action_meaning or behavior_meaning
+    if not action_name and not meaning:
         return ""
-    if len(top_symbols) == 1:
-        return _sentence(f"The main symbol in the dream is {top_symbols[0]}")
-    return _sentence(f"The main symbols in the dream are {human_join(top_symbols)}")
+
+    if action_name and meaning:
+        return _sentence(f"The action is the strongest part: {action_name} points to {_phrase_to_natural_clause(meaning)}")
+
+    if action_name:
+        return _sentence(f"The action is the strongest part: {action_name}")
+
+    return _sentence(f"The action in the dream points to {_phrase_to_natural_clause(meaning)}")
 
 
-def _build_support_sentence(
-    behavior_meaning: str,
+def _build_subject_sentence(event_context: Dict[str, Any], top_symbols: List[str]) -> str:
+    subject = _event_value(event_context, "primary_subject", "")
+    subjects = event_context.get("subjects", []) or top_symbols or []
+    subjects = _normalize_list(subjects, max_items=max(1, Config.NARRATION_MAX_SYMBOLS))
+
+    if subject:
+        return _sentence(f"The main subject is {subject}, so it adds detail to what the action is touching")
+
+    if len(subjects) == 1:
+        return _sentence(f"The main subject in the dream is {subjects[0]}")
+
+    if len(subjects) > 1:
+        return _sentence(f"The main subjects in the dream are {human_join(subjects)}")
+
+    return ""
+
+
+def _build_place_sentence(event_context: Dict[str, Any], location_meaning: str) -> str:
+    place_name = _event_value(event_context, "primary_place", "name")
+    place_meaning = _event_value(event_context, "primary_place", "meaning")
+    place_physical = _event_value(event_context, "primary_place", "physical_area")
+
+    meaning = place_meaning or location_meaning
+
+    if not place_name and not meaning:
+        return ""
+
+    if place_name and meaning:
+        text = f"The place matters: {place_name} points to {_phrase_to_natural_clause(meaning)}"
+        if place_physical:
+            text += f", especially around {place_physical}"
+        return _sentence(text)
+
+    if place_name:
+        return _sentence(f"The place matters: {place_name} gives context to where this issue is showing up")
+
+    return _sentence(f"The setting connects this dream to {_phrase_to_natural_clause(meaning)}")
+
+
+def _build_state_relationship_sentence(
+    event_context: Dict[str, Any],
     state_meaning: str,
-    location_meaning: str,
     relationship_meaning: str,
 ) -> str:
-    support_clauses: List[str] = []
+    state_name = _event_value(event_context, "primary_state", "name")
+    state_event_meaning = _event_value(event_context, "primary_state", "meaning")
+    relationship_name = _event_value(event_context, "primary_relationship", "name")
+    relationship_event_meaning = _event_value(event_context, "primary_relationship", "meaning")
 
-    if behavior_meaning and not _should_skip_placeholder(
-        behavior_meaning,
-        ["active pattern in the dream"],
-    ):
-        support_clauses.append(f"the actions show {_phrase_to_natural_clause(behavior_meaning)}")
+    clauses: List[str] = []
 
-    if state_meaning and not _should_skip_placeholder(
-        state_meaning,
-        ["condition attached to the message"],
-    ):
-        support_clauses.append(f"the condition of what appeared points to {_phrase_to_natural_clause(state_meaning)}")
+    final_state_meaning = state_event_meaning or state_meaning
+    if final_state_meaning and not _should_skip_placeholder(final_state_meaning, ["condition attached to the message"]):
+        if state_name:
+            clauses.append(f"{state_name} points to {_phrase_to_natural_clause(final_state_meaning)}")
+        else:
+            clauses.append(f"the condition points to {_phrase_to_natural_clause(final_state_meaning)}")
 
-    if location_meaning and not _should_skip_placeholder(
-        location_meaning,
-        ["area of life being touched"],
-    ):
-        support_clauses.append(f"the setting connects this to {_phrase_to_natural_clause(location_meaning)}")
+    final_relationship_meaning = relationship_event_meaning or relationship_meaning
+    if final_relationship_meaning and not _should_skip_placeholder(final_relationship_meaning, ["people dimension of the dream"]):
+        if relationship_name:
+            clauses.append(f"{relationship_name} points to {_phrase_to_natural_clause(final_relationship_meaning)}")
+        else:
+            clauses.append(f"the people involved point to {_phrase_to_natural_clause(final_relationship_meaning)}")
 
-    if relationship_meaning and not _should_skip_placeholder(
-        relationship_meaning,
-        ["people dimension of the dream"],
-    ):
-        support_clauses.append(f"the people involved point to {_phrase_to_natural_clause(relationship_meaning)}")
-
-    support_clauses = compress_phrase_list(support_clauses)
-    if not support_clauses:
+    clauses = compress_phrase_list(clauses)
+    if not clauses:
         return ""
 
-    return _sentence(human_join(support_clauses))
+    return _sentence(human_join(clauses))
 
 
-def _build_seal_sentence(seal_type: str, seal_message: str) -> str:
-    seal_type = _clean(seal_type)
-    seal_message = _clean(seal_message)
+def _build_ending_sentence(event_context: Dict[str, Any], seal_type: str, seal_message: str) -> str:
+    ending_name = _event_value(event_context, "primary_ending", "name")
+    ending_meaning = _event_value(event_context, "primary_ending", "meaning")
+    ending_action = _event_value(event_context, "primary_ending", "action")
+
+    if ending_name and ending_meaning:
+        text = f"The ending is important: {ending_name} points to {ending_meaning}"
+        if ending_action:
+            text += f", so the response is to {ending_action}"
+        return _sentence(text)
+
+    if ending_name:
+        return _sentence(f"The ending is important because it shows the outcome: {ending_name}")
+
+    seal_type = _safe_text(seal_type)
+    seal_message = _safe_text(seal_message)
 
     if not seal_type and not seal_message:
         return ""
@@ -287,6 +367,29 @@ def _build_seal_sentence(seal_type: str, seal_message: str) -> str:
     return _sentence(seal_message)
 
 
+def _build_guidance_sentence(
+    event_context: Dict[str, Any],
+    interpretation: Dict[str, str],
+) -> str:
+    action_guidance = _event_value(event_context, "primary_action", "action")
+    place_guidance = _event_value(event_context, "primary_place", "action")
+    ending_guidance = _event_value(event_context, "primary_ending", "action")
+    doctrine_guidance = _safe_text((interpretation or {}).get("what_to_do"))
+
+    guidance_items = _normalize_list(
+        [ending_guidance, action_guidance, place_guidance, doctrine_guidance],
+        max_items=2,
+    )
+
+    if not guidance_items:
+        return ""
+
+    if len(guidance_items) == 1:
+        return _sentence(f"The response is to {guidance_items[0]}")
+
+    return _sentence(f"The response is to {human_join(guidance_items)}")
+
+
 def _build_risk_sentence(risk: str) -> str:
     risk = _clean(risk)
     if not risk:
@@ -308,14 +411,16 @@ def build_doctrine_bound_summary(
     """
     Deterministic narration layer.
 
-    This function does NOT invent doctrine.
-    It only rewrites doctrine facts already produced by the backend.
-
-    LOCKED RULE:
-    narration may clarify wording, but it may not soften,
-    replace, or reinterpret doctrine facts.
+    Locked rule:
+    This function may clarify wording, but it must not invent new doctrine.
+    It uses backend doctrine facts and event_context only.
     """
     max_symbols = max(1, Config.NARRATION_MAX_SYMBOLS)
+
+    doctrine_facts = doctrine_facts or {}
+    interpretation = interpretation or {}
+
+    event_context = _get_event_context(doctrine_facts)
 
     lead_message = _safe_text(doctrine_facts.get("lead_message"))
     top_symbols = _normalize_list(doctrine_facts.get("top_symbols", []), max_items=max_symbols)
@@ -329,27 +434,55 @@ def build_doctrine_bound_summary(
 
     parts: List[str] = []
 
-    lead_sentence = _build_locked_lead_sentence(
+    lead_sentence = _build_event_lead_sentence(
         lead_message=lead_message,
+        event_context=event_context,
+        behavior_meaning=behavior_meaning,
+        relationship_meaning=relationship_meaning,
+    )
+
+    action_sentence = _build_action_sentence(
+        event_context=event_context,
+        behavior_meaning=behavior_meaning,
+    )
+
+    subject_sentence = _build_subject_sentence(
+        event_context=event_context,
         top_symbols=top_symbols,
-        behavior_meaning=behavior_meaning,
-        relationship_meaning=relationship_meaning,
     )
-    symbols_sentence = _build_symbols_sentence(top_symbols)
-    support_sentence = _build_support_sentence(
-        behavior_meaning=behavior_meaning,
-        state_meaning=state_meaning,
+
+    place_sentence = _build_place_sentence(
+        event_context=event_context,
         location_meaning=location_meaning,
+    )
+
+    state_relationship_sentence = _build_state_relationship_sentence(
+        event_context=event_context,
+        state_meaning=state_meaning,
         relationship_meaning=relationship_meaning,
     )
-    seal_sentence = _build_seal_sentence(seal_type, seal_message)
+
+    ending_sentence = _build_ending_sentence(
+        event_context=event_context,
+        seal_type=seal_type,
+        seal_message=seal_message,
+    )
+
+    guidance_sentence = _build_guidance_sentence(
+        event_context=event_context,
+        interpretation=interpretation,
+    )
+
     risk_sentence = _build_risk_sentence(risk)
 
     for item in [
         lead_sentence,
-        symbols_sentence,
-        support_sentence,
-        seal_sentence,
+        action_sentence,
+        subject_sentence,
+        place_sentence,
+        state_relationship_sentence,
+        ending_sentence,
+        guidance_sentence,
         risk_sentence,
     ]:
         if item:
@@ -371,13 +504,14 @@ def build_ai_prompt_payload(
     interpretation: Dict[str, str],
 ) -> Dict[str, Any]:
     """
-    Structured payload for a future AI narration layer.
-    This keeps the prompt grounded in doctrine facts only.
+    Structured payload for future AI narration.
+    It must stay grounded in doctrine facts only.
     """
     max_input_chars = max(500, Config.AI_NARRATION_MAX_INPUT_CHARS)
 
     instruction = (
         "Rewrite the supplied doctrine findings into natural, clear, spiritually serious language. "
+        "Follow this order: action first, subject second, place third, ending last. "
         "Do not add new meanings, symbols, warnings, or instructions. "
         "Do not contradict the doctrine facts. "
         "Do not speak with absolute certainty beyond what is supplied."
@@ -433,7 +567,7 @@ def build_narration_result(
     - honors Config.NARRATION_ENABLED
     - produces deterministic doctrine-bound narration
     - optionally includes prompt payload for future AI narration
-    - is ready for future AI enhancement without changing response shape
+    - keeps response shape stable
     """
     if not Config.NARRATION_ENABLED:
         return _build_disabled_result()
@@ -444,7 +578,7 @@ def build_narration_result(
     )
 
     result: Dict[str, Any] = {
-        "mode": Config.NARRATION_MODE or "deterministic",
+        "mode": Config.NARRATION_MODE or "deterministic_event",
         "enabled": True,
         "used_ai": False,
         "readable_summary": deterministic_summary,
@@ -453,17 +587,5 @@ def build_narration_result(
 
     if Config.NARRATION_INCLUDE_PROMPT_PAYLOAD:
         result["prompt_payload"] = build_ai_prompt_payload(doctrine_facts, interpretation)
-
-    # Future AI upgrade point:
-    #
-    # if ai_enabled and Config.AI_NARRATION_ENABLED:
-    #     try:
-    #         ai_text = call_your_model_here(...)
-    #         if ai_text:
-    #             result["mode"] = "ai_enhanced"
-    #             result["used_ai"] = True
-    #             result["readable_summary"] = ai_text.strip()
-    #     except Exception:
-    #         pass
 
     return result

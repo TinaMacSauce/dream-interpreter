@@ -9,23 +9,26 @@
 
 <style>
 :root{
-  --bg:#030405;
+  --bg:#020303;
   --panel:#08090c;
   --card:#0d0e12;
   --card2:#111217;
   --gold:#d4af37;
-  --gold2:#f6d878;
-  --gold3:#a97521;
+  --gold2:#f8dd7d;
+  --gold3:#aa731f;
   --cream:#fff4dc;
   --text:#f8efd9;
-  --muted:rgba(248,239,217,.58);
-  --soft:rgba(248,239,217,.36);
-  --line:rgba(212,175,55,.22);
-  --line2:rgba(212,175,55,.42);
+  --muted:rgba(248,239,217,.57);
+  --soft:rgba(248,239,217,.38);
+  --line:rgba(212,175,55,.24);
+  --line2:rgba(212,175,55,.48);
   --danger:#ffb4a8;
 }
 
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+*{
+  box-sizing:border-box;
+  -webkit-tap-highlight-color:transparent;
+}
 
 html{
   scroll-behavior:smooth;
@@ -35,10 +38,11 @@ html{
 body{
   margin:0;
   font-family:Inter,system-ui,sans-serif;
+  font-size:14px;
   background:
-    radial-gradient(circle at 50% -5%, rgba(212,175,55,.18), transparent 30%),
-    radial-gradient(circle at 10% 10%, rgba(212,175,55,.08), transparent 24%),
-    radial-gradient(circle at 95% 20%, rgba(246,216,120,.05), transparent 25%),
+    radial-gradient(circle at 50% -5%, rgba(212,175,55,.18), transparent 31%),
+    radial-gradient(circle at 12% 9%, rgba(212,175,55,.08), transparent 25%),
+    radial-gradient(circle at 92% 14%, rgba(246,216,120,.055), transparent 26%),
     linear-gradient(180deg,#020303,#050506 52%,#020202);
   color:var(--text);
   overflow-x:hidden;
@@ -49,10 +53,10 @@ body::before{
   position:fixed;
   inset:0;
   background:
-    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px);
+    linear-gradient(rgba(255,255,255,.014) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.01) 1px, transparent 1px);
   background-size:42px 42px;
-  opacity:.12;
+  opacity:.11;
   pointer-events:none;
   z-index:-3;
 }
@@ -61,7 +65,7 @@ body::after{
   content:"";
   position:fixed;
   inset:0;
-  background:radial-gradient(circle at center, transparent 35%, rgba(0,0,0,.58) 100%);
+  background:radial-gradient(circle at center, transparent 34%, rgba(0,0,0,.62) 100%);
   pointer-events:none;
   z-index:-2;
 }
@@ -77,77 +81,91 @@ button{
 }
 
 .app{
+  width:100%;
   max-width:430px;
   min-height:100svh;
   margin:0 auto;
-  padding:max(16px, env(safe-area-inset-top)) 14px 104px;
+  padding:max(13px, env(safe-area-inset-top)) 18px 96px;
   position:relative;
 }
+
+/* MENU */
 
 .menu-panel{
   position:fixed;
   top:0;
-  left:-290px;
+  left:-292px;
   width:270px;
   height:100vh;
   background:
-    radial-gradient(circle at top, rgba(212,175,55,.12), transparent 36%),
+    radial-gradient(circle at top, rgba(212,175,55,.13), transparent 35%),
     #07080a;
   border-right:1px solid var(--line2);
   z-index:100;
-  padding:26px 22px;
+  padding:24px 20px;
   transition:.25s ease;
   box-shadow:24px 0 70px rgba(0,0,0,.76);
 }
 
-.menu-panel.open{left:0;}
+.menu-panel.open{
+  left:0;
+}
 
 .menu-panel button{
   background:none;
   border:0;
   color:var(--gold2);
-  font-size:34px;
-  margin-bottom:22px;
+  font-size:32px;
+  margin-bottom:18px;
 }
 
 .menu-panel a{
   display:block;
   color:var(--cream);
   text-decoration:none;
-  padding:15px 0;
+  padding:14px 0;
   border-bottom:1px solid rgba(212,175,55,.16);
   font-weight:800;
 }
+
+/* TOP BAR */
 
 .topbar{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:12px;
-  margin-bottom:18px;
+  gap:10px;
+  margin-bottom:14px;
 }
 
 .icon-btn{
-  width:42px;
-  height:42px;
+  width:46px;
+  height:46px;
+  min-width:46px;
   border-radius:50%;
-  border:1px solid rgba(212,175,55,.32);
-  background:rgba(8,8,10,.72);
+  border:1.4px solid rgba(248,221,125,.55);
+  background:
+    radial-gradient(circle at center, rgba(212,175,55,.13), rgba(5,6,8,.9) 58%);
   color:var(--gold2);
   display:flex;
   align-items:center;
   justify-content:center;
   backdrop-filter:blur(18px);
   box-shadow:
-    0 14px 32px rgba(0,0,0,.44),
-    inset 0 1px 0 rgba(255,255,255,.06);
+    0 0 16px rgba(212,175,55,.16),
+    0 12px 28px rgba(0,0,0,.48),
+    inset 0 1px 0 rgba(255,255,255,.08);
   text-decoration:none;
 }
 
 .icon-btn svg{
-  width:19px;
-  height:19px;
-  stroke-width:2.25;
+  width:22px;
+  height:22px;
+  stroke-width:2.7;
+  stroke:currentColor;
+  fill:none;
+  stroke-linecap:round;
+  stroke-linejoin:round;
 }
 
 .brand{
@@ -158,21 +176,23 @@ button{
 .brand h1{
   margin:0;
   font-family:Cinzel,Georgia,serif;
-  font-size:1.18rem;
+  font-size:1.04rem;
   line-height:1.08;
   color:var(--gold2);
   text-transform:uppercase;
-  letter-spacing:.16em;
-  text-shadow:0 0 18px rgba(212,175,55,.18);
+  letter-spacing:.15em;
+  text-shadow:0 0 18px rgba(212,175,55,.22);
 }
 
 .brand p{
   margin:4px auto 0;
-  font-size:.64rem;
+  font-size:.58rem;
   color:rgba(255,244,220,.66);
   text-transform:uppercase;
-  letter-spacing:.28em;
+  letter-spacing:.24em;
 }
+
+/* SCREENS */
 
 .screen{
   display:none;
@@ -184,38 +204,42 @@ button{
 }
 
 @keyframes screenIn{
-  from{opacity:.4;transform:translateY(8px);}
+  from{opacity:.45;transform:translateY(7px);}
   to{opacity:1;transform:translateY(0);}
 }
 
 .page-title{
   text-align:center;
-  margin:8px 0 18px;
+  margin:6px 0 16px;
 }
 
 .page-title h2{
   margin:0;
   font-family:Cinzel,Georgia,serif;
   color:var(--gold2);
-  font-size:1.12rem;
+  font-size:1.03rem;
+  line-height:1.15;
+  letter-spacing:.02em;
 }
 
 .page-title p{
   margin:8px auto 0;
-  max-width:260px;
+  max-width:275px;
   color:var(--muted);
-  font-size:.82rem;
-  line-height:1.45;
+  font-size:.8rem;
+  line-height:1.42;
 }
 
+/* CARDS */
+
 .card{
-  border-radius:24px;
+  border-radius:22px;
   border:1px solid var(--line);
   background:
-    radial-gradient(circle at top center, rgba(212,175,55,.075), transparent 38%),
-    linear-gradient(180deg, rgba(17,18,23,.96), rgba(7,8,11,.98));
+    radial-gradient(circle at top center, rgba(212,175,55,.068), transparent 38%),
+    linear-gradient(180deg, rgba(17,18,23,.96), rgba(6,7,10,.985));
   box-shadow:
-    0 22px 60px rgba(0,0,0,.54),
+    0 20px 54px rgba(0,0,0,.5),
     inset 0 1px 0 rgba(255,255,255,.045);
   position:relative;
   overflow:hidden;
@@ -228,86 +252,109 @@ button{
   right:18px;
   top:0;
   height:1px;
-  background:linear-gradient(90deg, transparent, rgba(246,216,120,.58), transparent);
+  background:linear-gradient(90deg, transparent, rgba(246,216,120,.55), transparent);
   opacity:.62;
 }
 
 .decode-card{
-  padding:18px;
-  margin-bottom:16px;
+  padding:16px;
+  margin-bottom:14px;
 }
 
 .decode-card h2{
-  margin:0 0 8px;
+  margin:0 0 7px;
   color:var(--gold2);
-  font-size:1rem;
+  font-size:.96rem;
+  line-height:1.2;
 }
 
 .decode-card .sub{
-  margin:0 0 16px;
-  color:rgba(255,244,220,.76);
-  font-size:.82rem;
-  line-height:1.45;
+  margin:0 0 14px;
+  color:rgba(255,244,220,.7);
+  font-size:.79rem;
+  line-height:1.42;
 }
+
+/* FORMS */
 
 textarea,
 input{
   width:100%;
-  border-radius:18px;
-  border:1px solid rgba(212,175,55,.24);
+  border-radius:17px;
+  border:1px solid rgba(212,175,55,.25);
   background:
-    linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.014));
+    radial-gradient(circle at top left, rgba(255,255,255,.04), transparent 38%),
+    linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012));
   color:#fff;
   outline:none;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
 }
 
 textarea{
-  min-height:172px;
+  min-height:145px;
   resize:vertical;
-  padding:16px;
-  line-height:1.65;
-  font-size:.94rem;
+  padding:14px;
+  line-height:1.55;
+  font-size:.88rem;
 }
 
 input{
-  padding:15px;
-  font-size:.94rem;
+  padding:13px 14px;
+  font-size:.88rem;
 }
 
 textarea::placeholder,
 input::placeholder{
-  color:rgba(248,239,217,.34);
+  color:rgba(248,239,217,.36);
 }
 
 .count-row{
   display:flex;
   justify-content:flex-end;
-  margin-top:7px;
-  color:rgba(248,239,217,.36);
-  font-size:.72rem;
+  margin-top:6px;
+  color:rgba(248,239,217,.4);
+  font-size:.68rem;
 }
+
+.status-line{
+  margin:0 0 12px;
+  padding:10px 12px;
+  border-radius:15px;
+  border:1px solid rgba(212,175,55,.17);
+  background:rgba(0,0,0,.24);
+  color:var(--muted);
+  font-size:.76rem;
+  line-height:1.45;
+  display:none;
+}
+
+.status-line strong{
+  color:var(--gold2);
+}
+
+/* DECODE ACTIONS */
 
 .chips{
   display:grid;
   grid-template-columns:1fr 1fr;
-  gap:10px;
-  margin-top:15px;
+  gap:9px;
+  margin-top:14px;
 }
 
 .chip{
-  min-height:46px;
+  min-height:42px;
   border-radius:15px;
-  border:1px solid rgba(212,175,55,.2);
-  background:rgba(255,255,255,.035);
+  border:1px solid rgba(212,175,55,.22);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.038), rgba(255,255,255,.014));
   color:var(--text);
-  padding:10px;
-  font-size:.78rem;
+  padding:8px 10px;
+  font-size:.72rem;
   font-weight:850;
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:8px;
+  gap:7px;
 }
 
 .chip span:first-child{
@@ -316,47 +363,35 @@ input::placeholder{
 
 .primary{
   width:100%;
-  margin-top:16px;
-  padding:17px;
+  margin-top:15px;
+  padding:15px 16px;
   border:0;
   border-radius:18px;
   background:
-    linear-gradient(180deg,#ffe99b 0%, #d9a83a 54%, #a96d1b 100%);
-  color:#160d02;
-  font-size:.94rem;
+    linear-gradient(180deg,#ffe99d 0%, #dfb443 54%, #a96f1c 100%);
+  color:#150d02;
+  font-size:.9rem;
   font-weight:900;
   cursor:pointer;
   box-shadow:
-    0 16px 34px rgba(0,0,0,.62),
+    0 14px 32px rgba(0,0,0,.58),
     0 0 24px rgba(212,175,55,.14),
     inset 0 1px 0 rgba(255,255,255,.42);
 }
 
 .helper{
-  margin:14px 0 0;
+  margin:13px 0 0;
   text-align:center;
   color:var(--muted);
-  font-size:.76rem;
-  line-height:1.55;
+  font-size:.73rem;
+  line-height:1.48;
 }
 
-.status-line{
-  margin:0 0 14px;
-  padding:12px 14px;
-  border-radius:16px;
-  border:1px solid rgba(212,175,55,.16);
-  background:rgba(0,0,0,.24);
-  color:var(--muted);
-  font-size:.8rem;
-  line-height:1.5;
-  display:none;
-}
-
-.status-line strong{color:var(--gold2);}
+/* RESULTS */
 
 .result{
   display:none;
-  margin-top:16px;
+  margin-top:14px;
 }
 
 .result.show{
@@ -368,42 +403,42 @@ input::placeholder{
   justify-content:space-between;
   gap:12px;
   align-items:flex-start;
-  margin:0 0 12px;
+  margin:0 0 11px;
 }
 
 .result-head h3{
   margin:0;
   color:var(--gold2);
-  font-size:.95rem;
+  font-size:.9rem;
 }
 
 .result-head p{
-  margin:5px 0 0;
+  margin:4px 0 0;
   color:var(--muted);
-  font-size:.72rem;
+  font-size:.67rem;
 }
 
 .small-btn{
   border-radius:999px;
-  border:1px solid rgba(212,175,55,.28);
+  border:1px solid rgba(212,175,55,.3);
   background:rgba(255,255,255,.035);
   color:var(--gold2);
-  padding:8px 12px;
+  padding:7px 11px;
   font-weight:850;
-  font-size:.72rem;
+  font-size:.68rem;
 }
 
 .result-card{
   opacity:0;
-  transform:translateY(12px);
-  border-radius:20px;
-  margin-top:10px;
-  padding:15px;
+  transform:translateY(11px);
+  border-radius:18px;
+  margin-top:9px;
+  padding:13px;
   background:
-    radial-gradient(circle at left, rgba(212,175,55,.08), transparent 28%),
-    linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.017));
+    radial-gradient(circle at left, rgba(212,175,55,.085), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.016));
   border:1px solid rgba(212,175,55,.17);
-  box-shadow:0 14px 36px rgba(0,0,0,.36);
+  box-shadow:0 14px 32px rgba(0,0,0,.34);
   animation:cardReveal .42s forwards;
 }
 
@@ -414,27 +449,27 @@ input::placeholder{
 
 .result-card-row{
   display:grid;
-  grid-template-columns:42px 1fr;
-  gap:12px;
+  grid-template-columns:38px 1fr;
+  gap:11px;
   align-items:flex-start;
 }
 
 .result-icon{
-  width:42px;
-  height:42px;
-  border-radius:16px;
+  width:38px;
+  height:38px;
+  border-radius:15px;
   display:flex;
   align-items:center;
   justify-content:center;
   color:var(--gold2);
-  border:1px solid rgba(212,175,55,.28);
+  border:1px solid rgba(212,175,55,.3);
   background:radial-gradient(circle, rgba(212,175,55,.17), rgba(255,255,255,.02));
-  box-shadow:0 0 22px rgba(212,175,55,.12);
+  box-shadow:0 0 20px rgba(212,175,55,.12);
 }
 
 .result-icon svg{
-  width:23px;
-  height:23px;
+  width:21px;
+  height:21px;
   stroke:currentColor;
   fill:none;
   stroke-width:2.2;
@@ -443,59 +478,53 @@ input::placeholder{
 }
 
 .label{
-  margin-bottom:6px;
+  margin-bottom:5px;
   color:var(--gold2);
-  font-size:.74rem;
+  font-size:.7rem;
   font-weight:900;
 }
 
 .result-text{
-  line-height:1.58;
+  line-height:1.52;
   color:rgba(248,239,217,.88);
-  font-size:.8rem;
+  font-size:.76rem;
   white-space:pre-wrap;
 }
 
 .symbol-matches{
   display:grid;
   grid-template-columns:1fr 1fr;
-  gap:9px;
-  margin-top:10px;
+  gap:8px;
+  margin-top:9px;
 }
 
 .match-pill{
-  border-radius:15px;
+  border-radius:14px;
   border:1px solid rgba(212,175,55,.22);
   background:rgba(255,255,255,.035);
-  padding:11px;
+  padding:10px;
 }
 
 .match-pill strong{
   display:block;
   color:var(--gold2);
-  font-size:.78rem;
+  font-size:.74rem;
   margin-bottom:4px;
 }
 
 .match-pill span{
   display:block;
   color:var(--muted);
-  font-size:.7rem;
-  line-height:1.35;
+  font-size:.66rem;
+  line-height:1.32;
 }
 
-.empty{
-  padding:28px 18px;
-  text-align:center;
-  color:var(--muted);
-  line-height:1.55;
-  font-size:.86rem;
-}
+/* JOURNAL */
 
 .journal-tools{
   display:flex;
-  gap:9px;
-  margin-bottom:14px;
+  gap:8px;
+  margin-bottom:13px;
 }
 
 .search{
@@ -503,175 +532,196 @@ input::placeholder{
 }
 
 .filter-btn{
-  width:48px;
-  border-radius:17px;
-  border:1px solid rgba(212,175,55,.22);
+  width:46px;
+  min-width:46px;
+  border-radius:16px;
+  border:1px solid rgba(212,175,55,.24);
   background:rgba(255,255,255,.035);
   color:var(--gold2);
+  font-weight:900;
 }
 
 .pill-tabs{
   display:flex;
-  gap:9px;
-  margin-bottom:14px;
+  gap:8px;
+  margin-bottom:13px;
 }
 
 .pill-tab{
   flex:1;
-  padding:10px;
+  padding:9px 8px;
   border-radius:999px;
-  border:1px solid rgba(212,175,55,.16);
-  background:rgba(255,255,255,.03);
+  border:1px solid rgba(212,175,55,.17);
+  background:rgba(255,255,255,.025);
   color:var(--muted);
-  font-size:.72rem;
+  font-size:.69rem;
   font-weight:850;
 }
 
 .pill-tab.active{
-  color:#140d03;
+  color:#130c03;
   background:linear-gradient(180deg,#f8dc7b,#c4912e);
 }
 
 .journal-list{
   display:grid;
-  gap:10px;
+  gap:9px;
+}
+
+.empty{
+  padding:24px 16px;
+  text-align:center;
+  color:var(--muted);
+  line-height:1.48;
+  font-size:.8rem;
 }
 
 .journal-item{
   width:100%;
-  border:1px solid rgba(212,175,55,.16);
+  border:1px solid rgba(212,175,55,.17);
   background:
     radial-gradient(circle at left, rgba(212,175,55,.08), transparent 28%),
-    rgba(255,255,255,.035);
+    rgba(255,255,255,.033);
   color:var(--text);
-  border-radius:18px;
-  padding:13px;
+  border-radius:17px;
+  padding:11px;
   display:grid;
-  grid-template-columns:42px 1fr 30px;
-  gap:10px;
+  grid-template-columns:38px 1fr 28px;
+  gap:9px;
   align-items:center;
   text-align:left;
 }
 
 .journal-icon{
-  width:42px;
-  height:42px;
-  border-radius:15px;
+  width:38px;
+  height:38px;
+  border-radius:14px;
   color:var(--gold2);
-  border:1px solid rgba(212,175,55,.24);
+  border:1px solid rgba(212,175,55,.25);
   display:flex;
   align-items:center;
   justify-content:center;
   background:rgba(212,175,55,.06);
+  font-size:1rem;
 }
 
 .journal-title{
-  font-size:.82rem;
+  font-size:.76rem;
   font-weight:800;
-  line-height:1.35;
+  line-height:1.32;
   margin-bottom:4px;
 }
 
 .journal-date{
   color:var(--muted);
-  font-size:.68rem;
+  font-size:.63rem;
 }
 
 .star{
   color:var(--gold2);
-  font-size:1.2rem;
+  font-size:1.08rem;
 }
+
+/* SYMBOLS */
 
 .symbol-grid{
   display:grid;
   grid-template-columns:repeat(3,1fr);
-  gap:10px;
+  gap:8px;
+  padding-bottom:10px;
 }
 
 .symbol-card{
-  min-height:112px;
-  border-radius:18px;
+  min-height:96px;
+  border-radius:17px;
   border:1px solid rgba(212,175,55,.18);
   background:
-    radial-gradient(circle at top, rgba(212,175,55,.09), transparent 42%),
-    rgba(255,255,255,.035);
+    radial-gradient(circle at top, rgba(212,175,55,.085), transparent 42%),
+    rgba(255,255,255,.033);
   color:var(--text);
-  padding:12px 8px;
+  padding:10px 7px;
   text-align:center;
+  overflow:hidden;
 }
 
 .symbol-card .big{
   color:var(--gold2);
-  font-size:1.7rem;
+  font-size:1.35rem;
   display:block;
-  margin-bottom:8px;
+  margin-bottom:7px;
+  line-height:1;
 }
 
 .symbol-card strong{
   display:block;
   color:var(--cream);
-  font-size:.78rem;
-  margin-bottom:5px;
+  font-size:.72rem;
+  margin-bottom:4px;
 }
 
 .symbol-card span{
   display:block;
   color:var(--muted);
-  font-size:.66rem;
-  line-height:1.32;
+  font-size:.6rem;
+  line-height:1.28;
 }
+
+/* ACCOUNT */
 
 .account-profile{
   display:flex;
   align-items:center;
-  gap:14px;
-  padding:18px;
-  margin-bottom:14px;
+  gap:13px;
+  padding:15px;
+  margin-bottom:13px;
 }
 
 .avatar{
-  width:62px;
-  height:62px;
+  width:54px;
+  height:54px;
+  min-width:54px;
   border-radius:50%;
-  border:1px solid rgba(246,216,120,.44);
+  border:1px solid rgba(246,216,120,.46);
   background:
-    radial-gradient(circle at 45% 40%, rgba(255,244,220,.6), rgba(212,175,55,.22) 18%, rgba(5,6,8,.95) 54%),
+    radial-gradient(circle at 45% 40%, rgba(255,244,220,.58), rgba(212,175,55,.22) 18%, rgba(5,6,8,.95) 54%),
     #07080a;
-  box-shadow:0 0 30px rgba(212,175,55,.22);
+  box-shadow:0 0 28px rgba(212,175,55,.2);
 }
 
 .profile-copy h3{
   margin:0;
   color:var(--cream);
-  font-size:.95rem;
+  font-size:.9rem;
 }
 
 .profile-copy p{
   margin:5px 0 0;
   color:var(--muted);
-  font-size:.75rem;
+  font-size:.71rem;
+  line-height:1.35;
 }
 
 .form-card{
-  padding:18px;
-  margin-bottom:14px;
+  padding:15px;
+  margin-bottom:13px;
 }
 
 .form-card label{
   display:block;
   color:var(--gold2);
   font-weight:850;
-  font-size:.78rem;
-  margin-bottom:9px;
+  font-size:.74rem;
+  margin-bottom:8px;
 }
 
 .settings-list{
   overflow:hidden;
+  margin-bottom:13px;
 }
 
 .setting-row{
   width:100%;
-  min-height:50px;
+  min-height:46px;
   border:0;
   border-bottom:1px solid rgba(212,175,55,.12);
   background:transparent;
@@ -679,8 +729,9 @@ input::placeholder{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  padding:0 16px;
-  font-weight:760;
+  padding:0 14px;
+  font-weight:780;
+  font-size:.8rem;
   text-align:left;
 }
 
@@ -692,38 +743,105 @@ input::placeholder{
   color:var(--gold2);
 }
 
+.premium-card{
+  padding:16px;
+  margin-bottom:10px;
+}
+
+.premium-title{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.premium-icon{
+  width:40px;
+  height:40px;
+  border-radius:15px;
+  color:var(--gold2);
+  border:1px solid rgba(212,175,55,.28);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:radial-gradient(circle, rgba(212,175,55,.17), rgba(255,255,255,.02));
+}
+
+.premium-title h3{
+  margin:0;
+  color:var(--gold2);
+  font-size:.92rem;
+}
+
+.premium-title p{
+  margin:3px 0 0;
+  color:var(--muted);
+  font-size:.7rem;
+}
+
+.premium-list{
+  display:grid;
+  gap:7px;
+  margin:12px 0 0;
+  padding:0;
+  list-style:none;
+  color:rgba(248,239,217,.82);
+  font-size:.72rem;
+}
+
+.premium-list li{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+
+.premium-list li::before{
+  content:"✓";
+  width:17px;
+  height:17px;
+  border-radius:50%;
+  border:1px solid rgba(212,175,55,.36);
+  color:var(--gold2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:.62rem;
+}
+
 .upgrade-link{
   display:flex;
   align-items:center;
   justify-content:center;
-  margin-top:14px;
+  margin-top:13px;
   width:100%;
-  padding:15px;
-  border-radius:18px;
+  padding:13px 15px;
+  border-radius:17px;
   background:
     linear-gradient(180deg,#ffe99b 0%, #d9a83a 54%, #a96d1b 100%);
   border:0;
   color:#160d02;
   text-decoration:none;
   font-weight:900;
-  font-size:.9rem;
+  font-size:.84rem;
 }
+
+/* BOTTOM NAV */
 
 .bottom-nav{
   position:fixed;
   left:50%;
   bottom:max(10px, env(safe-area-inset-bottom));
   transform:translateX(-50%);
-  width:calc(100% - 28px);
-  max-width:400px;
-  height:72px;
+  width:calc(100% - 36px);
+  max-width:394px;
+  height:68px;
   display:grid;
   grid-template-columns:repeat(4,1fr);
   gap:4px;
   padding:8px;
-  border-radius:24px;
-  background:rgba(7,8,10,.96);
-  border:1px solid rgba(212,175,55,.24);
+  border-radius:22px;
+  background:rgba(7,8,10,.965);
+  border:1px solid rgba(212,175,55,.27);
   backdrop-filter:blur(26px);
   box-shadow:0 18px 45px rgba(0,0,0,.72);
   z-index:40;
@@ -732,10 +850,10 @@ input::placeholder{
 .bottom-nav button{
   border:0;
   background:transparent;
-  color:rgba(248,239,217,.48);
-  font-size:.68rem;
+  color:rgba(248,239,217,.5);
+  font-size:.62rem;
   font-weight:850;
-  border-radius:16px;
+  border-radius:15px;
   display:flex;
   flex-direction:column;
   align-items:center;
@@ -744,40 +862,79 @@ input::placeholder{
 }
 
 .bottom-nav svg{
-  width:20px;
-  height:20px;
+  width:19px;
+  height:19px;
   stroke:currentColor;
   fill:none;
-  stroke-width:2.15;
+  stroke-width:2.2;
   stroke-linecap:round;
   stroke-linejoin:round;
 }
 
 .bottom-nav .active{
   color:var(--gold2);
-  background:rgba(212,175,55,.09);
+  background:rgba(212,175,55,.1);
 }
 
+/* MISC */
+
 .loader-ring{
-  width:18px;
-  height:18px;
+  width:17px;
+  height:17px;
   border:2px solid rgba(0,0,0,.18);
   border-top:2px solid #111;
   border-radius:50%;
   display:inline-block;
-  margin-right:10px;
+  margin-right:9px;
   vertical-align:-3px;
   animation:spin 1s linear infinite;
 }
 
-@keyframes spin{to{transform:rotate(360deg);}}
-@keyframes cardReveal{to{opacity:1;transform:translateY(0);}}
+@keyframes spin{
+  to{transform:rotate(360deg);}
+}
+
+@keyframes cardReveal{
+  to{opacity:1;transform:translateY(0);}
+}
 
 @media(max-width:380px){
-  .brand h1{font-size:1.02rem;}
-  .brand p{font-size:.58rem;}
-  .symbol-grid{gap:8px;}
-  .symbol-card{min-height:106px;}
+  .app{
+    padding-left:14px;
+    padding-right:14px;
+  }
+
+  .brand h1{
+    font-size:.94rem;
+    letter-spacing:.12em;
+  }
+
+  .brand p{
+    font-size:.54rem;
+  }
+
+  .icon-btn{
+    width:42px;
+    height:42px;
+    min-width:42px;
+  }
+
+  .chips{
+    gap:8px;
+  }
+
+  .chip{
+    font-size:.68rem;
+    padding:8px;
+  }
+
+  .symbol-grid{
+    gap:7px;
+  }
+
+  .symbol-card{
+    min-height:92px;
+  }
 }
 </style>
 </head>
@@ -785,7 +942,7 @@ input::placeholder{
 <body>
 
 <div class="menu-panel" id="menuPanel">
-  <button id="closeMenu" type="button">×</button>
+  <button id="closeMenu" type="button" aria-label="Close menu">×</button>
   <a href="#" data-tab-link="decode">Decode Dream</a>
   <a href="#" data-tab-link="journal">Journal</a>
   <a href="#" data-tab-link="symbols">Symbols</a>
@@ -854,7 +1011,7 @@ input::placeholder{
 
     <div class="journal-tools">
       <input class="search" id="journalSearch" type="search" placeholder="Search your dreams..." />
-      <button class="filter-btn" type="button" id="clearJournalSearch">⌕</button>
+      <button class="filter-btn" type="button" id="clearJournalSearch" aria-label="Clear search">⌕</button>
     </div>
 
     <div class="pill-tabs">
@@ -911,7 +1068,24 @@ input::placeholder{
       <button class="setting-row" type="button" id="supportBtn">Help & Support <span>›</span></button>
     </section>
 
-    <a class="upgrade-link" id="upgradeAccount" href="#">Upgrade to Premium</a>
+    <section class="card premium-card">
+      <div class="premium-title">
+        <div class="premium-icon">♕</div>
+        <div>
+          <h3>Go Premium</h3>
+          <p>Unlock the full power of your dream journey.</p>
+        </div>
+      </div>
+
+      <ul class="premium-list">
+        <li>Unlimited dream interpretations</li>
+        <li>Advanced symbol insights</li>
+        <li>Dream pattern tracking</li>
+        <li>Mood and emotion analysis</li>
+      </ul>
+
+      <a class="upgrade-link" id="upgradeAccount" href="#">Upgrade to Premium</a>
+    </section>
   </section>
 
 </main>
@@ -921,14 +1095,17 @@ input::placeholder{
     <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
     <span>Decode</span>
   </button>
+
   <button type="button" data-tab="journal">
     <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 7h6"/><path d="M9 11h6"/><path d="M9 15h4"/></svg>
     <span>Journal</span>
   </button>
+
   <button type="button" data-tab="symbols">
     <svg viewBox="0 0 24 24"><path d="M12 3c4 4 6 7 6 11a6 6 0 0 1-12 0c0-4 2-7 6-11z"/><path d="M9 15c2 2 4 2 6 0"/></svg>
     <span>Symbols</span>
   </button>
+
   <button type="button" data-tab="account">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-5 14.5-5 16 0"/></svg>
     <span>Account</span>
@@ -995,16 +1172,24 @@ function validEmail(email){
 
 function saveEmail(email){
   const clean = normalizeEmail(email);
+
   try{
-    if(clean) localStorage.setItem(EMAIL_KEY, clean);
-    else localStorage.removeItem(EMAIL_KEY);
+    if(clean){
+      localStorage.setItem(EMAIL_KEY, clean);
+    }else{
+      localStorage.removeItem(EMAIL_KEY);
+    }
   }catch(e){}
+
   refreshAccount();
 }
 
 function loadEmail(){
-  try{ return normalizeEmail(localStorage.getItem(EMAIL_KEY) || ""); }
-  catch(e){ return ""; }
+  try{
+    return normalizeEmail(localStorage.getItem(EMAIL_KEY) || "");
+  }catch(e){
+    return "";
+  }
 }
 
 function getReturnUrl(){
@@ -1073,9 +1258,11 @@ function updateCharCount(){
 
 function appendDreamText(text){
   const clean = String(text || "").trim();
+
   dreamEl.value = dreamEl.value.trim()
     ? dreamEl.value.trim() + "\n" + clean
     : clean;
+
   updateCharCount();
 }
 
@@ -1129,7 +1316,22 @@ function iconSvg(type){
     body:`<svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>`,
     action:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>`
   };
+
   return icons[type] || icons.main;
+}
+
+function resultCard(label, text, icon){
+  return `
+    <div class="result-card">
+      <div class="result-card-row">
+        <div class="result-icon">${iconSvg(icon)}</div>
+        <div>
+          <div class="label">${esc(label)}</div>
+          <div class="result-text">${esc(text)}</div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderResultCards(mapped, dreamText){
@@ -1160,6 +1362,7 @@ function renderResultCards(mapped, dreamText){
             mapped.matchedSymbols.length
               ? mapped.matchedSymbols.map(name => {
                   const found = SYMBOLS.find(s => s.name.toLowerCase() === String(name).toLowerCase());
+
                   return `
                     <div class="match-pill">
                       <strong>${esc(name)}</strong>
@@ -1175,22 +1378,7 @@ function renderResultCards(mapped, dreamText){
   `;
 
   document.getElementById("editDreamBtn").onclick = () => dreamEl.focus();
-
   result.scrollIntoView({behavior:"smooth", block:"start"});
-}
-
-function resultCard(label, text, icon){
-  return `
-    <div class="result-card">
-      <div class="result-card-row">
-        <div class="result-icon">${iconSvg(icon)}</div>
-        <div>
-          <div class="label">${esc(label)}</div>
-          <div class="result-text">${esc(text)}</div>
-        </div>
-      </div>
-    </div>
-  `;
 }
 
 function renderError(title, message, upgrade){
@@ -1206,6 +1394,7 @@ function renderError(title, message, upgrade){
       }
     </div>
   `;
+
   result.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
@@ -1213,12 +1402,18 @@ async function readResponse(res){
   const ct = (res.headers.get("content-type") || "").toLowerCase();
 
   if(ct.includes("application/json")){
-    try{ return await res.json(); }
-    catch(e){ return {}; }
+    try{
+      return await res.json();
+    }catch(e){
+      return {};
+    }
   }
 
-  try{ return {error: await res.text()}; }
-  catch(e){ return {}; }
+  try{
+    return {error: await res.text()};
+  }catch(e){
+    return {};
+  }
 }
 
 function renderJournal(){
@@ -1271,9 +1466,11 @@ function renderJournal(){
 
 function openJournalEntry(id){
   const entry = readJournal().find(e => e.id === id);
+
   if(!entry) return;
 
   switchTab("decode");
+
   dreamEl.value = entry.dreamText || "";
   updateCharCount();
 
@@ -1308,7 +1505,9 @@ function refreshAccount(){
   const email = loadEmail();
   const count = readJournal().length;
 
-  if(emailEl.value !== email) emailEl.value = email;
+  if(emailEl.value !== email){
+    emailEl.value = email;
+  }
 
   memberLine.textContent = email
     ? "Email saved • " + count + " dream(s)"
@@ -1321,20 +1520,22 @@ function exportJournal(){
   const entries = readJournal();
   const blob = new Blob([JSON.stringify(entries, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
+
   const a = document.createElement("a");
   a.href = url;
   a.download = "jamaican-dream-journal.json";
   document.body.appendChild(a);
   a.click();
   a.remove();
+
   URL.revokeObjectURL(url);
 }
 
 menuBtn.onclick = () => menuPanel.classList.add("open");
 closeMenu.onclick = () => menuPanel.classList.remove("open");
 
-document.querySelectorAll("[data-tab]").forEach(btn => {
-  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+document.querySelectorAll("[data-tab]").forEach(button => {
+  button.addEventListener("click", () => switchTab(button.dataset.tab));
 });
 
 document.querySelectorAll("[data-tab-link]").forEach(link => {
@@ -1379,8 +1580,10 @@ document.getElementById("newDreamBtn").onclick = () => {
   dreamEl.value = "";
   result.classList.remove("show");
   result.innerHTML = "";
+
   updateCharCount();
   switchTab("decode");
+
   setTimeout(() => dreamEl.focus(), 180);
 };
 
@@ -1397,8 +1600,10 @@ document.getElementById("clearJournalSearch").onclick = () => {
 document.querySelectorAll("[data-journal-filter]").forEach(button => {
   button.onclick = () => {
     journalFilter = button.dataset.journalFilter;
+
     document.querySelectorAll("[data-journal-filter]").forEach(b => b.classList.remove("active"));
     button.classList.add("active");
+
     renderJournal();
   };
 });
@@ -1438,7 +1643,9 @@ btn.onclick = async () => {
     return;
   }
 
-  if(email) saveEmail(email);
+  if(email){
+    saveEmail(email);
+  }
 
   btn.disabled = true;
   btn.innerHTML = `<span class="loader-ring"></span> Decoding Dream...`;
@@ -1485,6 +1692,7 @@ btn.onclick = async () => {
     }
 
     const mapped = mapInterpretation(data, dream);
+
     renderResultCards(mapped, dream);
 
     addJournalEntry({

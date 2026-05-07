@@ -8,24 +8,30 @@
   content="width=device-width, initial-scale=1, viewport-fit=cover"
 />
 
-<title>Unlock Dream Interpreter</title>
+<title>Unlock Jamaican Dream Interpreter</title>
 
 <link
-  href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+  href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap"
   rel="stylesheet"
 />
 
 <style>
 :root{
-  --bg:#050506;
+  --bg:#020303;
+  --panel:#08090c;
+  --card:#0d0e12;
+  --card2:#111217;
   --gold:#d4af37;
-  --gold-soft:#f3e28a;
+  --gold2:#f8dd7d;
+  --gold3:#aa731f;
+  --cream:#fff4dc;
   --text:#f8efd9;
-  --muted:rgba(248,239,217,.62);
-  --line:rgba(212,175,55,.14);
-  --danger:#ffb3b3;
+  --muted:rgba(248,239,217,.58);
+  --soft:rgba(248,239,217,.38);
+  --line:rgba(212,175,55,.24);
+  --line2:rgba(212,175,55,.48);
+  --danger:#ffb4a8;
   --success:#9ae6b4;
-  --shadow:rgba(0,0,0,.72);
 }
 
 *{
@@ -41,55 +47,94 @@ html{
 body{
   margin:0;
   font-family:Inter,system-ui,sans-serif;
+  font-size:14px;
   background:
-    radial-gradient(circle at top, rgba(212,175,55,.14), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(115,92,255,.10), transparent 35%),
-    linear-gradient(180deg,#07070a,#030304);
+    radial-gradient(circle at 50% -5%, rgba(212,175,55,.18), transparent 31%),
+    radial-gradient(circle at 12% 9%, rgba(212,175,55,.08), transparent 25%),
+    radial-gradient(circle at 92% 14%, rgba(246,216,120,.055), transparent 26%),
+    linear-gradient(180deg,#020303,#050506 52%,#020202);
   color:var(--text);
   overflow-x:hidden;
   overscroll-behavior:none;
 }
 
-.app{
-  position:relative;
-  max-width:430px;
-  min-height:100svh;
-  margin:0 auto;
-  padding:
-    max(18px, env(safe-area-inset-top))
-    16px
-    120px;
-}
-
-.app::before{
+body::before{
   content:"";
   position:fixed;
   inset:0;
-  backdrop-filter:blur(80px);
+  background:
+    linear-gradient(rgba(255,255,255,.014) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.01) 1px, transparent 1px);
+  background-size:42px 42px;
+  opacity:.11;
+  pointer-events:none;
+  z-index:-3;
+}
+
+body::after{
+  content:"";
+  position:fixed;
+  inset:0;
+  background:
+    radial-gradient(circle at center, transparent 34%, rgba(0,0,0,.62) 100%);
   pointer-events:none;
   z-index:-2;
 }
 
-.app::after{
-  content:"";
-  position:fixed;
-  width:320px;
-  height:320px;
-  border-radius:50%;
-  background:radial-gradient(circle, rgba(212,175,55,.12), transparent 70%);
-  bottom:-140px;
-  right:-120px;
-  filter:blur(60px);
-  pointer-events:none;
-  z-index:-1;
+button,
+input{
+  font:inherit;
+}
+
+button{
+  cursor:pointer;
+}
+
+.app{
+  width:100%;
+  max-width:430px;
+  min-height:100svh;
+  margin:0 auto;
+  padding:max(13px, env(safe-area-inset-top)) 18px 96px;
+  position:relative;
 }
 
 .topbar{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:12px;
-  margin-bottom:34px;
+  gap:10px;
+  margin-bottom:16px;
+}
+
+.icon-btn{
+  width:46px;
+  height:46px;
+  min-width:46px;
+  border-radius:50%;
+  border:1.4px solid rgba(248,221,125,.55);
+  background:
+    radial-gradient(circle at center, rgba(212,175,55,.13), rgba(5,6,8,.9) 58%);
+  color:var(--gold2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  backdrop-filter:blur(18px);
+  box-shadow:
+    0 0 16px rgba(212,175,55,.16),
+    0 12px 28px rgba(0,0,0,.48),
+    inset 0 1px 0 rgba(255,255,255,.08);
+  text-decoration:none;
+}
+
+.icon-btn svg{
+  width:22px;
+  height:22px;
+  stroke-width:2.7;
+  stroke:currentColor;
+  fill:none;
+  stroke-linecap:round;
+  stroke-linejoin:round;
 }
 
 .brand{
@@ -99,164 +144,199 @@ body{
 
 .brand h1{
   margin:0;
-  font-size:1.24rem;
-  font-weight:800;
-  letter-spacing:-.05em;
-  color:#fff8e7;
+  font-family:Cinzel,Georgia,serif;
+  font-size:1.04rem;
+  line-height:1.08;
+  color:var(--gold2);
+  text-transform:uppercase;
+  letter-spacing:.15em;
+  text-shadow:0 0 18px rgba(212,175,55,.22);
 }
 
 .brand p{
-  margin:5px 0 0;
-  font-size:.78rem;
-  color:var(--muted);
-}
-
-.icon-btn{
-  width:48px;
-  height:48px;
-  border-radius:50%;
-  border:1px solid var(--line);
-  background:rgba(255,255,255,.03);
-  color:var(--gold-soft);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  backdrop-filter:blur(18px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
-  text-decoration:none;
-}
-
-.icon-btn svg{
-  width:20px;
-  height:20px;
-  stroke-width:2;
+  margin:4px auto 0;
+  font-size:.58rem;
+  color:rgba(255,244,220,.66);
+  text-transform:uppercase;
+  letter-spacing:.24em;
 }
 
 .hero{
-  position:relative;
-  margin-bottom:26px;
-}
-
-.hero::before{
-  content:"";
-  position:absolute;
-  width:260px;
-  height:260px;
-  border-radius:50%;
-  background:rgba(212,175,55,.09);
-  filter:blur(80px);
-  top:-120px;
-  left:-60px;
-  z-index:-1;
+  text-align:center;
+  margin:8px 0 16px;
 }
 
 .kicker{
-  color:var(--gold);
-  font-size:.74rem;
+  color:var(--gold2);
+  font-size:.66rem;
   font-weight:900;
-  letter-spacing:.14em;
+  letter-spacing:.18em;
   text-transform:uppercase;
 }
 
 .hero h2{
-  margin:12px 0 14px;
-  font-size:2.8rem;
-  font-weight:900;
-  line-height:.94;
-  letter-spacing:-.1em;
-  color:#fff6df;
+  margin:10px 0 8px;
+  font-family:Cinzel,Georgia,serif;
+  font-size:1.72rem;
+  font-weight:800;
+  line-height:1.06;
+  color:var(--cream);
+  letter-spacing:-.02em;
+  text-shadow:0 0 22px rgba(212,175,55,.18);
 }
 
 .hero p{
-  margin:0;
+  margin:0 auto;
+  max-width:310px;
   color:var(--muted);
-  line-height:1.7;
-  font-size:1.02rem;
+  line-height:1.48;
+  font-size:.82rem;
 }
 
-.panel{
-  border-radius:34px;
-  padding:20px;
-  border:1px solid rgba(212,175,55,.16);
-  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+.card{
+  border-radius:22px;
+  border:1px solid var(--line);
+  background:
+    radial-gradient(circle at top center, rgba(212,175,55,.068), transparent 38%),
+    linear-gradient(180deg, rgba(17,18,23,.96), rgba(6,7,10,.985));
   box-shadow:
-    0 28px 70px rgba(0,0,0,.58),
-    inset 0 1px 0 rgba(255,255,255,.04);
-  backdrop-filter:blur(26px);
+    0 20px 54px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,.045);
+  position:relative;
+  overflow:hidden;
+}
+
+.card::before{
+  content:"";
+  position:absolute;
+  left:18px;
+  right:18px;
+  top:0;
+  height:1px;
+  background:linear-gradient(90deg, transparent, rgba(246,216,120,.55), transparent);
+  opacity:.62;
+}
+
+.main-panel{
+  padding:16px;
 }
 
 .section-title{
-  margin:0 0 12px;
-  color:var(--gold-soft);
-  font-size:.76rem;
+  margin:0 0 11px;
+  color:var(--gold2);
+  font-size:.68rem;
   font-weight:900;
-  letter-spacing:.13em;
+  letter-spacing:.15em;
   text-transform:uppercase;
 }
 
 .access-list{
   display:grid;
-  gap:10px;
-  margin:0 0 18px;
+  gap:9px;
+  margin:0 0 15px;
 }
 
 .access-item{
-  padding:14px;
-  border-radius:20px;
-  border:1px solid rgba(212,175,55,.11);
-  background:rgba(0,0,0,.22);
-  color:rgba(248,239,217,.86);
-  font-size:.92rem;
-  line-height:1.55;
+  display:grid;
+  grid-template-columns:36px 1fr;
+  gap:10px;
+  align-items:flex-start;
+  padding:11px;
+  border-radius:17px;
+  border:1px solid rgba(212,175,55,.15);
+  background:
+    radial-gradient(circle at left, rgba(212,175,55,.08), transparent 32%),
+    rgba(255,255,255,.026);
+  color:rgba(248,239,217,.84);
+  font-size:.76rem;
+  line-height:1.42;
+}
+
+.access-icon{
+  width:36px;
+  height:36px;
+  border-radius:14px;
+  border:1px solid rgba(212,175,55,.28);
+  color:var(--gold2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:radial-gradient(circle, rgba(212,175,55,.16), rgba(255,255,255,.02));
+  box-shadow:0 0 18px rgba(212,175,55,.1);
+}
+
+.access-icon svg{
+  width:19px;
+  height:19px;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:2.2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
 }
 
 .access-item strong{
-  color:#fff6df;
+  display:block;
+  color:var(--cream);
+  font-size:.78rem;
+  margin-bottom:3px;
+}
+
+.email-card{
+  padding:15px;
+  margin-top:13px;
 }
 
 label{
   display:block;
-  margin:0 0 10px;
-  font-size:.84rem;
+  margin:0 0 8px;
+  font-size:.74rem;
   font-weight:900;
-  color:var(--gold-soft);
+  color:var(--gold2);
 }
 
 input{
   width:100%;
-  border-radius:24px;
-  border:1px solid rgba(212,175,55,.14);
-  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
-  backdrop-filter:blur(10px);
+  border-radius:17px;
+  border:1px solid rgba(212,175,55,.25);
+  background:
+    radial-gradient(circle at top left, rgba(255,255,255,.04), transparent 38%),
+    linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012));
   color:#fff;
   outline:none;
-  font-family:inherit;
-  padding:16px;
-  font-size:1rem;
+  padding:13px 14px;
+  font-size:.88rem;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
 }
 
 input::placeholder{
-  color:rgba(248,239,217,.28);
+  color:rgba(248,239,217,.36);
 }
 
 .email-note{
-  margin:10px 0 16px;
+  margin:10px 0 0;
   color:var(--muted);
-  font-size:.82rem;
-  line-height:1.55;
+  font-size:.71rem;
+  line-height:1.45;
+  text-align:center;
 }
 
 .price-card{
-  margin-top:14px;
-  padding:18px;
-  border-radius:28px;
-  border:1px solid rgba(212,175,55,.14);
-  background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
-  box-shadow:0 18px 42px rgba(0,0,0,.42);
+  margin-top:13px;
+  padding:15px;
+  border-radius:22px;
+  border:1px solid rgba(212,175,55,.2);
+  background:
+    radial-gradient(circle at top left, rgba(212,175,55,.07), transparent 40%),
+    linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.014));
+  box-shadow:0 16px 38px rgba(0,0,0,.38);
 }
 
 .price-card.featured{
-  background:linear-gradient(180deg, rgba(212,175,55,.12), rgba(255,255,255,.02));
+  border-color:rgba(248,221,125,.38);
+  background:
+    radial-gradient(circle at top left, rgba(212,175,55,.16), transparent 42%),
+    linear-gradient(180deg, rgba(212,175,55,.085), rgba(255,255,255,.018));
 }
 
 .price-top{
@@ -264,99 +344,149 @@ input::placeholder{
   justify-content:space-between;
   gap:12px;
   align-items:flex-start;
-  margin-bottom:12px;
+  margin-bottom:11px;
+}
+
+.price-title-wrap{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+}
+
+.price-icon{
+  width:40px;
+  height:40px;
+  min-width:40px;
+  border-radius:15px;
+  color:var(--gold2);
+  border:1px solid rgba(212,175,55,.3);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:radial-gradient(circle, rgba(212,175,55,.17), rgba(255,255,255,.02));
+}
+
+.price-icon svg{
+  width:21px;
+  height:21px;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:2.2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
 }
 
 .price-title{
   margin:0;
-  font-size:1.05rem;
+  font-size:.92rem;
   font-weight:900;
-  color:#fff6df;
+  color:var(--cream);
 }
 
 .price-sub{
-  margin:5px 0 0;
+  margin:4px 0 0;
   color:var(--muted);
-  font-size:.84rem;
-  line-height:1.45;
+  font-size:.71rem;
+  line-height:1.4;
 }
 
 .badge{
-  padding:6px 10px;
+  padding:5px 8px;
   border-radius:999px;
-  border:1px solid rgba(212,175,55,.18);
-  color:var(--gold-soft);
+  border:1px solid rgba(212,175,55,.25);
+  color:var(--gold2);
   background:rgba(255,255,255,.035);
-  font-size:.68rem;
+  font-size:.58rem;
   font-weight:900;
   letter-spacing:.1em;
   text-transform:uppercase;
+  white-space:nowrap;
+}
+
+.price-list{
+  display:grid;
+  gap:7px;
+  margin:11px 0 0;
+  padding:0;
+  list-style:none;
+  color:rgba(248,239,217,.82);
+  font-size:.71rem;
+}
+
+.price-list li{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.price-list li::before{
+  content:"✓";
+  width:17px;
+  height:17px;
+  min-width:17px;
+  border-radius:50%;
+  border:1px solid rgba(212,175,55,.34);
+  color:var(--gold2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:.62rem;
 }
 
 .btn,
 .btn-outline{
   width:100%;
-  margin-top:14px;
+  margin-top:13px;
   cursor:pointer;
   font-weight:900;
-  font-family:inherit;
   display:flex;
   align-items:center;
   justify-content:center;
+  text-decoration:none;
+  transition:transform .16s ease, opacity .16s ease;
+}
+
+.btn:active,
+.btn-outline:active{
+  transform:scale(.985);
 }
 
 .btn{
-  padding:18px;
+  padding:14px 15px;
   border:0;
-  border-radius:999px;
-  background:linear-gradient(135deg, #c69220 0%, #f3e28a 45%, #b88218 100%);
-  color:#111;
-  font-size:1rem;
-  letter-spacing:.02em;
+  border-radius:17px;
+  background:
+    linear-gradient(180deg,#ffe99b 0%, #d9a83a 54%, #a96d1b 100%);
+  color:#160d02;
+  font-size:.86rem;
+  box-shadow:
+    0 14px 32px rgba(0,0,0,.58),
+    0 0 24px rgba(212,175,55,.14),
+    inset 0 1px 0 rgba(255,255,255,.42);
 }
 
 .btn-outline{
-  padding:16px;
-  border-radius:999px;
+  padding:13px 15px;
+  border-radius:17px;
   border:1px solid rgba(212,175,55,.28);
-  background:rgba(255,255,255,.04);
-  color:var(--gold-soft);
-  font-size:.95rem;
+  background:rgba(255,255,255,.035);
+  color:var(--gold2);
+  font-size:.82rem;
 }
 
 .btn:disabled,
 .btn-outline:disabled{
-  opacity:.66;
+  opacity:.62;
   cursor:not-allowed;
-}
-
-.loader-ring{
-  width:18px;
-  height:18px;
-  border:2px solid rgba(0,0,0,.18);
-  border-top:2px solid #111;
-  border-radius:50%;
-  display:inline-block;
-  margin-right:10px;
-  animation:spin 1s linear infinite;
-}
-
-.loader-ring-light{
-  width:18px;
-  height:18px;
-  border:2px solid rgba(243,226,138,.18);
-  border-top:2px solid var(--gold-soft);
-  border-radius:50%;
-  display:inline-block;
-  margin-right:10px;
-  animation:spin 1s linear infinite;
+  transform:none;
 }
 
 .message{
-  margin-top:14px;
-  font-size:.86rem;
-  line-height:1.55;
-  min-height:1.2em;
+  margin-top:13px;
+  font-size:.76rem;
+  line-height:1.45;
+  min-height:1.1em;
+  text-align:center;
 }
 
 .err{
@@ -369,59 +499,131 @@ input::placeholder{
 
 .mini-link{
   display:block;
-  margin-top:18px;
+  margin-top:14px;
   text-align:center;
-  color:rgba(243,226,138,.9);
+  color:rgba(248,221,125,.92);
   text-decoration:none;
-  font-size:.86rem;
-  font-weight:800;
+  font-size:.76rem;
+  font-weight:850;
 }
 
 .micro{
-  margin:18px 0 0;
+  margin:15px 0 0;
   text-align:center;
   color:var(--muted);
-  font-size:.78rem;
-  line-height:1.6;
+  font-size:.68rem;
+  line-height:1.52;
 }
 
 .bottom-nav{
   position:fixed;
   left:50%;
-  bottom:10px;
+  bottom:max(10px, env(safe-area-inset-bottom));
   transform:translateX(-50%);
-  width:calc(100% - 28px);
-  max-width:400px;
+  width:calc(100% - 36px);
+  max-width:394px;
   height:68px;
   display:grid;
   grid-template-columns:repeat(3,1fr);
   gap:4px;
   padding:8px;
-  border-radius:24px;
-  background:rgba(10,10,12,.84);
-  border:1px solid rgba(212,175,55,.16);
+  border-radius:22px;
+  background:rgba(7,8,10,.965);
+  border:1px solid rgba(212,175,55,.27);
   backdrop-filter:blur(26px);
   box-shadow:0 18px 45px rgba(0,0,0,.72);
+  z-index:40;
 }
 
 .bottom-nav a{
+  border:0;
+  background:transparent;
+  color:rgba(248,239,217,.5);
+  font-size:.62rem;
+  font-weight:850;
+  border-radius:15px;
   display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
-  border-radius:14px;
-  color:rgba(248,239,217,.48);
+  gap:4px;
   text-decoration:none;
-  font-size:.74rem;
-  font-weight:800;
+}
+
+.bottom-nav svg{
+  width:19px;
+  height:19px;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:2.2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
 }
 
 .bottom-nav a.active{
-  color:var(--gold-soft);
-  background:rgba(255,255,255,.03);
+  color:var(--gold2);
+  background:rgba(212,175,55,.1);
+}
+
+.loader-ring{
+  width:17px;
+  height:17px;
+  border:2px solid rgba(0,0,0,.18);
+  border-top:2px solid #111;
+  border-radius:50%;
+  display:inline-block;
+  margin-right:9px;
+  animation:spin 1s linear infinite;
+}
+
+.loader-ring-light{
+  width:17px;
+  height:17px;
+  border:2px solid rgba(248,221,125,.18);
+  border-top:2px solid var(--gold2);
+  border-radius:50%;
+  display:inline-block;
+  margin-right:9px;
+  animation:spin 1s linear infinite;
 }
 
 @keyframes spin{
-  to{ transform:rotate(360deg); }
+  to{transform:rotate(360deg);}
+}
+
+@media(max-width:380px){
+  .app{
+    padding-left:14px;
+    padding-right:14px;
+  }
+
+  .brand h1{
+    font-size:.94rem;
+    letter-spacing:.12em;
+  }
+
+  .brand p{
+    font-size:.54rem;
+  }
+
+  .icon-btn{
+    width:42px;
+    height:42px;
+    min-width:42px;
+  }
+
+  .hero h2{
+    font-size:1.55rem;
+  }
+
+  .price-top{
+    gap:8px;
+  }
+
+  .badge{
+    font-size:.54rem;
+    padding:5px 7px;
+  }
 }
 </style>
 </head>
@@ -437,88 +639,130 @@ input::placeholder{
       id="topBackLink"
       aria-label="Back to interpreter"
     >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+      <svg viewBox="0 0 24 24">
         <path d="M15 18l-6-6 6-6"/>
       </svg>
     </a>
 
     <div class="brand">
-      <h1>Unlock Access</h1>
-      <p>Dream Interpreter</p>
+      <h1>Jamaican<br>Dream Interpreter</h1>
+      <p>Unlock Access</p>
     </div>
 
     <span class="icon-btn" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7z"/>
+      <svg viewBox="0 0 24 24">
+        <path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2z"/>
+        <path d="M19 15l.8 2.7L22 18.5l-2.2.8L19 22l-.8-2.7-2.2-.8 2.2-.8L19 15z"/>
       </svg>
     </span>
   </header>
 
   <section class="hero">
     <div class="kicker">Continue Decoding</div>
-
-    <h2>Choose your access.</h2>
-
+    <h2>Choose Your Access</h2>
     <p>
-      Unlock continued dream interpretations
-      through subscriptions or dream packs.
+      Unlock more Jamaican dream interpretations, symbol insights, and saved access recovery.
     </p>
   </section>
 
-  <section class="panel">
+  <section class="card main-panel">
 
     <div class="section-title">Access Includes</div>
 
     <div class="access-list">
       <div class="access-item">
-        <strong>Doctrine-based interpretations</strong>
-        with spiritual meaning, effects, and guidance.
+        <div class="access-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3c4 4 6 7 6 11a6 6 0 0 1-12 0c0-4 2-7 6-11z"/>
+            <path d="M9 15c2 2 4 2 6 0"/>
+          </svg>
+        </div>
+        <div>
+          <strong>Dream interpretations</strong>
+          Spiritual meaning, physical effects, and practical guidance.
+        </div>
       </div>
 
       <div class="access-item">
-        <strong>Structured dream logic</strong>
-        prioritizing action, subject, place, and ending.
+        <div class="access-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M4 5h16"/>
+            <path d="M4 12h16"/>
+            <path d="M4 19h10"/>
+          </svg>
+        </div>
+        <div>
+          <strong>Structured dream logic</strong>
+          Action, subject, place, ending, and symbol matching.
+        </div>
       </div>
 
       <div class="access-item">
-        <strong>Secure checkout</strong>
-        powered by Stripe.
+        <div class="access-icon">
+          <svg viewBox="0 0 24 24">
+            <path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7l8-4z"/>
+            <path d="M9 12l2 2 4-5"/>
+          </svg>
+        </div>
+        <div>
+          <strong>Secure checkout</strong>
+          Access is handled through Stripe and restored by email.
+        </div>
       </div>
     </div>
 
-    <label for="email">Email</label>
+    <section class="card email-card">
+      <label for="email">Email for access recovery</label>
 
-    <input
-      id="email"
-      type="email"
-      placeholder="you@example.com"
-      autocomplete="email"
-      inputmode="email"
-    />
+      <input
+        id="email"
+        type="email"
+        placeholder="you@example.com"
+        autocomplete="email"
+        inputmode="email"
+      />
 
-    <div class="email-note">
-      Use the same email you used during checkout.
-    </div>
+      <div class="email-note">
+        Use the same email you used during checkout.
+      </div>
 
-    <button
-      class="btn-outline"
-      id="unlock"
-      type="button"
-    >
-      Unlock Existing Access
-    </button>
+      <button
+        class="btn-outline"
+        id="unlock"
+        type="button"
+      >
+        Unlock Existing Access
+      </button>
+    </section>
 
     <div class="price-card featured">
       <div class="price-top">
-        <div>
-          <h3 class="price-title">Subscription</h3>
-          <p class="price-sub">
-            Best for ongoing access and frequent dream interpretation.
-          </p>
+        <div class="price-title-wrap">
+          <div class="price-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 19h16"/>
+              <path d="M6 17l2-10 4 5 4-5 2 10"/>
+              <path d="M8 7h.01"/>
+              <path d="M16 7h.01"/>
+            </svg>
+          </div>
+
+          <div>
+            <h3 class="price-title">Subscription</h3>
+            <p class="price-sub">
+              Best for ongoing access and frequent dream interpretation.
+            </p>
+          </div>
         </div>
 
         <div class="badge">Best</div>
       </div>
+
+      <ul class="price-list">
+        <li>Ongoing interpretation access</li>
+        <li>Better for repeat dream journaling</li>
+        <li>Restore access with your email</li>
+      </ul>
 
       <form
         action="/create-checkout-session"
@@ -537,15 +781,33 @@ input::placeholder{
 
     <div class="price-card">
       <div class="price-top">
-        <div>
-          <h3 class="price-title">Dream Pack</h3>
-          <p class="price-sub">
-            Lower one-time option for limited interpretations.
-          </p>
+        <div class="price-title-wrap">
+          <div class="price-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M20 7H4"/>
+              <path d="M18 7v13H6V7"/>
+              <path d="M9 7a3 3 0 0 1 6 0"/>
+              <path d="M9 13h6"/>
+              <path d="M9 17h4"/>
+            </svg>
+          </div>
+
+          <div>
+            <h3 class="price-title">Dream Pack</h3>
+            <p class="price-sub">
+              One-time option for limited dream interpretations.
+            </p>
+          </div>
         </div>
 
         <div class="badge">One-Time</div>
       </div>
+
+      <ul class="price-list">
+        <li>Pay once for a smaller pack</li>
+        <li>Good for occasional dreams</li>
+        <li>No subscription commitment</li>
+      </ul>
 
       <form
         action="/create-dream-pack-checkout-session"
@@ -570,8 +832,7 @@ input::placeholder{
     <div id="ok" class="message ok" role="status" aria-live="polite"></div>
 
     <p class="micro">
-      Cultural and educational only.
-      Not therapy, legal, medical, or financial advice.
+      Cultural and educational only. Not therapy, legal, medical, or financial advice.
     </p>
 
   </section>
@@ -579,9 +840,31 @@ input::placeholder{
 </main>
 
 <nav class="bottom-nav">
-  <a href="/" id="decodeNav">Decode</a>
-  <a href="#" class="active">Access</a>
-  <a href="https://jamaicantruestories.com">Main Site</a>
+  <a href="/" id="decodeNav">
+    <svg viewBox="0 0 24 24">
+      <path d="M3 11l9-8 9 8"/>
+      <path d="M5 10v10h14V10"/>
+      <path d="M10 20v-6h4v6"/>
+    </svg>
+    <span>Decode</span>
+  </a>
+
+  <a href="#" class="active">
+    <svg viewBox="0 0 24 24">
+      <path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7l8-4z"/>
+      <path d="M9 12l2 2 4-5"/>
+    </svg>
+    <span>Access</span>
+  </a>
+
+  <a href="https://jamaicantruestories.com">
+    <svg viewBox="0 0 24 24">
+      <path d="M4 5h16"/>
+      <path d="M4 12h16"/>
+      <path d="M4 19h16"/>
+    </svg>
+    <span>Main Site</span>
+  </a>
 </nav>
 
 <script>
@@ -599,6 +882,9 @@ input::placeholder{
     HOSTED_APP + "/";
 
   const EMAIL_KEY =
+    "jdi_email";
+
+  const LEGACY_EMAIL_KEY =
     "jts_email";
 
   const emailInput =
@@ -674,17 +960,17 @@ input::placeholder{
     if(!clean) return;
 
     try{
-      localStorage.setItem(
-        EMAIL_KEY,
-        clean
-      );
+      localStorage.setItem(EMAIL_KEY, clean);
+      localStorage.setItem(LEGACY_EMAIL_KEY, clean);
     }catch(e){}
   }
 
   function getEmailFromStorage(){
     try{
       return normalizeEmail(
-        localStorage.getItem(EMAIL_KEY) || ""
+        localStorage.getItem(EMAIL_KEY) ||
+        localStorage.getItem(LEGACY_EMAIL_KEY) ||
+        ""
       );
     }catch(e){
       return "";
@@ -861,6 +1147,7 @@ input::placeholder{
       syncEmail();
       saveEmail(emailInput.value);
       setMsg("err","");
+      setMsg("ok","");
     }
   );
 
@@ -918,7 +1205,7 @@ input::placeholder{
             data.message ||
             data.error ||
             data.details ||
-            "No active access found."
+            "No active access found for this email."
           );
 
           return;

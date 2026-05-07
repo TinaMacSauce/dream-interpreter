@@ -1,17 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1, viewport-fit=cover"
+/>
+
 <title>Dream Interpreter</title>
 
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link
+  href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+  rel="stylesheet"
+/>
 
 <style>
 
 :root{
+
   --bg:#050506;
-  --bg2:#0c0c11;
+  --bg2:#0d0d12;
+
   --card:#111116;
   --card2:#17171d;
 
@@ -21,9 +32,9 @@
   --text:#f8efd9;
   --muted:rgba(248,239,217,.62);
 
-  --line:rgba(212,175,55,.16);
+  --line:rgba(212,175,55,.14);
 
-  --shadow:rgba(0,0,0,.65);
+  --shadow:rgba(0,0,0,.72);
 }
 
 *{
@@ -33,24 +44,51 @@
 
 html{
   -webkit-text-size-adjust:100%;
+  scroll-behavior:smooth;
 }
 
 body{
+
   margin:0;
+
   font-family:Inter,system-ui,sans-serif;
+
   background:
-    radial-gradient(circle at top, rgba(212,175,55,.12), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(115,92,255,.08), transparent 30%),
-    linear-gradient(180deg,#07070a,#030304);
+    radial-gradient(
+      circle at top,
+      rgba(212,175,55,.14),
+      transparent 30%
+    ),
+
+    radial-gradient(
+      circle at bottom right,
+      rgba(115,92,255,.10),
+      transparent 35%
+    ),
+
+    linear-gradient(
+      180deg,
+      #07070a,
+      #030304
+    );
+
   color:var(--text);
+
   overflow-x:hidden;
+
+  overscroll-behavior:none;
 }
 
 .app{
+
   position:relative;
+
   max-width:430px;
+
   min-height:100svh;
+
   margin:0 auto;
+
   padding:
     max(18px, env(safe-area-inset-top))
     16px
@@ -58,110 +96,208 @@ body{
 }
 
 .app::before{
+
   content:"";
+
   position:fixed;
+
   inset:0;
+
   backdrop-filter:blur(80px);
+
   pointer-events:none;
+
+  z-index:-2;
+}
+
+.app::after{
+
+  content:"";
+
+  position:fixed;
+
+  width:320px;
+  height:320px;
+
+  border-radius:50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(212,175,55,.12),
+      transparent 70%
+    );
+
+  bottom:-140px;
+  right:-120px;
+
+  filter:blur(60px);
+
+  pointer-events:none;
+
   z-index:-1;
 }
 
 .topbar{
+
   display:flex;
+
   align-items:center;
+
   justify-content:space-between;
+
   gap:12px;
-  margin-bottom:24px;
+
+  margin-bottom:34px;
 }
 
 .brand{
+
   flex:1;
+
   text-align:center;
 }
 
 .brand h1{
+
   margin:0;
-  font-size:1.2rem;
+
+  font-size:1.24rem;
+
   font-weight:800;
+
   letter-spacing:-.05em;
+
   color:#fff8e7;
 }
 
 .brand p{
+
   margin:5px 0 0;
+
   font-size:.78rem;
+
   color:var(--muted);
 }
 
 .icon-btn{
-  width:46px;
-  height:46px;
+
+  width:48px;
+  height:48px;
+
   border-radius:50%;
+
   border:1px solid var(--line);
+
   background:rgba(255,255,255,.03);
+
   color:var(--gold-soft);
+
   display:flex;
+
   align-items:center;
+
   justify-content:center;
-  backdrop-filter:blur(14px);
+
+  backdrop-filter:blur(18px);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.04);
+
+  transition:
+    transform .12s ease,
+    opacity .2s ease,
+    background .2s ease;
+}
+
+.icon-btn:active{
+  transform:scale(.96);
 }
 
 .icon-btn svg{
+
   width:20px;
   height:20px;
+
   stroke-width:2;
 }
 
 .hero{
+
   position:relative;
-  margin-bottom:24px;
+
+  margin-bottom:34px;
 }
 
 .hero::before{
+
   content:"";
+
   position:absolute;
+
   width:260px;
   height:260px;
+
   border-radius:50%;
+
   background:rgba(212,175,55,.09);
+
   filter:blur(80px);
+
   top:-120px;
   left:-60px;
+
   z-index:-1;
 }
 
 .kicker{
+
   color:var(--gold);
+
   font-size:.74rem;
+
   font-weight:900;
+
   letter-spacing:.14em;
+
   text-transform:uppercase;
 }
 
 .hero h2{
-  margin:10px 0 10px;
-  font-size:2.7rem;
+
+  margin:12px 0 14px;
+
+  font-size:3rem;
+
   font-weight:900;
-  line-height:.95;
-  letter-spacing:-.09em;
+
+  line-height:.92;
+
+  letter-spacing:-.11em;
+
   color:#fff6df;
 }
 
 .hero p{
+
   margin:0;
+
   color:var(--muted);
-  line-height:1.6;
-  font-size:1rem;
+
+  line-height:1.7;
+
+  font-size:1.02rem;
 }
 
 .input-card{
+
   position:relative;
-  transform:translateY(-6px);
 
-  border-radius:32px;
-  padding:18px;
+  border-radius:34px;
 
-  border:1px solid rgba(212,175,55,.18);
+  padding:20px;
+
+  border:1px solid rgba(212,175,55,.16);
 
   background:
     linear-gradient(
@@ -171,67 +307,113 @@ body{
     );
 
   box-shadow:
-    0 24px 60px rgba(0,0,0,.55),
-    inset 0 1px 0 rgba(255,255,255,.03);
+    0 28px 70px rgba(0,0,0,.58),
+    inset 0 1px 0 rgba(255,255,255,.04);
 
-  backdrop-filter:blur(24px);
+  backdrop-filter:blur(26px);
 }
 
 label{
+
   display:block;
-  margin:0 0 8px;
-  font-size:.82rem;
+
+  margin:0 0 10px;
+
+  font-size:.84rem;
+
   font-weight:900;
+
   color:var(--gold-soft);
 }
 
 input,
 textarea{
+
   width:100%;
 
   border-radius:24px;
 
   border:1px solid rgba(212,175,55,.14);
 
-  background:rgba(255,255,255,.025);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.05),
+      rgba(255,255,255,.015)
+    );
 
-  backdrop-filter:blur(8px);
+  backdrop-filter:blur(10px);
 
   color:#fff;
 
   outline:none;
 
   font-family:inherit;
+
+  transition:
+    border-color .2s ease,
+    transform .15s ease,
+    background .2s ease;
+}
+
+input:focus,
+textarea:focus{
+
+  border-color:rgba(243,226,138,.45);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.06),
+      rgba(255,255,255,.02)
+    );
+
+  transform:translateY(-1px);
 }
 
 input{
+
   padding:16px;
+
   margin-bottom:18px;
+
   font-size:1rem;
 }
 
 textarea{
+
   min-height:260px;
+
   resize:vertical;
+
   padding:20px;
-  line-height:1.7;
+
+  line-height:1.72;
+
   font-size:1rem;
 }
 
 textarea::placeholder,
 input::placeholder{
+
   color:rgba(248,239,217,.28);
 }
 
 .chips{
+
   display:grid;
+
   grid-template-columns:1fr 1fr;
+
   gap:10px;
+
   margin-top:16px;
 }
 
 .chip{
+
   border-radius:18px;
+
   border:1px solid rgba(212,175,55,.12);
 
   background:rgba(255,255,255,.04);
@@ -240,20 +422,34 @@ input::placeholder{
 
   padding:14px 10px;
 
-  font-size:.8rem;
+  font-size:.82rem;
+
   font-weight:800;
 
   backdrop-filter:blur(10px);
 
   cursor:pointer;
+
+  transition:
+    transform .12s ease,
+    opacity .2s ease,
+    background .2s ease;
+}
+
+.chip:active{
+  transform:scale(.98);
 }
 
 .primary{
+
   width:100%;
+
   margin-top:18px;
+
   padding:18px;
 
   border:0;
+
   border-radius:999px;
 
   background:
@@ -267,10 +463,18 @@ input::placeholder{
   color:#111;
 
   font-size:1rem;
+
   font-weight:900;
+
   letter-spacing:.02em;
 
   cursor:pointer;
+
+  display:flex;
+
+  align-items:center;
+
+  justify-content:center;
 
   box-shadow:
     0 14px 28px rgba(0,0,0,.55),
@@ -290,23 +494,58 @@ input::placeholder{
 }
 
 .helper{
+
   margin:14px 0 0;
+
   text-align:center;
+
   color:var(--muted);
-  font-size:.8rem;
-  line-height:1.55;
+
+  font-size:.82rem;
+
+  line-height:1.6;
+}
+
+.loader-ring{
+
+  width:18px;
+  height:18px;
+
+  border:2px solid rgba(0,0,0,.18);
+
+  border-top:2px solid #111;
+
+  border-radius:50%;
+
+  display:inline-block;
+
+  margin-right:10px;
+
+  animation:spin 1s linear infinite;
+}
+
+@keyframes spin{
+  to{
+    transform:rotate(360deg);
+  }
 }
 
 .result{
+
   margin-top:24px;
 }
 
 .result-card{
-  border-radius:26px;
+
+  opacity:0;
+
+  transform:translateY(16px);
+
+  border-radius:28px;
 
   margin-top:14px;
 
-  padding:18px;
+  padding:20px;
 
   background:
     linear-gradient(
@@ -318,14 +557,35 @@ input::placeholder{
   border:1px solid rgba(212,175,55,.14);
 
   box-shadow:
-    0 18px 42px rgba(0,0,0,.4);
+    0 18px 42px rgba(0,0,0,.42);
 
-  backdrop-filter:blur(20px);
+  backdrop-filter:blur(22px);
 
-  animation:fadeUp .45s ease;
+  animation:cardReveal .55s forwards;
+}
+
+.result-card:nth-child(1){
+  animation-delay:.05s;
+}
+
+.result-card:nth-child(2){
+  animation-delay:.12s;
+}
+
+.result-card:nth-child(3){
+  animation-delay:.19s;
+}
+
+.result-card:nth-child(4){
+  animation-delay:.26s;
+}
+
+.result-card:nth-child(5){
+  animation-delay:.33s;
 }
 
 .result-card.featured{
+
   background:
     linear-gradient(
       180deg,
@@ -335,27 +595,34 @@ input::placeholder{
 }
 
 .label{
+
   margin-bottom:10px;
 
   color:var(--gold-soft);
 
   font-size:.72rem;
+
   font-weight:900;
 
   letter-spacing:.13em;
+
   text-transform:uppercase;
 }
 
 .result-text{
-  line-height:1.72;
+
+  line-height:1.75;
+
   color:rgba(248,239,217,.92);
-  font-size:.95rem;
+
+  font-size:.96rem;
 }
 
 .logic-line{
+
   margin-top:10px;
 
-  padding:12px;
+  padding:14px;
 
   border-radius:16px;
 
@@ -363,12 +630,13 @@ input::placeholder{
 
   border:1px solid rgba(212,175,55,.10);
 
-  line-height:1.6;
+  line-height:1.7;
 
-  font-size:.9rem;
+  font-size:.92rem;
 }
 
 .bottom-nav{
+
   position:fixed;
 
   left:50%;
@@ -377,50 +645,64 @@ input::placeholder{
   transform:translateX(-50%);
 
   width:calc(100% - 28px);
+
   max-width:400px;
 
-  height:64px;
+  height:68px;
 
   display:grid;
+
   grid-template-columns:repeat(4,1fr);
 
   gap:4px;
 
   padding:8px;
 
-  border-radius:22px;
+  border-radius:24px;
 
   background:rgba(10,10,12,.84);
 
   border:1px solid rgba(212,175,55,.16);
 
-  backdrop-filter:blur(24px);
+  backdrop-filter:blur(26px);
 
-  box-shadow:0 18px 45px rgba(0,0,0,.72);
+  box-shadow:
+    0 18px 45px rgba(0,0,0,.72);
 }
 
 .bottom-nav button{
+
   border:0;
+
   background:transparent;
 
   color:rgba(248,239,217,.48);
 
-  font-size:.72rem;
+  font-size:.74rem;
+
   font-weight:800;
 
   border-radius:14px;
+
+  transition:
+    transform .12s ease,
+    opacity .2s ease,
+    background .2s ease;
 }
 
 .bottom-nav button.active{
+
   color:var(--gold-soft);
+
   background:rgba(255,255,255,.03);
 }
 
-@keyframes fadeUp{
-  from{
-    opacity:0;
-    transform:translateY(12px);
-  }
+.bottom-nav button:active{
+  transform:scale(.96);
+}
+
+@keyframes cardReveal{
+
   to{
     opacity:1;
     transform:translateY(0);
@@ -463,19 +745,31 @@ input::placeholder{
   </header>
 
   <section class="hero">
-    <div class="kicker">Decode one dream</div>
 
-    <h2>What did you dream?</h2>
+    <div class="kicker">
+      Decode One Dream
+    </div>
+
+    <h2>
+      What did you dream?
+    </h2>
 
     <p>
-      Write the dream clearly. Include the ending,
-      emotions, people, places, and key symbols.
+      Write the dream clearly.
+      Include the ending,
+      emotions,
+      people,
+      places,
+      and key symbols.
     </p>
+
   </section>
 
   <section class="input-card">
 
-    <label for="email">Email</label>
+    <label for="email">
+      Email
+    </label>
 
     <input
       id="email"
@@ -483,7 +777,9 @@ input::placeholder{
       placeholder="you@example.com"
     />
 
-    <label for="dream">Dream entry</label>
+    <label for="dream">
+      Dream Entry
+    </label>
 
     <textarea
       id="dream"
@@ -491,16 +787,29 @@ input::placeholder{
     ></textarea>
 
     <div class="chips">
-      <button class="chip" type="button" id="templateBtn">
-        Use template
+
+      <button
+        class="chip"
+        type="button"
+        id="templateBtn"
+      >
+        Use Template
       </button>
 
-      <button class="chip" type="button" id="clearBtn">
-        Clear dream
+      <button
+        class="chip"
+        type="button"
+        id="clearBtn"
+      >
+        Clear Dream
       </button>
+
     </div>
 
-    <button id="interpret" class="primary">
+    <button
+      id="interpret"
+      class="primary"
+    >
       Decode Dream
     </button>
 
@@ -511,7 +820,10 @@ input::placeholder{
 
   </section>
 
-  <div id="result" class="result"></div>
+  <div
+    id="result"
+    class="result"
+  ></div>
 
 </main>
 
@@ -537,12 +849,14 @@ input::placeholder{
 
 <script>
 
-const API = window.location.origin.includes("localhost")
-  ? "http://127.0.0.1:5000"
-  : "https://interpreter.jamaicantruestories.com";
+const API =
+  window.location.origin.includes("localhost")
+    ? "http://127.0.0.1:5000"
+    : "https://interpreter.jamaicantruestories.com";
 
 function esc(s){
-  return String(s||"")
+
+  return String(s || "")
     .replace(/&/g,"&amp;")
     .replace(/</g,"&lt;")
     .replace(/>/g,"&gt;");
@@ -550,16 +864,29 @@ function esc(s){
 
 function render(data){
 
-  const result = document.getElementById("result");
+  const result =
+    document.getElementById("result");
 
-  const interp = data.interpretation || {};
-  const facts = data.doctrine_facts || {};
-  const event = facts.event_context || {};
+  const interp =
+    data.interpretation || {};
 
-  const action = event.primary_action || {};
-  const subject = event.primary_subject || "";
-  const place = event.primary_place || {};
-  const ending = event.primary_ending || {};
+  const facts =
+    data.doctrine_facts || {};
+
+  const event =
+    facts.event_context || {};
+
+  const action =
+    event.primary_action || {};
+
+  const subject =
+    event.primary_subject || "";
+
+  const place =
+    event.primary_place || {};
+
+  const ending =
+    event.primary_ending || {};
 
   const readable =
     data.narration?.readable_summary || "";
@@ -587,7 +914,7 @@ function render(data){
       <div class="logic-line">
         <b>Action:</b>
         ${esc(action.name || "")}
-        ${action.meaning ? "— " + esc(action.meaning) : ""}
+        ${action.meaning ? " — " + esc(action.meaning) : ""}
       </div>
 
       <div class="logic-line">
@@ -598,13 +925,13 @@ function render(data){
       <div class="logic-line">
         <b>Place:</b>
         ${esc(place.name || "")}
-        ${place.meaning ? "— " + esc(place.meaning) : ""}
+        ${place.meaning ? " — " + esc(place.meaning) : ""}
       </div>
 
       <div class="logic-line">
         <b>Ending:</b>
         ${esc(ending.name || "")}
-        ${ending.meaning ? "— " + esc(ending.meaning) : ""}
+        ${ending.meaning ? " — " + esc(ending.meaning) : ""}
       </div>
 
     </div>
@@ -644,7 +971,6 @@ function render(data){
       </div>
 
     </div>
-
   `;
 
   result.scrollIntoView({
@@ -660,16 +986,15 @@ document.getElementById("templateBtn").onclick = () => {
 [What happened?]
 
 Symbols:
-- 
-- 
-- 
+-
+-
+-
 
 Emotion:
 [What did you feel?]
 
 Ending:
 [How did it end?]`;
-
 };
 
 document.getElementById("clearBtn").onclick = () => {
@@ -702,7 +1027,11 @@ document.getElementById("interpret").onclick = async () => {
   }
 
   btn.disabled = true;
-  btn.textContent = "Decoding...";
+
+  btn.innerHTML = `
+    <span class="loader-ring"></span>
+    Analyzing Dream...
+  `;
 
   try{
 
@@ -718,10 +1047,10 @@ document.getElementById("interpret").onclick = async () => {
         text:dream,
         email:email
       })
-
     });
 
-    const data = await res.json();
+    const data =
+      await res.json();
 
     render(data);
 
@@ -740,13 +1069,13 @@ document.getElementById("interpret").onclick = async () => {
         </div>
 
       </div>
-
     `;
   }
 
   finally{
 
     btn.disabled = false;
+
     btn.textContent = "Decode Dream";
   }
 };

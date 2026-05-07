@@ -11,15 +11,11 @@ services:
       pip install -r requirements.txt
 
     startCommand: |
-      gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --keep-alive 5
+      gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --keep-alive 5
 
     healthCheckPath: /health
 
     envVars:
-
-      # ============================================================
-      # Python / Runtime
-      # ============================================================
 
       - key: PYTHON_VERSION
         value: 3.11.11
@@ -30,10 +26,6 @@ services:
       - key: WEB_CONCURRENCY
         value: "2"
 
-      # ============================================================
-      # Security
-      # ============================================================
-
       - key: FLASK_SECRET_KEY
         generateValue: true
 
@@ -42,10 +34,6 @@ services:
 
       - key: SESSION_COOKIE_SECURE
         value: "true"
-
-      # ============================================================
-      # Frontend / Domain
-      # ============================================================
 
       - key: RETURN_URL
         value: https://interpreter.jamaicantruestories.com/
@@ -56,16 +44,8 @@ services:
       - key: UPGRADE_URL
         value: https://interpreter.jamaicantruestories.com/upgrade
 
-      # ============================================================
-      # CORS
-      # ============================================================
-
       - key: ALLOWED_ORIGINS
         value: https://interpreter.jamaicantruestories.com,https://jamaicantruestories.com,https://www.jamaicantruestories.com,https://plqwhd-jm.myshopify.com
-
-      # ============================================================
-      # Google Sheets
-      # ============================================================
 
       - key: SPREADSHEET_ID
         value: 1ToWPpJ_u-Z14eqL9U1oJppXX6f63h_eZcjUVglKr4Zk
@@ -75,10 +55,6 @@ services:
 
       - key: GOOGLE_SERVICE_ACCOUNT_FILE
         value: /etc/secrets/credentials.json
-
-      # ============================================================
-      # Doctrine Mode
-      # ============================================================
 
       - key: DOCTRINE_MODE
         value: "1"
@@ -101,10 +77,6 @@ services:
       - key: NARRATION_INCLUDE_PROMPT_PAYLOAD
         value: "1"
 
-      # ============================================================
-      # Optional AI Narration
-      # ============================================================
-
       - key: AI_NARRATION_ENABLED
         value: "0"
 
@@ -114,19 +86,11 @@ services:
       - key: AI_NARRATION_STRICT_DOCTRINE
         value: "1"
 
-      # ============================================================
-      # Performance
-      # ============================================================
-
       - key: CACHE_TTL_SECONDS
         value: "120"
 
       - key: DEBUG_MATCH
         value: "0"
-
-      # ============================================================
-      # Free Usage System
-      # ============================================================
 
       - key: FREE_QUOTA
         value: "3"
@@ -134,29 +98,17 @@ services:
       - key: SHADOW_WINDOW_HOURS
         value: "72"
 
-      # ============================================================
-      # Dream Pack
-      # ============================================================
-
       - key: DREAM_PACK_USES
         value: "3"
 
       - key: DREAM_PACK_HOURS
         value: "72"
 
-      # ============================================================
-      # Flask Templates
-      # ============================================================
-
       - key: TEMPLATE_INDEX
         value: index.html
 
       - key: TEMPLATE_UPGRADE
         value: upgrade.html
-
-      # ============================================================
-      # Scaling / Safety
-      # ============================================================
 
       - key: MAX_DREAM_LENGTH
         value: "2500"
@@ -170,11 +122,7 @@ services:
       - key: MAX_RULE_HITS_PER_LAYER
         value: "4"
 
-      # ============================================================
-      # Stripe
-      # ============================================================
-
-      # Set these securely in the Render dashboard:
+      # Keep these secret in Render dashboard:
       # STRIPE_SECRET_KEY
       # STRIPE_WEBHOOK_SECRET
       # PRICE_WEEKLY

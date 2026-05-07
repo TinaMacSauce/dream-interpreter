@@ -24,6 +24,7 @@ interpreter_bp = Blueprint("interpreter", __name__)
 # ============================================================
 # Home Page
 # ============================================================
+
 @interpreter_bp.route("/", methods=["GET"])
 def home():
     return render_template(Config.TEMPLATE_INDEX)
@@ -32,6 +33,7 @@ def home():
 # ============================================================
 # Upgrade Page
 # ============================================================
+
 @interpreter_bp.route("/upgrade", methods=["GET"])
 def upgrade():
     return render_template(Config.TEMPLATE_UPGRADE)
@@ -40,6 +42,7 @@ def upgrade():
 # ============================================================
 # Health Check
 # ============================================================
+
 @interpreter_bp.route("/health", methods=["GET"])
 def health():
     return jsonify({
@@ -52,6 +55,7 @@ def health():
 # ============================================================
 # Access Check
 # ============================================================
+
 @interpreter_bp.route("/check-access", methods=["POST", "OPTIONS"])
 def check_access():
 
@@ -97,10 +101,25 @@ def check_access():
 # ============================================================
 # Main Interpreter Endpoint
 # ============================================================
+
 @interpreter_bp.route("/interpret", methods=["POST", "OPTIONS"])
 def interpret():
 
     if request.method == "OPTIONS":
         return make_response("", 204)
 
-    return run_interpretation()
+    try:
+        return run_interpretation()
+
+    except Exception as e:
+        import traceback
+
+        trace = traceback.format_exc()
+
+        print(trace, flush=True)
+
+        return jsonify({
+            "ok": False,
+            "error": str(e),
+            "trace": trace,
+        }), 500

@@ -27,11 +27,9 @@ def create_app() -> Flask:
     app.config["SECRET_KEY"] = Config.SECRET_KEY
     app.config["MAX_CONTENT_LENGTH"] = Config.MAX_CONTENT_LENGTH
 
-    # Keep JSON responses predictable for frontend clients.
     app.config["JSON_SORT_KEYS"] = False
     app.config["JSONIFY_PRETTYPRINT_REGULAR"] = False
 
-    # Template reload should only be active in local/debug mode.
     app.config["TEMPLATES_AUTO_RELOAD"] = bool(
         getattr(Config, "DEBUG", False)
     )
@@ -59,14 +57,18 @@ def create_app() -> Flask:
     # ============================================================
     # Trusted Hosts
     # ============================================================
-    trusted_hosts = [
-        "jamaicantruestories.com",
-        "www.jamaicantruestories.com",
-        "interpreter.jamaicantruestories.com",
-        "plqwhd-jm.myshopify.com",
-        "localhost",
-        "127.0.0.1",
-    ]
+    trusted_hosts = getattr(
+        Config,
+        "TRUSTED_HOSTS",
+        [
+            "jamaicantruestories.com",
+            "www.jamaicantruestories.com",
+            "interpreter.jamaicantruestories.com",
+            "plqwhd-jm.myshopify.com",
+            "localhost",
+            "127.0.0.1",
+        ],
+    )
 
     app.config["TRUSTED_HOSTS"] = trusted_hosts
 
@@ -120,21 +122,20 @@ def create_app() -> Flask:
         if request_id:
             response.headers["X-Request-ID"] = request_id
 
-        # Security headers.
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=()"
         )
 
-        # Helpful browser caching behavior for app/API responses.
         no_store_paths = (
             "/interpret",
             "/check-access",
             "/create-checkout-session",
             "/create-dream-pack-checkout-session",
+            "/payment-success",
+            "/dream-pack-success",
         )
 
         if request.path.startswith(no_store_paths):
@@ -165,10 +166,10 @@ def create_app() -> Flask:
 
     # ============================================================
     # Error Handlers
-    # Note:
-    # Flask does not recognize 402 as a registerable global error
-    # handler unless you define a custom HTTPException subclass.
-    # Your routes may still manually return:
+    #
+    # Do not register 402 here.
+    # Flask does not recognize 402 as a built-in global handler.
+    # Individual routes may still manually return:
     # return {"error": "payment_required"}, 402
     # ============================================================
     @app.errorhandler(400)

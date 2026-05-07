@@ -12,17 +12,15 @@
   --bg:#020303;
   --panel:#08090c;
   --card:#0d0e12;
-  --card2:#111217;
   --gold:#d4af37;
   --gold2:#f8dd7d;
-  --gold3:#aa731f;
   --cream:#fff4dc;
   --text:#f8efd9;
-  --muted:rgba(248,239,217,.57);
-  --soft:rgba(248,239,217,.38);
+  --muted:rgba(248,239,217,.58);
   --line:rgba(212,175,55,.24);
   --line2:rgba(212,175,55,.48);
   --danger:#ffb4a8;
+  --success:#9ae6b4;
 }
 
 *{
@@ -72,7 +70,8 @@ body::after{
 
 button,
 input,
-textarea{
+textarea,
+select{
   font:inherit;
 }
 
@@ -219,7 +218,6 @@ button{
   color:var(--gold2);
   font-size:1.03rem;
   line-height:1.15;
-  letter-spacing:.02em;
 }
 
 .page-title p{
@@ -265,7 +263,6 @@ button{
   margin:0 0 7px;
   color:var(--gold2);
   font-size:.96rem;
-  line-height:1.2;
 }
 
 .decode-card .sub{
@@ -278,7 +275,8 @@ button{
 /* FORMS */
 
 textarea,
-input{
+input,
+select{
   width:100%;
   border-radius:17px;
   border:1px solid rgba(212,175,55,.25);
@@ -298,9 +296,14 @@ textarea{
   font-size:.88rem;
 }
 
-input{
+input,
+select{
   padding:13px 14px;
   font-size:.88rem;
+}
+
+select option{
+  color:#111;
 }
 
 textarea::placeholder,
@@ -310,7 +313,8 @@ input::placeholder{
 
 .count-row{
   display:flex;
-  justify-content:flex-end;
+  justify-content:space-between;
+  gap:10px;
   margin-top:6px;
   color:rgba(248,239,217,.4);
   font-size:.68rem;
@@ -332,7 +336,7 @@ input::placeholder{
   color:var(--gold2);
 }
 
-/* DECODE ACTIONS */
+/* ACTIONS */
 
 .chips{
   display:grid;
@@ -372,11 +376,22 @@ input::placeholder{
   color:#150d02;
   font-size:.9rem;
   font-weight:900;
-  cursor:pointer;
   box-shadow:
     0 14px 32px rgba(0,0,0,.58),
     0 0 24px rgba(212,175,55,.14),
     inset 0 1px 0 rgba(255,255,255,.42);
+}
+
+.secondary{
+  width:100%;
+  margin-top:10px;
+  padding:13px 14px;
+  border-radius:17px;
+  border:1px solid rgba(212,175,55,.28);
+  background:rgba(255,255,255,.035);
+  color:var(--gold2);
+  font-size:.82rem;
+  font-weight:900;
 }
 
 .helper{
@@ -385,6 +400,62 @@ input::placeholder{
   color:var(--muted);
   font-size:.73rem;
   line-height:1.48;
+}
+
+/* GUIDED DETAILS */
+
+.guided-panel{
+  display:none;
+  margin-top:12px;
+  padding:13px;
+  border-radius:19px;
+  border:1px solid rgba(212,175,55,.18);
+  background:rgba(0,0,0,.22);
+}
+
+.guided-panel.open{
+  display:block;
+}
+
+.guided-grid{
+  display:grid;
+  gap:10px;
+}
+
+.guided-row{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+}
+
+.field label{
+  display:block;
+  margin:0 0 7px;
+  color:var(--gold2);
+  font-size:.68rem;
+  font-weight:900;
+}
+
+.symbol-chip-row{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-top:8px;
+}
+
+.tiny-chip{
+  border-radius:999px;
+  border:1px solid rgba(212,175,55,.24);
+  background:rgba(255,255,255,.035);
+  color:var(--text);
+  padding:8px 10px;
+  font-size:.68rem;
+  font-weight:800;
+}
+
+.tiny-chip.selected{
+  color:#160d02;
+  background:linear-gradient(180deg,#ffe99b,#d9a83a);
 }
 
 /* RESULTS */
@@ -418,12 +489,17 @@ input::placeholder{
   font-size:.67rem;
 }
 
+.result-actions{
+  display:flex;
+  gap:7px;
+}
+
 .small-btn{
   border-radius:999px;
   border:1px solid rgba(212,175,55,.3);
   background:rgba(255,255,255,.035);
   color:var(--gold2);
-  padding:7px 11px;
+  padding:7px 10px;
   font-weight:850;
   font-size:.68rem;
 }
@@ -586,7 +662,7 @@ input::placeholder{
   border-radius:17px;
   padding:11px;
   display:grid;
-  grid-template-columns:38px 1fr 28px;
+  grid-template-columns:38px 1fr 64px;
   gap:9px;
   align-items:center;
   text-align:left;
@@ -617,9 +693,27 @@ input::placeholder{
   font-size:.63rem;
 }
 
-.star{
+.entry-actions{
+  display:flex;
+  gap:5px;
+  justify-content:flex-end;
+}
+
+.icon-mini{
+  width:28px;
+  height:28px;
+  border-radius:50%;
+  border:1px solid rgba(212,175,55,.2);
+  background:rgba(255,255,255,.035);
   color:var(--gold2);
-  font-size:1.08rem;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:.85rem;
+}
+
+.danger{
+  color:var(--danger);
 }
 
 /* SYMBOLS */
@@ -779,35 +873,6 @@ input::placeholder{
   font-size:.7rem;
 }
 
-.premium-list{
-  display:grid;
-  gap:7px;
-  margin:12px 0 0;
-  padding:0;
-  list-style:none;
-  color:rgba(248,239,217,.82);
-  font-size:.72rem;
-}
-
-.premium-list li{
-  display:flex;
-  gap:8px;
-  align-items:center;
-}
-
-.premium-list li::before{
-  content:"✓";
-  width:17px;
-  height:17px;
-  border-radius:50%;
-  border:1px solid rgba(212,175,55,.36);
-  color:var(--gold2);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:.62rem;
-}
-
 .upgrade-link{
   display:flex;
   align-items:center;
@@ -876,8 +941,6 @@ input::placeholder{
   background:rgba(212,175,55,.1);
 }
 
-/* MISC */
-
 .loader-ring{
   width:17px;
   height:17px;
@@ -888,6 +951,10 @@ input::placeholder{
   margin-right:9px;
   vertical-align:-3px;
   animation:spin 1s linear infinite;
+}
+
+.hidden-file{
+  display:none;
 }
 
 @keyframes spin{
@@ -919,17 +986,9 @@ input::placeholder{
     min-width:42px;
   }
 
-  .chips{
-    gap:8px;
-  }
-
   .chip{
     font-size:.68rem;
     padding:8px;
-  }
-
-  .symbol-grid{
-    gap:7px;
   }
 
   .symbol-card{
@@ -986,13 +1045,67 @@ input::placeholder{
       <p class="sub">Write your dream in as much detail as you can.</p>
 
       <textarea id="dream" maxlength="2000" placeholder="I was being chased by a dog in my old school. I kept running and finally escaped."></textarea>
-      <div class="count-row"><span id="charCount">0/2000</span></div>
+
+      <div class="count-row">
+        <span id="qualityHint">Tip: include the ending and how you felt.</span>
+        <span id="charCount">0/2000</span>
+      </div>
 
       <div class="chips">
-        <button class="chip" type="button" id="endingBtn"><span>✦</span> Add ending <span>›</span></button>
-        <button class="chip" type="button" id="emotionBtn"><span>♥</span> Add emotions <span>›</span></button>
+        <button class="chip" type="button" id="guidedBtn"><span>✦</span> Guided Details <span>›</span></button>
         <button class="chip" type="button" id="symbolBtn"><span>◇</span> Add symbols <span>›</span></button>
         <button class="chip" type="button" id="templateBtn"><span>⌘</span> Use template <span>›</span></button>
+        <button class="chip" type="button" id="clearBtn"><span>×</span> Clear dream <span>›</span></button>
+      </div>
+
+      <div class="guided-panel" id="guidedPanel">
+        <div class="guided-grid">
+          <div class="guided-row">
+            <div class="field">
+              <label for="emotion">Emotion</label>
+              <select id="emotion">
+                <option value="">Choose</option>
+                <option>Afraid</option>
+                <option>Peaceful</option>
+                <option>Confused</option>
+                <option>Happy</option>
+                <option>Angry</option>
+                <option>Sad</option>
+                <option>Anxious</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="ending">Ending</label>
+              <select id="ending">
+                <option value="">Choose</option>
+                <option>Escaped</option>
+                <option>Woke up suddenly</option>
+                <option>Was rescued</option>
+                <option>Got lost</option>
+                <option>Won / overcame</option>
+                <option>Still unresolved</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="guided-row">
+            <div class="field">
+              <label for="place">Place</label>
+              <input id="place" type="text" placeholder="School, house, road..." />
+            </div>
+
+            <div class="field">
+              <label for="people">People</label>
+              <input id="people" type="text" placeholder="Mother, stranger..." />
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Quick symbols</label>
+            <div class="symbol-chip-row" id="guidedSymbolChips"></div>
+          </div>
+        </div>
       </div>
 
       <button id="interpret" class="primary" type="button">Decode Dream</button>
@@ -1006,7 +1119,7 @@ input::placeholder{
   <section class="screen" id="journalScreen">
     <div class="page-title">
       <h2>My Journal</h2>
-      <p>Review saved interpretations and patterns.</p>
+      <p>Review saved interpretations, favorites, and repeated symbols.</p>
     </div>
 
     <div class="journal-tools">
@@ -1029,13 +1142,6 @@ input::placeholder{
     <div class="page-title">
       <h2>Symbol Library</h2>
       <p>Tap a symbol to add it to your current dream.</p>
-    </div>
-
-    <div class="pill-tabs">
-      <button class="pill-tab active" type="button">All</button>
-      <button class="pill-tab" type="button">People</button>
-      <button class="pill-tab" type="button">Animals</button>
-      <button class="pill-tab" type="button">Places</button>
     </div>
 
     <div class="symbol-grid" id="symbolGrid"></div>
@@ -1063,26 +1169,22 @@ input::placeholder{
 
     <section class="card settings-list">
       <button class="setting-row" type="button" id="exportBtn">Export Journal <span>›</span></button>
+      <button class="setting-row" type="button" id="importBtn">Import Journal <span>›</span></button>
       <button class="setting-row" type="button" id="clearJournalBtn">Clear Local Journal <span>›</span></button>
       <button class="setting-row" type="button" id="privacyBtn">Privacy & Security <span>›</span></button>
       <button class="setting-row" type="button" id="supportBtn">Help & Support <span>›</span></button>
     </section>
+
+    <input class="hidden-file" type="file" id="importFile" accept="application/json" />
 
     <section class="card premium-card">
       <div class="premium-title">
         <div class="premium-icon">♕</div>
         <div>
           <h3>Go Premium</h3>
-          <p>Unlock the full power of your dream journey.</p>
+          <p>Unlock deeper symbol insights and pattern tracking.</p>
         </div>
       </div>
-
-      <ul class="premium-list">
-        <li>Unlimited dream interpretations</li>
-        <li>Advanced symbol insights</li>
-        <li>Dream pattern tracking</li>
-        <li>Mood and emotion analysis</li>
-      </ul>
 
       <a class="upgrade-link" id="upgradeAccount" href="#">Upgrade to Premium</a>
     </section>
@@ -1122,6 +1224,7 @@ const API =
     : HOSTED_APP;
 
 const EMAIL_KEY = "jdi_email";
+const LEGACY_EMAIL_KEY = "jts_email";
 const JOURNAL_KEY = "jdi_journal";
 
 const emailEl = document.getElementById("email");
@@ -1130,27 +1233,37 @@ const btn = document.getElementById("interpret");
 const result = document.getElementById("result");
 const accessStatus = document.getElementById("accessStatus");
 const charCount = document.getElementById("charCount");
+const qualityHint = document.getElementById("qualityHint");
 const journalList = document.getElementById("journalList");
 const journalSearch = document.getElementById("journalSearch");
 const memberLine = document.getElementById("memberLine");
 const upgradeAccount = document.getElementById("upgradeAccount");
+const guidedPanel = document.getElementById("guidedPanel");
+const emotionEl = document.getElementById("emotion");
+const endingEl = document.getElementById("ending");
+const placeEl = document.getElementById("place");
+const peopleEl = document.getElementById("people");
 
 const menuBtn = document.getElementById("menuBtn");
 const menuPanel = document.getElementById("menuPanel");
 const closeMenu = document.getElementById("closeMenu");
 
 let journalFilter = "all";
+let selectedGuidedSymbols = [];
 
 const SYMBOLS = [
-  {name:"Dog", icon:"🐕", meaning:"Chasing, fear, loyalty issues", key:"dog"},
-  {name:"School", icon:"🏫", meaning:"Past lessons, memory, pressure", key:"school"},
-  {name:"Water", icon:"〰️", meaning:"Emotions, life changes, depth", key:"water"},
-  {name:"Teeth", icon:"🦷", meaning:"Warning, anxiety, change", key:"teeth"},
-  {name:"Falling", icon:"🪂", meaning:"Loss of control, fear, transition", key:"falling"},
-  {name:"Money", icon:"💰", meaning:"Opportunity, power, fear", key:"money"},
-  {name:"House", icon:"⌂", meaning:"Self, mind, security", key:"house"},
-  {name:"Snake", icon:"蛇", meaning:"Transformation, warning, fear", key:"snake"},
-  {name:"Car", icon:"🚗", meaning:"Direction, control, life journey", key:"car"}
+  {name:"Dog", icon:"🐕", meaning:"Chasing, pressure, loyalty, warning", key:"dog", category:"animal"},
+  {name:"School", icon:"🏫", meaning:"Past lessons, pressure, memory", key:"school", category:"place"},
+  {name:"Water", icon:"〰️", meaning:"Decision, emotions, spiritual state", key:"water", category:"nature"},
+  {name:"Teeth", icon:"🦷", meaning:"Serious warning, anxiety, loss", key:"teeth", category:"body"},
+  {name:"Falling", icon:"🪂", meaning:"Loss of control, fear, transition", key:"falling", category:"action"},
+  {name:"Money", icon:"💰", meaning:"Opportunity, power, worry", key:"money", category:"object"},
+  {name:"House", icon:"⌂", meaning:"Private life, self, family matter", key:"house", category:"place"},
+  {name:"Snake", icon:"蛇", meaning:"Enemy, opposition, hidden issue", key:"snake", category:"animal"},
+  {name:"Car", icon:"🚗", meaning:"Direction, control, life journey", key:"car", category:"object"},
+  {name:"Hair", icon:"〰", meaning:"Burden, ongoing problem, concern", key:"hair", category:"body"},
+  {name:"Road", icon:"⌁", meaning:"Path, decision, journey", key:"road", category:"place"},
+  {name:"Baby", icon:"✺", meaning:"New beginning, responsibility, fragile matter", key:"baby", category:"people"}
 ];
 
 function esc(s){
@@ -1176,6 +1289,7 @@ function saveEmail(email){
   try{
     if(clean){
       localStorage.setItem(EMAIL_KEY, clean);
+      localStorage.setItem(LEGACY_EMAIL_KEY, clean);
     }else{
       localStorage.removeItem(EMAIL_KEY);
     }
@@ -1186,7 +1300,11 @@ function saveEmail(email){
 
 function loadEmail(){
   try{
-    return normalizeEmail(localStorage.getItem(EMAIL_KEY) || "");
+    return normalizeEmail(
+      localStorage.getItem(EMAIL_KEY) ||
+      localStorage.getItem(LEGACY_EMAIL_KEY) ||
+      ""
+    );
   }catch(e){
     return "";
   }
@@ -1213,7 +1331,7 @@ function readJournal(){
 
 function writeJournal(entries){
   try{
-    localStorage.setItem(JOURNAL_KEY, JSON.stringify(entries.slice(0, 100)));
+    localStorage.setItem(JOURNAL_KEY, JSON.stringify(entries.slice(0, 200)));
   }catch(e){}
 }
 
@@ -1253,7 +1371,22 @@ function switchTab(tab){
 }
 
 function updateCharCount(){
-  charCount.textContent = dreamEl.value.length + "/2000";
+  const len = dreamEl.value.length;
+  charCount.textContent = len + "/2000";
+
+  const dream = dreamEl.value.toLowerCase();
+  const hasEmotion = emotionEl.value || dream.includes("felt") || dream.includes("afraid") || dream.includes("happy") || dream.includes("sad");
+  const hasEnding = endingEl.value || dream.includes("ended") || dream.includes("woke") || dream.includes("escaped");
+
+  if(len < 20){
+    qualityHint.textContent = "Tip: add more dream detail.";
+  }else if(!hasEmotion){
+    qualityHint.textContent = "Tip: add how you felt.";
+  }else if(!hasEnding){
+    qualityHint.textContent = "Tip: add how it ended.";
+  }else{
+    qualityHint.textContent = "Good detail for interpretation.";
+  }
 }
 
 function appendDreamText(text){
@@ -1285,6 +1418,21 @@ function shortText(text, max){
   return clean.length > max ? clean.slice(0, max - 3) + "..." : clean;
 }
 
+function buildDreamPayload(){
+  const parts = [];
+
+  const dream = dreamEl.value.trim();
+  if(dream) parts.push("Dream:\n" + dream);
+
+  if(emotionEl.value) parts.push("Emotion:\n" + emotionEl.value);
+  if(endingEl.value) parts.push("Ending:\n" + endingEl.value);
+  if(placeEl.value.trim()) parts.push("Place:\n" + placeEl.value.trim());
+  if(peopleEl.value.trim()) parts.push("People:\n" + peopleEl.value.trim());
+  if(selectedGuidedSymbols.length) parts.push("Symbols:\n" + selectedGuidedSymbols.join(", "));
+
+  return parts.join("\n\n").trim();
+}
+
 function extractSymbols(data, dreamText){
   const facts = data.doctrine_facts || {};
   const fromApi = Array.isArray(facts.top_symbols) ? facts.top_symbols : [];
@@ -1293,19 +1441,62 @@ function extractSymbols(data, dreamText){
     .filter(s => dreamText.toLowerCase().includes(s.key))
     .map(s => s.name);
 
-  return [...new Set([...fromApi, ...detected])].slice(0, 4);
+  return [...new Set([...fromApi, ...selectedGuidedSymbols, ...detected])].slice(0, 6);
+}
+
+function buildPatternSummary(symbols, emotion){
+  const entries = readJournal();
+  const counts = {};
+  const emotionCounts = {};
+
+  entries.forEach(entry => {
+    (entry.matchedSymbols || []).forEach(sym => {
+      const key = String(sym || "").toLowerCase();
+      counts[key] = (counts[key] || 0) + 1;
+    });
+
+    if(entry.metadata?.emotion){
+      const e = String(entry.metadata.emotion).toLowerCase();
+      emotionCounts[e] = (emotionCounts[e] || 0) + 1;
+    }
+  });
+
+  const repeated = symbols
+    .map(sym => {
+      const key = String(sym || "").toLowerCase();
+      return {name:sym, count:counts[key] || 0};
+    })
+    .filter(x => x.count > 0)
+    .sort((a,b) => b.count - a.count);
+
+  if(repeated.length){
+    return `Pattern noticed: ${repeated[0].name} has appeared ${repeated[0].count + 1} time(s), including this dream. Watch whether this symbol keeps returning with the same emotion or ending.`;
+  }
+
+  if(emotion && emotionCounts[String(emotion).toLowerCase()]){
+    return `Pattern noticed: the emotion "${emotion}" has appeared before in your journal. Compare this dream with earlier dreams that carried the same feeling.`;
+  }
+
+  if(entries.length >= 3){
+    return "No repeated symbol stands out yet, but your journal is growing enough to begin tracking dream patterns over time.";
+  }
+
+  return "Pattern tracking will become stronger after you save more dreams.";
 }
 
 function mapInterpretation(data, dreamText){
   const interp = data.interpretation || {};
   const readable = data.narration?.readable_summary || data.full_interpretation || "";
+  const matchedSymbols = extractSymbols(data, dreamText);
+  const patternSummary = buildPatternSummary(matchedSymbols, emotionEl.value);
 
   return {
     mainMeaning: readable || "Your dream has been interpreted.",
     spiritualWarning: interp.spiritual_meaning || "No specific spiritual warning was returned.",
     physicalEffects: interp.effects_in_physical_realm || "No specific physical effects were returned.",
     whatToDo: interp.what_to_do || "Reflect, pray, and pay attention to repeated symbols.",
-    matchedSymbols: extractSymbols(data, dreamText)
+    matchedSymbols,
+    patternSummary
   };
 }
 
@@ -1314,7 +1505,8 @@ function iconSvg(type){
     main:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 5v14"/><path d="M5 12h14"/></svg>`,
     warning:`<svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7l8-4z"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>`,
     body:`<svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>`,
-    action:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>`
+    action:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>`,
+    pattern:`<svg viewBox="0 0 24 24"><path d="M4 18c4-10 8 0 12-10"/><path d="M16 8h4v4"/><path d="M4 6h.01"/><path d="M8 6h.01"/><path d="M12 6h.01"/></svg>`
   };
 
   return icons[type] || icons.main;
@@ -1334,7 +1526,7 @@ function resultCard(label, text, icon){
   `;
 }
 
-function renderResultCards(mapped, dreamText){
+function renderResultCards(mapped, dreamText, entryId){
   const now = new Date().toISOString();
 
   result.classList.add("show");
@@ -1345,7 +1537,15 @@ function renderResultCards(mapped, dreamText){
           <h3>Dream Interpretation</h3>
           <p>${esc(formatDate(now))}</p>
         </div>
-        <button class="small-btn" type="button" id="editDreamBtn">Edit</button>
+
+        <div class="result-actions">
+          <button class="small-btn" type="button" id="editDreamBtn">Edit</button>
+          ${
+            entryId
+              ? `<button class="small-btn" type="button" id="favResultBtn">★</button>`
+              : ""
+          }
+        </div>
       </div>
 
       <div class="result-text">${esc(shortText(dreamText, 150))}</div>
@@ -1354,6 +1554,7 @@ function renderResultCards(mapped, dreamText){
       ${resultCard("Spiritual Warning", mapped.spiritualWarning, "warning")}
       ${resultCard("Physical Effects", mapped.physicalEffects, "body")}
       ${resultCard("What To Do", mapped.whatToDo, "action")}
+      ${resultCard("Dream Pattern", mapped.patternSummary, "pattern")}
 
       <div class="result-card">
         <div class="label">Matched Symbols</div>
@@ -1378,6 +1579,12 @@ function renderResultCards(mapped, dreamText){
   `;
 
   document.getElementById("editDreamBtn").onclick = () => dreamEl.focus();
+
+  const favBtn = document.getElementById("favResultBtn");
+  if(favBtn && entryId){
+    favBtn.onclick = () => toggleFavorite(entryId, true);
+  }
+
   result.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
@@ -1439,7 +1646,8 @@ function renderJournal(){
     entries = entries.filter(e =>
       String(e.dreamText || "").toLowerCase().includes(q) ||
       String(e.summary || "").toLowerCase().includes(q) ||
-      String((e.matchedSymbols || []).join(" ")).toLowerCase().includes(q)
+      String((e.matchedSymbols || []).join(" ")).toLowerCase().includes(q) ||
+      String(e.metadata?.emotion || "").toLowerCase().includes(q)
     );
   }
 
@@ -1449,18 +1657,37 @@ function renderJournal(){
   }
 
   journalList.innerHTML = entries.map(entry => `
-    <button class="journal-item" type="button" data-entry-id="${esc(entry.id)}">
+    <div class="journal-item" data-entry-id="${esc(entry.id)}">
       <div class="journal-icon">${esc((entry.matchedSymbols || [])[0] || "☾")}</div>
-      <div>
+
+      <button type="button" style="all:unset;cursor:pointer;" data-open-entry="${esc(entry.id)}">
         <div class="journal-title">${esc(shortText(entry.dreamText, 72))}</div>
-        <div class="journal-date">${esc(formatDate(entry.createdAt))}</div>
+        <div class="journal-date">${esc(formatDate(entry.createdAt))}${entry.metadata?.emotion ? " • " + esc(entry.metadata.emotion) : ""}</div>
+      </button>
+
+      <div class="entry-actions">
+        <button class="icon-mini" type="button" data-favorite-entry="${esc(entry.id)}">${entry.favorite ? "★" : "☆"}</button>
+        <button class="icon-mini danger" type="button" data-delete-entry="${esc(entry.id)}">×</button>
       </div>
-      <div class="star">${entry.favorite ? "★" : "☆"}</div>
-    </button>
+    </div>
   `).join("");
 
-  document.querySelectorAll(".journal-item").forEach(item => {
-    item.onclick = () => openJournalEntry(item.dataset.entryId);
+  document.querySelectorAll("[data-open-entry]").forEach(item => {
+    item.onclick = () => openJournalEntry(item.dataset.openEntry);
+  });
+
+  document.querySelectorAll("[data-favorite-entry]").forEach(item => {
+    item.onclick = e => {
+      e.stopPropagation();
+      toggleFavorite(item.dataset.favoriteEntry);
+    };
+  });
+
+  document.querySelectorAll("[data-delete-entry]").forEach(item => {
+    item.onclick = e => {
+      e.stopPropagation();
+      deleteEntry(item.dataset.deleteEntry);
+    };
   });
 }
 
@@ -1472,6 +1699,13 @@ function openJournalEntry(id){
   switchTab("decode");
 
   dreamEl.value = entry.dreamText || "";
+  emotionEl.value = entry.metadata?.emotion || "";
+  endingEl.value = entry.metadata?.ending || "";
+  placeEl.value = entry.metadata?.place || "";
+  peopleEl.value = entry.metadata?.people || "";
+  selectedGuidedSymbols = entry.metadata?.selectedSymbols || [];
+
+  renderGuidedSymbols();
   updateCharCount();
 
   renderResultCards({
@@ -1479,8 +1713,34 @@ function openJournalEntry(id){
     spiritualWarning: entry.interpretation?.spiritualWarning || "",
     physicalEffects: entry.interpretation?.physicalEffects || "",
     whatToDo: entry.interpretation?.whatToDo || "",
-    matchedSymbols: entry.matchedSymbols || []
-  }, entry.dreamText || "");
+    matchedSymbols: entry.matchedSymbols || [],
+    patternSummary: entry.interpretation?.patternSummary || buildPatternSummary(entry.matchedSymbols || [], entry.metadata?.emotion)
+  }, entry.dreamText || "", entry.id);
+}
+
+function toggleFavorite(id, stayOnDecode){
+  const entries = readJournal();
+  const found = entries.find(e => e.id === id);
+
+  if(found){
+    found.favorite = !found.favorite;
+    writeJournal(entries);
+  }
+
+  renderJournal();
+
+  if(stayOnDecode && found){
+    alert(found.favorite ? "Added to favorites." : "Removed from favorites.");
+  }
+}
+
+function deleteEntry(id){
+  if(!confirm("Delete this saved dream from your local journal?")) return;
+
+  const entries = readJournal().filter(e => e.id !== id);
+  writeJournal(entries);
+  renderJournal();
+  refreshAccount();
 }
 
 function renderSymbols(){
@@ -1497,6 +1757,33 @@ function renderSymbols(){
       appendDreamText(card.dataset.symbol);
       switchTab("decode");
       dreamEl.focus();
+    };
+  });
+}
+
+function renderGuidedSymbols(){
+  document.getElementById("guidedSymbolChips").innerHTML = SYMBOLS.slice(0, 9).map(s => `
+    <button
+      class="tiny-chip ${selectedGuidedSymbols.includes(s.name) ? "selected" : ""}"
+      type="button"
+      data-guided-symbol="${esc(s.name)}"
+    >
+      ${esc(s.name)}
+    </button>
+  `).join("");
+
+  document.querySelectorAll("[data-guided-symbol]").forEach(btn => {
+    btn.onclick = () => {
+      const symbol = btn.dataset.guidedSymbol;
+
+      if(selectedGuidedSymbols.includes(symbol)){
+        selectedGuidedSymbols = selectedGuidedSymbols.filter(s => s !== symbol);
+      }else{
+        selectedGuidedSymbols.push(symbol);
+      }
+
+      renderGuidedSymbols();
+      updateCharCount();
     };
   });
 }
@@ -1531,6 +1818,40 @@ function exportJournal(){
   URL.revokeObjectURL(url);
 }
 
+function importJournalFile(file){
+  if(!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      if(!Array.isArray(parsed)){
+        alert("Invalid journal file.");
+        return;
+      }
+
+      const existing = readJournal();
+      const byId = new Map();
+
+      [...parsed, ...existing].forEach(entry => {
+        if(entry && entry.id){
+          byId.set(entry.id, entry);
+        }
+      });
+
+      writeJournal(Array.from(byId.values()));
+      renderJournal();
+      refreshAccount();
+      alert("Journal imported.");
+    }catch(e){
+      alert("Could not import this journal file.");
+    }
+  };
+
+  reader.readAsText(file);
+}
+
 menuBtn.onclick = () => menuPanel.classList.add("open");
 closeMenu.onclick = () => menuPanel.classList.remove("open");
 
@@ -1551,9 +1872,13 @@ document.getElementById("sparkBtn").onclick = () => {
 };
 
 dreamEl.addEventListener("input", updateCharCount);
+emotionEl.addEventListener("change", updateCharCount);
+endingEl.addEventListener("change", updateCharCount);
 
-document.getElementById("endingBtn").onclick = () => appendDreamText("Ending: ");
-document.getElementById("emotionBtn").onclick = () => appendDreamText("Emotion: ");
+document.getElementById("guidedBtn").onclick = () => {
+  guidedPanel.classList.toggle("open");
+};
+
 document.getElementById("symbolBtn").onclick = () => switchTab("symbols");
 
 document.getElementById("templateBtn").onclick = () => {
@@ -1576,14 +1901,34 @@ Ending:
   dreamEl.focus();
 };
 
+document.getElementById("clearBtn").onclick = () => {
+  if(!dreamEl.value.trim() || confirm("Clear the current dream draft?")){
+    dreamEl.value = "";
+    emotionEl.value = "";
+    endingEl.value = "";
+    placeEl.value = "";
+    peopleEl.value = "";
+    selectedGuidedSymbols = [];
+    renderGuidedSymbols();
+    result.classList.remove("show");
+    result.innerHTML = "";
+    updateCharCount();
+    dreamEl.focus();
+  }
+};
+
 document.getElementById("newDreamBtn").onclick = () => {
   dreamEl.value = "";
   result.classList.remove("show");
   result.innerHTML = "";
-
+  emotionEl.value = "";
+  endingEl.value = "";
+  placeEl.value = "";
+  peopleEl.value = "";
+  selectedGuidedSymbols = [];
+  renderGuidedSymbols();
   updateCharCount();
   switchTab("decode");
-
   setTimeout(() => dreamEl.focus(), 180);
 };
 
@@ -1610,6 +1955,15 @@ document.querySelectorAll("[data-journal-filter]").forEach(button => {
 
 document.getElementById("exportBtn").onclick = exportJournal;
 
+document.getElementById("importBtn").onclick = () => {
+  document.getElementById("importFile").click();
+};
+
+document.getElementById("importFile").addEventListener("change", e => {
+  importJournalFile(e.target.files[0]);
+  e.target.value = "";
+});
+
 document.getElementById("clearJournalBtn").onclick = () => {
   if(confirm("Clear all dream journal entries saved in this browser?")){
     writeJournal([]);
@@ -1627,10 +1981,11 @@ document.getElementById("supportBtn").onclick = () => {
 };
 
 btn.onclick = async () => {
-  const dream = dreamEl.value.trim();
+  const dream = buildDreamPayload();
+  const rawDream = dreamEl.value.trim();
   const email = normalizeEmail(emailEl.value);
 
-  if(!dream){
+  if(!rawDream){
     alert("Enter your dream first.");
     dreamEl.focus();
     return;
@@ -1692,18 +2047,30 @@ btn.onclick = async () => {
     }
 
     const mapped = mapInterpretation(data, dream);
+    const entryId = "dream_" + Date.now();
 
-    renderResultCards(mapped, dream);
-
-    addJournalEntry({
-      id:"dream_" + Date.now(),
+    const entry = {
+      id:entryId,
       createdAt:new Date().toISOString(),
-      dreamText:dream,
+      dreamText:rawDream,
+      fullPrompt:dream,
       summary:mapped.mainMeaning,
       interpretation:mapped,
       matchedSymbols:mapped.matchedSymbols,
-      favorite:false
-    });
+      favorite:false,
+      metadata:{
+        emotion:emotionEl.value,
+        ending:endingEl.value,
+        place:placeEl.value.trim(),
+        people:peopleEl.value.trim(),
+        selectedSymbols:selectedGuidedSymbols.slice()
+      },
+      source:"api",
+      accessType:data.is_paid ? "subscription" : data.dream_pack?.active ? "pack" : "free"
+    };
+
+    renderResultCards(mapped, rawDream, entryId);
+    addJournalEntry(entry);
 
   }catch(e){
     renderError(
@@ -1727,6 +2094,7 @@ if(savedEmail){
 }
 
 updateCharCount();
+renderGuidedSymbols();
 renderSymbols();
 renderJournal();
 refreshAccount();

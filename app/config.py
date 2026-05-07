@@ -321,6 +321,94 @@ class Config:
     ]
 
     # ============================================================
+    # Expected Headers
+    # ============================================================
+
+    EXPECTED_HEADERS = {
+
+        "Sheet1": [
+            "Symbol",
+            "Meaning",
+            "Effects in the Physical Realm",
+            "What to Do",
+            "Keywords",
+        ],
+
+        "BaseSymbols": [
+            "symbol",
+            "spiritual_meaning",
+            "physical_meaning",
+            "action",
+            "keywords",
+            "priority",
+            "active",
+        ],
+
+        "BehaviorRules": [
+            "behavior_name",
+            "keywords",
+            "life_area_meaning",
+            "physical_area_meaning",
+            "action_modifier",
+            "priority",
+            "active",
+        ],
+
+        "LocationRules": [
+            "location_name",
+            "keywords",
+            "life_area_meaning",
+            "physical_area_meaning",
+            "action_modifier",
+            "priority",
+            "active",
+        ],
+
+        "RelationshipRules": [
+            "relationship_name",
+            "keywords",
+            "life_area_meaning",
+            "physical_area_meaning",
+            "action_modifier",
+            "priority",
+            "active",
+        ],
+
+        "SizeStateRules": [
+            "state_name",
+            "keywords",
+            "life_area_meaning",
+            "physical_area_meaning",
+            "action_modifier",
+            "priority",
+            "active",
+        ],
+
+        "EndingRules": [
+            "ending_name",
+            "keywords",
+            "meaning",
+            "priority",
+            "active",
+        ],
+
+        "OverrideRules": [
+            "override_name",
+            "conditions",
+            "override_text",
+            "priority",
+            "active",
+        ],
+
+        "OutputTemplates": [
+            "template_name",
+            "template",
+            "priority",
+            "active",
+        ],
+    }
+
+    # ============================================================
     # Matching Engine
     # ============================================================
 

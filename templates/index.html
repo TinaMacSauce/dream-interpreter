@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
 <meta charset="utf-8" />
 
 <meta
@@ -17,23 +16,18 @@
 />
 
 <style>
-
 :root{
-
   --bg:#050506;
   --bg2:#0d0d12;
-
   --card:#111116;
   --card2:#17171d;
-
   --gold:#d4af37;
   --gold-soft:#f3e28a;
-
   --text:#f8efd9;
   --muted:rgba(248,239,217,.62);
-
   --line:rgba(212,175,55,.14);
-
+  --danger:#ffb3b3;
+  --success:#9ae6b4;
   --shadow:rgba(0,0,0,.72);
 }
 
@@ -48,47 +42,22 @@ html{
 }
 
 body{
-
   margin:0;
-
   font-family:Inter,system-ui,sans-serif;
-
   background:
-    radial-gradient(
-      circle at top,
-      rgba(212,175,55,.14),
-      transparent 30%
-    ),
-
-    radial-gradient(
-      circle at bottom right,
-      rgba(115,92,255,.10),
-      transparent 35%
-    ),
-
-    linear-gradient(
-      180deg,
-      #07070a,
-      #030304
-    );
-
+    radial-gradient(circle at top, rgba(212,175,55,.14), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(115,92,255,.10), transparent 35%),
+    linear-gradient(180deg,#07070a,#030304);
   color:var(--text);
-
   overflow-x:hidden;
-
   overscroll-behavior:none;
 }
 
 .app{
-
   position:relative;
-
   max-width:430px;
-
   min-height:100svh;
-
   margin:0 auto;
-
   padding:
     max(18px, env(safe-area-inset-top))
     16px
@@ -96,118 +65,69 @@ body{
 }
 
 .app::before{
-
   content:"";
-
   position:fixed;
-
   inset:0;
-
   backdrop-filter:blur(80px);
-
   pointer-events:none;
-
   z-index:-2;
 }
 
 .app::after{
-
   content:"";
-
   position:fixed;
-
   width:320px;
   height:320px;
-
   border-radius:50%;
-
-  background:
-    radial-gradient(
-      circle,
-      rgba(212,175,55,.12),
-      transparent 70%
-    );
-
+  background:radial-gradient(circle, rgba(212,175,55,.12), transparent 70%);
   bottom:-140px;
   right:-120px;
-
   filter:blur(60px);
-
   pointer-events:none;
-
   z-index:-1;
 }
 
 .topbar{
-
   display:flex;
-
   align-items:center;
-
   justify-content:space-between;
-
   gap:12px;
-
   margin-bottom:34px;
 }
 
 .brand{
-
   flex:1;
-
   text-align:center;
 }
 
 .brand h1{
-
   margin:0;
-
   font-size:1.24rem;
-
   font-weight:800;
-
   letter-spacing:-.05em;
-
   color:#fff8e7;
 }
 
 .brand p{
-
   margin:5px 0 0;
-
   font-size:.78rem;
-
   color:var(--muted);
 }
 
 .icon-btn{
-
   width:48px;
   height:48px;
-
   border-radius:50%;
-
   border:1px solid var(--line);
-
   background:rgba(255,255,255,.03);
-
   color:var(--gold-soft);
-
   display:flex;
-
   align-items:center;
-
   justify-content:center;
-
   backdrop-filter:blur(18px);
-
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.04);
-
-  transition:
-    transform .12s ease,
-    opacity .2s ease,
-    background .2s ease;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  text-decoration:none;
+  transition:transform .12s ease, opacity .2s ease, background .2s ease;
 }
 
 .icon-btn:active{
@@ -215,225 +135,146 @@ body{
 }
 
 .icon-btn svg{
-
   width:20px;
   height:20px;
-
   stroke-width:2;
 }
 
 .hero{
-
   position:relative;
-
   margin-bottom:34px;
 }
 
 .hero::before{
-
   content:"";
-
   position:absolute;
-
   width:260px;
   height:260px;
-
   border-radius:50%;
-
   background:rgba(212,175,55,.09);
-
   filter:blur(80px);
-
   top:-120px;
   left:-60px;
-
   z-index:-1;
 }
 
 .kicker{
-
   color:var(--gold);
-
   font-size:.74rem;
-
   font-weight:900;
-
   letter-spacing:.14em;
-
   text-transform:uppercase;
 }
 
 .hero h2{
-
   margin:12px 0 14px;
-
   font-size:3rem;
-
   font-weight:900;
-
   line-height:.92;
-
   letter-spacing:-.11em;
-
   color:#fff6df;
 }
 
 .hero p{
-
   margin:0;
-
   color:var(--muted);
-
   line-height:1.7;
-
   font-size:1.02rem;
 }
 
 .input-card{
-
   position:relative;
-
   border-radius:34px;
-
   padding:20px;
-
   border:1px solid rgba(212,175,55,.16);
-
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255,255,255,.05),
-      rgba(255,255,255,.015)
-    );
-
+  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
   box-shadow:
     0 28px 70px rgba(0,0,0,.58),
     inset 0 1px 0 rgba(255,255,255,.04);
-
   backdrop-filter:blur(26px);
 }
 
 label{
-
   display:block;
-
   margin:0 0 10px;
-
   font-size:.84rem;
-
   font-weight:900;
-
   color:var(--gold-soft);
 }
 
 input,
 textarea{
-
   width:100%;
-
   border-radius:24px;
-
   border:1px solid rgba(212,175,55,.14);
-
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255,255,255,.05),
-      rgba(255,255,255,.015)
-    );
-
+  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
   backdrop-filter:blur(10px);
-
   color:#fff;
-
   outline:none;
-
   font-family:inherit;
-
-  transition:
-    border-color .2s ease,
-    transform .15s ease,
-    background .2s ease;
+  transition:border-color .2s ease, transform .15s ease, background .2s ease;
 }
 
 input:focus,
 textarea:focus{
-
   border-color:rgba(243,226,138,.45);
-
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255,255,255,.06),
-      rgba(255,255,255,.02)
-    );
-
+  background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
   transform:translateY(-1px);
 }
 
 input{
-
   padding:16px;
-
   margin-bottom:18px;
-
   font-size:1rem;
 }
 
 textarea{
-
   min-height:260px;
-
   resize:vertical;
-
   padding:20px;
-
   line-height:1.72;
-
   font-size:1rem;
 }
 
 textarea::placeholder,
 input::placeholder{
-
   color:rgba(248,239,217,.28);
 }
 
+.status-line{
+  margin:0 0 14px;
+  padding:12px 14px;
+  border-radius:18px;
+  border:1px solid rgba(212,175,55,.11);
+  background:rgba(0,0,0,.20);
+  color:var(--muted);
+  font-size:.82rem;
+  line-height:1.55;
+  display:none;
+}
+
+.status-line strong{
+  color:var(--gold-soft);
+}
+
 .chips{
-
   display:grid;
-
   grid-template-columns:1fr 1fr;
-
   gap:10px;
-
   margin-top:16px;
 }
 
 .chip{
-
   border-radius:18px;
-
   border:1px solid rgba(212,175,55,.12);
-
   background:rgba(255,255,255,.04);
-
   color:var(--text);
-
   padding:14px 10px;
-
   font-size:.82rem;
-
   font-weight:800;
-
   backdrop-filter:blur(10px);
-
   cursor:pointer;
-
-  transition:
-    transform .12s ease,
-    opacity .2s ease,
-    background .2s ease;
+  transition:transform .12s ease, opacity .2s ease, background .2s ease;
 }
 
 .chip:active{
@@ -441,48 +282,24 @@ input::placeholder{
 }
 
 .primary{
-
   width:100%;
-
   margin-top:18px;
-
   padding:18px;
-
   border:0;
-
   border-radius:999px;
-
-  background:
-    linear-gradient(
-      135deg,
-      #c69220 0%,
-      #f3e28a 45%,
-      #b88218 100%
-    );
-
+  background:linear-gradient(135deg, #c69220 0%, #f3e28a 45%, #b88218 100%);
   color:#111;
-
   font-size:1rem;
-
   font-weight:900;
-
   letter-spacing:.02em;
-
   cursor:pointer;
-
   display:flex;
-
   align-items:center;
-
   justify-content:center;
-
   box-shadow:
     0 14px 28px rgba(0,0,0,.55),
     inset 0 1px 0 rgba(255,255,255,.25);
-
-  transition:
-    transform .15s ease,
-    filter .2s ease;
+  transition:transform .15s ease, filter .2s ease;
 }
 
 .primary:hover{
@@ -493,222 +310,158 @@ input::placeholder{
   transform:scale(.99);
 }
 
+.primary:disabled{
+  opacity:.72;
+  cursor:not-allowed;
+}
+
 .helper{
-
   margin:14px 0 0;
-
   text-align:center;
-
   color:var(--muted);
-
   font-size:.82rem;
-
   line-height:1.6;
 }
 
 .loader-ring{
-
   width:18px;
   height:18px;
-
   border:2px solid rgba(0,0,0,.18);
-
   border-top:2px solid #111;
-
   border-radius:50%;
-
   display:inline-block;
-
   margin-right:10px;
-
   animation:spin 1s linear infinite;
 }
 
 @keyframes spin{
-  to{
-    transform:rotate(360deg);
-  }
+  to{ transform:rotate(360deg); }
 }
 
 .result{
-
   margin-top:24px;
 }
 
 .result-card{
-
   opacity:0;
-
   transform:translateY(16px);
-
   border-radius:28px;
-
   margin-top:14px;
-
   padding:20px;
-
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255,255,255,.04),
-      rgba(255,255,255,.015)
-    );
-
+  background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
   border:1px solid rgba(212,175,55,.14);
-
-  box-shadow:
-    0 18px 42px rgba(0,0,0,.42);
-
+  box-shadow:0 18px 42px rgba(0,0,0,.42);
   backdrop-filter:blur(22px);
-
   animation:cardReveal .55s forwards;
 }
 
-.result-card:nth-child(1){
-  animation-delay:.05s;
-}
-
-.result-card:nth-child(2){
-  animation-delay:.12s;
-}
-
-.result-card:nth-child(3){
-  animation-delay:.19s;
-}
-
-.result-card:nth-child(4){
-  animation-delay:.26s;
-}
-
-.result-card:nth-child(5){
-  animation-delay:.33s;
-}
-
 .result-card.featured{
-
-  background:
-    linear-gradient(
-      180deg,
-      rgba(212,175,55,.12),
-      rgba(255,255,255,.02)
-    );
+  background:linear-gradient(180deg, rgba(212,175,55,.12), rgba(255,255,255,.02));
 }
+
+.result-card.error{
+  border-color:rgba(255,179,179,.24);
+  background:linear-gradient(180deg, rgba(255,90,90,.08), rgba(255,255,255,.015));
+}
+
+.result-card.success{
+  border-color:rgba(154,230,180,.24);
+  background:linear-gradient(180deg, rgba(90,255,140,.06), rgba(255,255,255,.015));
+}
+
+.result-card:nth-child(1){ animation-delay:.05s; }
+.result-card:nth-child(2){ animation-delay:.12s; }
+.result-card:nth-child(3){ animation-delay:.19s; }
+.result-card:nth-child(4){ animation-delay:.26s; }
+.result-card:nth-child(5){ animation-delay:.33s; }
 
 .label{
-
   margin-bottom:10px;
-
   color:var(--gold-soft);
-
   font-size:.72rem;
-
   font-weight:900;
-
   letter-spacing:.13em;
-
   text-transform:uppercase;
 }
 
 .result-text{
-
   line-height:1.75;
-
   color:rgba(248,239,217,.92);
-
   font-size:.96rem;
+  white-space:pre-wrap;
 }
 
 .logic-line{
-
   margin-top:10px;
-
   padding:14px;
-
   border-radius:16px;
-
   background:rgba(0,0,0,.22);
-
   border:1px solid rgba(212,175,55,.10);
-
   line-height:1.7;
-
   font-size:.92rem;
 }
 
+.upgrade-link{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-top:16px;
+  width:100%;
+  padding:15px;
+  border-radius:999px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(212,175,55,.24);
+  color:var(--gold-soft);
+  text-decoration:none;
+  font-weight:900;
+  font-size:.9rem;
+}
+
 .bottom-nav{
-
   position:fixed;
-
   left:50%;
   bottom:10px;
-
   transform:translateX(-50%);
-
   width:calc(100% - 28px);
-
   max-width:400px;
-
   height:68px;
-
   display:grid;
-
   grid-template-columns:repeat(4,1fr);
-
   gap:4px;
-
   padding:8px;
-
   border-radius:24px;
-
   background:rgba(10,10,12,.84);
-
   border:1px solid rgba(212,175,55,.16);
-
   backdrop-filter:blur(26px);
-
-  box-shadow:
-    0 18px 45px rgba(0,0,0,.72);
+  box-shadow:0 18px 45px rgba(0,0,0,.72);
 }
 
-.bottom-nav button{
-
+.bottom-nav button,
+.bottom-nav a{
   border:0;
-
   background:transparent;
-
   color:rgba(248,239,217,.48);
-
   font-size:.74rem;
-
   font-weight:800;
-
   border-radius:14px;
-
-  transition:
-    transform .12s ease,
-    opacity .2s ease,
-    background .2s ease;
+  text-decoration:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-family:inherit;
 }
 
-.bottom-nav button.active{
-
+.bottom-nav .active{
   color:var(--gold-soft);
-
   background:rgba(255,255,255,.03);
 }
 
-.bottom-nav button:active{
-  transform:scale(.96);
-}
-
 @keyframes cardReveal{
-
   to{
     opacity:1;
     transform:translateY(0);
   }
 }
-
 </style>
 </head>
 
@@ -717,15 +470,12 @@ input::placeholder{
 <main class="app">
 
   <header class="topbar">
-
-    <button class="icon-btn" type="button">
-
+    <button class="icon-btn" type="button" aria-label="Menu">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <line x1="4" y1="7" x2="20" y2="7"/>
         <line x1="4" y1="12" x2="20" y2="12"/>
         <line x1="4" y1="17" x2="20" y2="17"/>
       </svg>
-
     </button>
 
     <div class="brand">
@@ -733,26 +483,18 @@ input::placeholder{
       <p>Private dream journal</p>
     </div>
 
-    <button class="icon-btn" type="button">
-
+    <a class="icon-btn" href="/upgrade" aria-label="Access">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path d="M12 20h9"/>
         <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
       </svg>
-
-    </button>
-
+    </a>
   </header>
 
   <section class="hero">
+    <div class="kicker">Decode One Dream</div>
 
-    <div class="kicker">
-      Decode One Dream
-    </div>
-
-    <h2>
-      What did you dream?
-    </h2>
+    <h2>What did you dream?</h2>
 
     <p>
       Write the dream clearly.
@@ -762,24 +504,23 @@ input::placeholder{
       places,
       and key symbols.
     </p>
-
   </section>
 
   <section class="input-card">
 
-    <label for="email">
-      Email
-    </label>
+    <div id="accessStatus" class="status-line"></div>
+
+    <label for="email">Email</label>
 
     <input
       id="email"
       type="email"
       placeholder="you@example.com"
+      autocomplete="email"
+      inputmode="email"
     />
 
-    <label for="dream">
-      Dream Entry
-    </label>
+    <label for="dream">Dream Entry</label>
 
     <textarea
       id="dream"
@@ -787,86 +528,146 @@ input::placeholder{
     ></textarea>
 
     <div class="chips">
-
-      <button
-        class="chip"
-        type="button"
-        id="templateBtn"
-      >
-        Use Template
-      </button>
-
-      <button
-        class="chip"
-        type="button"
-        id="clearBtn"
-      >
-        Clear Dream
-      </button>
-
+      <button class="chip" type="button" id="templateBtn">Use Template</button>
+      <button class="chip" type="button" id="clearBtn">Clear Dream</button>
     </div>
 
-    <button
-      id="interpret"
-      class="primary"
-    >
+    <button id="interpret" class="primary" type="button">
       Decode Dream
     </button>
 
     <p class="helper">
-      Your first interpretations are free.
-      Journal features can be expanded later.
+      Your first interpretations are free. Use the same email for access recovery and checkout.
     </p>
 
   </section>
 
-  <div
-    id="result"
-    class="result"
-  ></div>
+  <div id="result" class="result"></div>
 
 </main>
 
 <nav class="bottom-nav">
-
-  <button class="active" type="button">
-    Decode
-  </button>
-
-  <button type="button">
-    Journal
-  </button>
-
-  <button type="button">
-    Symbols
-  </button>
-
-  <button type="button">
-    Account
-  </button>
-
+  <button class="active" type="button">Decode</button>
+  <button type="button">Journal</button>
+  <button type="button">Symbols</button>
+  <a href="/upgrade">Access</a>
 </nav>
 
 <script>
+const HOSTED_APP =
+  "https://interpreter.jamaicantruestories.com";
 
 const API =
-  window.location.origin.includes("localhost")
+  window.location.origin.includes("localhost") ||
+  window.location.origin.includes("127.0.0.1")
     ? "http://127.0.0.1:5000"
-    : "https://interpreter.jamaicantruestories.com";
+    : HOSTED_APP;
+
+const EMAIL_KEY = "jts_email";
+
+const emailEl =
+  document.getElementById("email");
+
+const dreamEl =
+  document.getElementById("dream");
+
+const btn =
+  document.getElementById("interpret");
+
+const result =
+  document.getElementById("result");
+
+const accessStatus =
+  document.getElementById("accessStatus");
 
 function esc(s){
-
   return String(s || "")
     .replace(/&/g,"&amp;")
     .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;");
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+function normalizeEmail(email){
+  return String(email || "").trim().toLowerCase();
+}
+
+function validEmail(email){
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
+}
+
+function saveEmail(email){
+  const clean = normalizeEmail(email);
+
+  if(!clean) return;
+
+  try{
+    localStorage.setItem(EMAIL_KEY, clean);
+  }catch(e){}
+}
+
+function loadEmail(){
+  try{
+    return normalizeEmail(localStorage.getItem(EMAIL_KEY) || "");
+  }catch(e){
+    return "";
+  }
+}
+
+function getReturnUrl(){
+  return window.location.href.split("#")[0];
+}
+
+function upgradeUrl(email){
+  const clean = normalizeEmail(email);
+
+  return API +
+    "/upgrade?email=" +
+    encodeURIComponent(clean) +
+    "&return=" +
+    encodeURIComponent(getReturnUrl());
+}
+
+function showAccessStatus(html){
+  accessStatus.style.display = "block";
+  accessStatus.innerHTML = html;
+}
+
+function hideAccessStatus(){
+  accessStatus.style.display = "none";
+  accessStatus.innerHTML = "";
+}
+
+function renderError(title, message, upgrade){
+  result.innerHTML = `
+
+    <div class="result-card error">
+
+      <div class="label">
+        ${esc(title)}
+      </div>
+
+      <div class="result-text">
+        ${esc(message)}
+      </div>
+
+      ${
+        upgrade
+          ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl.value))}">View Access Options</a>`
+          : ""
+      }
+
+    </div>
+  `;
+
+  result.scrollIntoView({
+    behavior:"smooth",
+    block:"start"
+  });
 }
 
 function render(data){
-
-  const result =
-    document.getElementById("result");
-
   const interp =
     data.interpretation || {};
 
@@ -891,6 +692,28 @@ function render(data){
   const readable =
     data.narration?.readable_summary || "";
 
+  const seal =
+    data.seal || {};
+
+  const dreamPack =
+    data.dream_pack || {};
+
+  if(data.is_paid){
+    showAccessStatus("<strong>Access:</strong> Subscription active.");
+  }else if(dreamPack.active){
+    showAccessStatus(
+      "<strong>Access:</strong> Dream Pack active • " +
+      esc(String(dreamPack.uses_remaining || 0)) +
+      " use(s) remaining."
+    );
+  }else if(typeof data.free_uses_left === "number"){
+    showAccessStatus(
+      "<strong>Access:</strong> Free mode • " +
+      esc(String(data.free_uses_left)) +
+      " free use(s) left."
+    );
+  }
+
   result.innerHTML = `
 
     <div class="result-card featured">
@@ -900,7 +723,7 @@ function render(data){
       </div>
 
       <div class="result-text">
-        ${esc(readable)}
+        ${esc(readable || data.full_interpretation || "")}
       </div>
 
     </div>
@@ -930,8 +753,14 @@ function render(data){
 
       <div class="logic-line">
         <b>Ending:</b>
-        ${esc(ending.name || "")}
+        ${esc(ending.name || seal.outcome || "")}
         ${ending.meaning ? " — " + esc(ending.meaning) : ""}
+      </div>
+
+      <div class="logic-line">
+        <b>Seal:</b>
+        ${esc(seal.type || "")}
+        ${seal.risk ? " — Risk: " + esc(seal.risk) : ""}
       </div>
 
     </div>
@@ -979,9 +808,29 @@ function render(data){
   });
 }
 
-document.getElementById("templateBtn").onclick = () => {
+async function readResponse(res){
+  const ct =
+    (res.headers.get("content-type") || "").toLowerCase();
 
-  document.getElementById("dream").value =
+  if(ct.includes("application/json")){
+    try{
+      return await res.json();
+    }catch(e){
+      return {};
+    }
+  }
+
+  try{
+    return {
+      error: await res.text()
+    };
+  }catch(e){
+    return {};
+  }
+}
+
+document.getElementById("templateBtn").onclick = () => {
+  dreamEl.value =
 `Dream:
 [What happened?]
 
@@ -995,35 +844,44 @@ Emotion:
 
 Ending:
 [How did it end?]`;
+
+  dreamEl.focus();
 };
 
 document.getElementById("clearBtn").onclick = () => {
-
-  document.getElementById("dream").value = "";
-
-  document.getElementById("dream").focus();
+  dreamEl.value = "";
+  dreamEl.focus();
 };
 
-document.getElementById("interpret").onclick = async () => {
+emailEl.addEventListener("input", () => {
+  saveEmail(emailEl.value);
+});
 
+emailEl.addEventListener("blur", () => {
+  saveEmail(emailEl.value);
+});
+
+btn.onclick = async () => {
   const dream =
-    document.getElementById("dream")
-    .value
-    .trim();
+    dreamEl.value.trim();
 
   const email =
-    document.getElementById("email")
-    .value
-    .trim();
-
-  const btn =
-    document.getElementById("interpret");
+    normalizeEmail(emailEl.value);
 
   if(!dream){
-
     alert("Enter your dream first.");
-
+    dreamEl.focus();
     return;
+  }
+
+  if(email && !validEmail(email)){
+    alert("Enter a valid email or leave the email field blank.");
+    emailEl.focus();
+    return;
+  }
+
+  if(email){
+    saveEmail(email);
   }
 
   btn.disabled = true;
@@ -1033,16 +891,17 @@ document.getElementById("interpret").onclick = async () => {
     Analyzing Dream...
   `;
 
+  result.innerHTML = "";
+
   try{
-
     const res = await fetch(API + "/interpret", {
-
       method:"POST",
-
+      mode:"cors",
+      credentials:"include",
       headers:{
-        "Content-Type":"application/json"
+        "Content-Type":"application/json",
+        "Accept":"application/json"
       },
-
       body:JSON.stringify({
         text:dream,
         email:email
@@ -1050,36 +909,51 @@ document.getElementById("interpret").onclick = async () => {
     });
 
     const data =
-      await res.json();
+      await readResponse(res);
+
+    if(res.status === 402){
+      window.location.href =
+        upgradeUrl(email);
+
+      return;
+    }
+
+    if(!res.ok){
+      renderError(
+        "Interpreter Error",
+        data.error ||
+        data.message ||
+        data.details ||
+        "Something went wrong calling the interpreter API.",
+        false
+      );
+
+      return;
+    }
 
     render(data);
 
   }catch(e){
-
-    document.getElementById("result").innerHTML = `
-
-      <div class="result-card">
-
-        <div class="label">
-          Error
-        </div>
-
-        <div class="result-text">
-          Something went wrong calling the interpreter API.
-        </div>
-
-      </div>
-    `;
-  }
-
-  finally{
-
+    renderError(
+      "Network Error",
+      "The interpreter could not be reached. Check the Render deployment, domain, or CORS settings.",
+      false
+    );
+  }finally{
     btn.disabled = false;
-
     btn.textContent = "Decode Dream";
   }
 };
 
+const savedEmail =
+  loadEmail();
+
+if(savedEmail){
+  emailEl.value = savedEmail;
+  showAccessStatus("<strong>Email saved:</strong> " + esc(savedEmail));
+}else{
+  hideAccessStatus();
+}
 </script>
 
 </body>

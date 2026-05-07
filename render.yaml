@@ -16,28 +16,63 @@ services:
     healthCheckPath: /health
 
     envVars:
-      # 🔒 Force Python version (critical)
+
+      # ============================================================
+      # Python
+      # ============================================================
+
       - key: PYTHON_VERSION
         value: 3.11.11
 
-      # 🔐 Security
+      # ============================================================
+      # Security
+      # ============================================================
+
       - key: FLASK_SECRET_KEY
         generateValue: true
 
-      # 📊 Google Sheets
+      - key: SESSION_COOKIE_SAMESITE
+        value: None
+
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+
+      # ============================================================
+      # Frontend / Domain
+      # ============================================================
+
+      - key: RETURN_URL
+        value: https://interpreter.jamaicantruestories.com
+
+      - key: FRONTEND_URL
+        value: https://interpreter.jamaicantruestories.com
+
+      - key: UPGRADE_URL
+        value: https://interpreter.jamaicantruestories.com/upgrade
+
+      # ============================================================
+      # CORS
+      # ============================================================
+
+      - key: ALLOWED_ORIGINS
+        value: https://interpreter.jamaicantruestories.com,https://jamaicantruestories.com,https://www.jamaicantruestories.com,https://plqwhd-jm.myshopify.com
+
+      # ============================================================
+      # Google Sheets
+      # ============================================================
+
       - key: SPREADSHEET_ID
         value: 1ToWPpJ_u-Z14eqL9U1oJppXX6f63h_eZcjUVglKr4Zk
 
       - key: WORKSHEET_NAME
         value: Sheet1
 
-      # 🌐 CORS
-      - key: ALLOWED_ORIGINS
-        value: https://jamaicantruestories.com,https://www.jamaicantruestories.com,https://plqwhd-jm.myshopify.com,https://interpreter.jamaicantruestories.com
+      - key: GOOGLE_SERVICE_ACCOUNT_FILE
+        value: /etc/secrets/credentials.json
 
-      # 🔁 App behavior
-      - key: RETURN_URL
-        value: https://jamaicantruestories.com/pages/dream-interpreter
+      # ============================================================
+      # Doctrine Mode
+      # ============================================================
 
       - key: DOCTRINE_MODE
         value: "1"
@@ -48,37 +83,89 @@ services:
       - key: NARRATIVE_MAX_SYMBOLS
         value: "3"
 
-      # ⚡ Performance
+      - key: NARRATION_ENABLED
+        value: "1"
+
+      - key: NARRATION_MODE
+        value: deterministic_event
+
+      - key: NARRATION_MAX_SYMBOLS
+        value: "3"
+
+      # ============================================================
+      # Performance
+      # ============================================================
+
       - key: CACHE_TTL_SECONDS
         value: "120"
 
-      # 🧪 Debug
       - key: DEBUG_MATCH
         value: "0"
 
-      # 🆓 Free usage system
+      # ============================================================
+      # Free Usage System
+      # ============================================================
+
       - key: FREE_QUOTA
         value: "3"
 
       - key: SHADOW_WINDOW_HOURS
         value: "72"
 
-      # 💰 Dream pack system
+      # ============================================================
+      # Dream Pack
+      # ============================================================
+
       - key: DREAM_PACK_USES
         value: "3"
 
       - key: DREAM_PACK_HOURS
         value: "72"
 
-      # 🍪 Cookies
-      - key: SESSION_COOKIE_SAMESITE
-        value: None
+      # ============================================================
+      # Flask Templates
+      # ============================================================
 
-      - key: SESSION_COOKIE_SECURE
-        value: "true"
+      - key: TEMPLATE_INDEX
+        value: index.html
 
-      # 🔑 Google credentials (use ONE method)
-      # Recommended: set GOOGLE_SERVICE_ACCOUNT_JSON in dashboard
+      - key: TEMPLATE_UPGRADE
+        value: upgrade.html
 
-      - key: GOOGLE_SERVICE_ACCOUNT_FILE
-        value: /etc/secrets/credentials.json
+      # ============================================================
+      # Stripe
+      # ============================================================
+
+      # Set these directly in Render dashboard securely
+
+      # STRIPE_SECRET_KEY
+      # STRIPE_WEBHOOK_SECRET
+      # PRICE_WEEKLY
+      # PRICE_MONTHLY
+      # PRICE_DREAM_PACK
+
+      # ============================================================
+      # Optional AI Narration
+      # ============================================================
+
+      - key: AI_NARRATION_ENABLED
+        value: "0"
+
+      - key: AI_NARRATION_PROVIDER
+        value: none
+
+      # ============================================================
+      # Scaling / Safety
+      # ============================================================
+
+      - key: MAX_DREAM_LENGTH
+        value: "2500"
+
+      - key: MIN_DREAM_LENGTH
+        value: "5"
+
+      - key: BASE_MATCH_TOP_K
+        value: "3"
+
+      - key: MAX_RULE_HITS_PER_LAYER
+        value: "4"

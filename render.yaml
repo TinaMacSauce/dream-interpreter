@@ -11,18 +11,24 @@ services:
       pip install -r requirements.txt
 
     startCommand: |
-      gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+      gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --worker-class gthread --timeout 120 --keep-alive 5
 
     healthCheckPath: /health
 
     envVars:
 
       # ============================================================
-      # Python
+      # Python / Runtime
       # ============================================================
 
       - key: PYTHON_VERSION
         value: 3.11.11
+
+      - key: PYTHONUNBUFFERED
+        value: "1"
+
+      - key: WEB_CONCURRENCY
+        value: "2"
 
       # ============================================================
       # Security
@@ -42,10 +48,10 @@ services:
       # ============================================================
 
       - key: RETURN_URL
-        value: https://interpreter.jamaicantruestories.com
+        value: https://interpreter.jamaicantruestories.com/
 
       - key: FRONTEND_URL
-        value: https://interpreter.jamaicantruestories.com
+        value: https://interpreter.jamaicantruestories.com/
 
       - key: UPGRADE_URL
         value: https://interpreter.jamaicantruestories.com/upgrade
@@ -92,6 +98,22 @@ services:
       - key: NARRATION_MAX_SYMBOLS
         value: "3"
 
+      - key: NARRATION_INCLUDE_PROMPT_PAYLOAD
+        value: "1"
+
+      # ============================================================
+      # Optional AI Narration
+      # ============================================================
+
+      - key: AI_NARRATION_ENABLED
+        value: "0"
+
+      - key: AI_NARRATION_PROVIDER
+        value: none
+
+      - key: AI_NARRATION_STRICT_DOCTRINE
+        value: "1"
+
       # ============================================================
       # Performance
       # ============================================================
@@ -133,28 +155,6 @@ services:
         value: upgrade.html
 
       # ============================================================
-      # Stripe
-      # ============================================================
-
-      # Set these directly in Render dashboard securely
-
-      # STRIPE_SECRET_KEY
-      # STRIPE_WEBHOOK_SECRET
-      # PRICE_WEEKLY
-      # PRICE_MONTHLY
-      # PRICE_DREAM_PACK
-
-      # ============================================================
-      # Optional AI Narration
-      # ============================================================
-
-      - key: AI_NARRATION_ENABLED
-        value: "0"
-
-      - key: AI_NARRATION_PROVIDER
-        value: none
-
-      # ============================================================
       # Scaling / Safety
       # ============================================================
 
@@ -169,3 +169,15 @@ services:
 
       - key: MAX_RULE_HITS_PER_LAYER
         value: "4"
+
+      # ============================================================
+      # Stripe
+      # ============================================================
+
+      # Set these securely in the Render dashboard:
+      # STRIPE_SECRET_KEY
+      # STRIPE_WEBHOOK_SECRET
+      # PRICE_WEEKLY
+      # PRICE_MONTHLY
+      # PRICE_DREAM_PACK
+      # ADMIN_KEY

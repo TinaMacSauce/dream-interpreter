@@ -526,3 +526,20 @@ def consume_dream_pack_use(
             else ""
         ),
     }
+
+
+# ============================================================
+# ACCESS CHECK WRAPPER
+# ============================================================
+
+def has_active_access(email: str):
+    """
+    Compatibility wrapper.
+
+    Some routes import has_active_access from app.access.
+    The real Stripe/subscription logic lives in app.billing.
+    This prevents import errors while keeping billing logic separate.
+    """
+    from app.billing import has_active_access as billing_has_active_access
+
+    return billing_has_active_access(email)

@@ -15,6 +15,7 @@ from flask import (
 from app.access import (
     get_dream_pack_status,
     mark_dream_pack_purchase,
+    mark_subscriber,
     persist_email_to_session,
     set_buyer_session,
     set_premium_session,
@@ -29,6 +30,8 @@ from app.config import Config
 from app.utils import normalize_email, validate_email
 
 billing_bp = Blueprint("billing", __name__)
+
+STRIPE_API_VERSION = "2025-03-31.basil"
 
 
 # ============================================================
@@ -85,7 +88,7 @@ def _configure_stripe() -> None:
         return
 
     stripe.api_key = Config.STRIPE_SECRET_KEY
-    stripe.api_version = "2025-03-31.basil"
+    stripe.api_version = STRIPE_API_VERSION
 
 
 def _clear_free_cookie(resp):
@@ -104,6 +107,20 @@ def _json_response(payload: Dict[str, Any], status: int = 200):
     resp = make_response(jsonify(payload), status)
     resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+def _build_success_url(endpoint: str, email: str, requested_return: str) -> str:
+    return (
+        url_for(endpoint, _external=True)
+        + f"?email={email}&return={requested_return}"
+    )
+
+
+def _build_cancel_url(email: str, requested_return: str) -> str:
+    return (
+        url_for("home.upgrade", _external=True)
+        + f"?email={email}&return={requested_return}"
+    )
 
 
 # ============================================================
@@ -152,10 +169,6 @@ def check_access():
 
     access_type = (access_meta.get("type") or "").strip().lower()
 
-    # --------------------------------------------------------
-    # ACTIVE SUBSCRIPTION
-    # --------------------------------------------------------
-
     if access_ok and access_type == "subscription":
         set_premium_session(email)
 
@@ -171,10 +184,6 @@ def check_access():
         )
 
         return _clear_free_cookie(resp)
-
-    # --------------------------------------------------------
-    # ACTIVE DREAM PACK
-    # --------------------------------------------------------
 
     if access_ok and access_type == "dream_pack":
         set_buyer_session(email)
@@ -197,10 +206,6 @@ def check_access():
         )
 
         return _clear_free_cookie(resp)
-
-    # --------------------------------------------------------
-    # NO ACCESS
-    # --------------------------------------------------------
 
     return _json_response(
         {
@@ -231,7 +236,6 @@ def create_checkout_session():
         return make_response("Missing valid email.", 400)
 
     persist_email_to_session(email)
-
     _configure_stripe()
 
     requested_return = _safe_return_url(
@@ -244,11 +248,9 @@ def create_checkout_session():
     try:
         checkout = stripe.checkout.Session.create(
             mode="subscription",
-            customer_creation="always",
-            payment_method_collection="always",
+            customer_email=email,
             billing_address_collection="auto",
             allow_promotion_codes=True,
-            customer_email=email,
             expires_at=int(time.time()) + 1800,
             line_items=[
                 {
@@ -261,13 +263,14 @@ def create_checkout_session():
                 "email": email,
                 "return_url": requested_return,
             },
-            success_url=(
-                url_for("billing.payment_success", _external=True)
-                + f"?email={email}&return={requested_return}"
+            success_url=_build_success_url(
+                "billing.payment_success",
+                email,
+                requested_return,
             ),
-            cancel_url=(
-                url_for("home.upgrade", _external=True)
-                + f"?email={email}&return={requested_return}"
+            cancel_url=_build_cancel_url(
+                email,
+                requested_return,
             ),
         )
 
@@ -292,7 +295,6 @@ def create_dream_pack_checkout_session():
         return make_response("Missing valid email.", 400)
 
     persist_email_to_session(email)
-
     _configure_stripe()
 
     requested_return = _safe_return_url(
@@ -305,9 +307,8 @@ def create_dream_pack_checkout_session():
     try:
         checkout = stripe.checkout.Session.create(
             mode="payment",
-            payment_method_collection="always",
-            allow_promotion_codes=True,
             customer_email=email,
+            allow_promotion_codes=True,
             expires_at=int(time.time()) + 1800,
             line_items=[
                 {
@@ -322,13 +323,14 @@ def create_dream_pack_checkout_session():
                 "email": email,
                 "return_url": requested_return,
             },
-            success_url=(
-                url_for("billing.dream_pack_success", _external=True)
-                + f"?email={email}&return={requested_return}"
+            success_url=_build_success_url(
+                "billing.dream_pack_success",
+                email,
+                requested_return,
             ),
-            cancel_url=(
-                url_for("home.upgrade", _external=True)
-                + f"?email={email}&return={requested_return}"
+            cancel_url=_build_cancel_url(
+                email,
+                requested_return,
             ),
         )
 
@@ -360,6 +362,7 @@ def payment_success():
                 access_meta.get("type") or ""
             ).strip().lower() == "subscription":
                 set_premium_session(email)
+                mark_subscriber(email, True)
 
         except Exception:
             pass
@@ -383,7 +386,6 @@ def dream_pack_success():
 
     if validate_email(email):
         persist_email_to_session(email)
-
         set_buyer_session(email)
 
         mark_dream_pack_purchase(
@@ -431,10 +433,6 @@ def stripe_webhook():
         or {}
     )
 
-    # --------------------------------------------------------
-    # CHECKOUT COMPLETED
-    # --------------------------------------------------------
-
     if event_type == "checkout.session.completed":
         metadata = data_obj.get("metadata") or {}
 
@@ -453,22 +451,12 @@ def stripe_webhook():
         if not validate_email(email):
             return ("ok", 200)
 
-        # ----------------------------------------------------
-        # DREAM PACK
-        # ----------------------------------------------------
-
         if mode == "payment" and purchase_type == "dream_pack":
             mark_dream_pack_purchase(
                 email=email,
                 uses=Config.DREAM_PACK_USES,
                 hours=Config.DREAM_PACK_HOURS,
             )
-
-            set_buyer_session(email)
-
-        # ----------------------------------------------------
-        # SUBSCRIPTION
-        # ----------------------------------------------------
 
         if mode == "subscription":
             subscription_id = data_obj.get("subscription")
@@ -478,9 +466,14 @@ def stripe_webhook():
                     sub = stripe.Subscription.retrieve(subscription_id)
 
                     status = (sub.get("status") or "").lower()
+                    customer_id = sub.get("customer") or ""
 
                     if status in {"active", "trialing"}:
-                        set_premium_session(email)
+                        mark_subscriber(
+                            email=email,
+                            is_active=True,
+                            stripe_customer_id=customer_id,
+                        )
 
                 except Exception:
                     pass

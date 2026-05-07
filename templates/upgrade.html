@@ -19,14 +19,20 @@
 <style>
 
 :root{
+
   --bg:#050506;
   --gold:#d4af37;
   --gold-soft:#f3e28a;
+
   --text:#f8efd9;
   --muted:rgba(248,239,217,.62);
+
   --line:rgba(212,175,55,.14);
+
   --danger:#ffb3b3;
   --success:#9ae6b4;
+
+  --shadow:rgba(0,0,0,.72);
 }
 
 *{
@@ -40,22 +46,47 @@ html{
 }
 
 body{
+
   margin:0;
+
   font-family:Inter,system-ui,sans-serif;
+
   background:
-    radial-gradient(circle at top, rgba(212,175,55,.14), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(115,92,255,.10), transparent 35%),
-    linear-gradient(180deg,#07070a,#030304);
+    radial-gradient(
+      circle at top,
+      rgba(212,175,55,.14),
+      transparent 30%
+    ),
+
+    radial-gradient(
+      circle at bottom right,
+      rgba(115,92,255,.10),
+      transparent 35%
+    ),
+
+    linear-gradient(
+      180deg,
+      #07070a,
+      #030304
+    );
+
   color:var(--text);
+
   overflow-x:hidden;
+
   overscroll-behavior:none;
 }
 
 .app{
+
   position:relative;
+
   max-width:430px;
+
   min-height:100svh;
+
   margin:0 auto;
+
   padding:
     max(18px, env(safe-area-inset-top))
     16px
@@ -63,151 +94,252 @@ body{
 }
 
 .app::before{
+
   content:"";
+
   position:fixed;
+
   inset:0;
+
   backdrop-filter:blur(80px);
+
   pointer-events:none;
+
   z-index:-2;
 }
 
 .app::after{
+
   content:"";
+
   position:fixed;
+
   width:320px;
   height:320px;
+
   border-radius:50%;
-  background:radial-gradient(circle, rgba(212,175,55,.12), transparent 70%);
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(212,175,55,.12),
+      transparent 70%
+    );
+
   bottom:-140px;
   right:-120px;
+
   filter:blur(60px);
+
   pointer-events:none;
+
   z-index:-1;
 }
 
 .topbar{
+
   display:flex;
+
   align-items:center;
+
   justify-content:space-between;
+
   gap:12px;
+
   margin-bottom:34px;
 }
 
 .brand{
+
   flex:1;
+
   text-align:center;
 }
 
 .brand h1{
+
   margin:0;
+
   font-size:1.24rem;
+
   font-weight:800;
+
   letter-spacing:-.05em;
+
   color:#fff8e7;
 }
 
 .brand p{
+
   margin:5px 0 0;
+
   font-size:.78rem;
+
   color:var(--muted);
 }
 
 .icon-btn{
+
   width:48px;
   height:48px;
+
   border-radius:50%;
+
   border:1px solid var(--line);
+
   background:rgba(255,255,255,.03);
+
   color:var(--gold-soft);
+
   display:flex;
+
   align-items:center;
+
   justify-content:center;
+
   backdrop-filter:blur(18px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.04);
+
   text-decoration:none;
 }
 
 .icon-btn svg{
+
   width:20px;
   height:20px;
+
   stroke-width:2;
 }
 
 .hero{
+
   position:relative;
+
   margin-bottom:26px;
 }
 
 .hero::before{
+
   content:"";
+
   position:absolute;
+
   width:260px;
   height:260px;
+
   border-radius:50%;
+
   background:rgba(212,175,55,.09);
+
   filter:blur(80px);
+
   top:-120px;
   left:-60px;
+
   z-index:-1;
 }
 
 .kicker{
+
   color:var(--gold);
+
   font-size:.74rem;
+
   font-weight:900;
+
   letter-spacing:.14em;
+
   text-transform:uppercase;
 }
 
 .hero h2{
+
   margin:12px 0 14px;
-  font-size:2.75rem;
+
+  font-size:2.8rem;
+
   font-weight:900;
+
   line-height:.94;
+
   letter-spacing:-.1em;
+
   color:#fff6df;
 }
 
 .hero p{
+
   margin:0;
+
   color:var(--muted);
+
   line-height:1.7;
+
   font-size:1.02rem;
 }
 
 .panel{
+
   border-radius:34px;
+
   padding:20px;
+
   border:1px solid rgba(212,175,55,.16);
-  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.05),
+      rgba(255,255,255,.015)
+    );
+
   box-shadow:
     0 28px 70px rgba(0,0,0,.58),
     inset 0 1px 0 rgba(255,255,255,.04);
+
   backdrop-filter:blur(26px);
 }
 
 .section-title{
+
   margin:0 0 12px;
+
   color:var(--gold-soft);
+
   font-size:.76rem;
+
   font-weight:900;
+
   letter-spacing:.13em;
+
   text-transform:uppercase;
 }
 
 .access-list{
+
   display:grid;
+
   gap:10px;
+
   margin:0 0 18px;
 }
 
 .access-item{
+
   padding:14px;
+
   border-radius:20px;
+
   border:1px solid rgba(212,175,55,.11);
+
   background:rgba(0,0,0,.22);
+
   color:rgba(248,239,217,.86);
+
   font-size:.92rem;
+
   line-height:1.55;
 }
 
@@ -216,31 +348,44 @@ body{
 }
 
 label{
+
   display:block;
+
   margin:0 0 10px;
+
   font-size:.84rem;
+
   font-weight:900;
+
   color:var(--gold-soft);
 }
 
 input{
-  width:100%;
-  border-radius:24px;
-  border:1px solid rgba(212,175,55,.14);
-  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
-  backdrop-filter:blur(10px);
-  color:#fff;
-  outline:none;
-  font-family:inherit;
-  padding:16px;
-  font-size:1rem;
-  transition:border-color .2s ease, transform .15s ease, background .2s ease;
-}
 
-input:focus{
-  border-color:rgba(243,226,138,.45);
-  background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-  transform:translateY(-1px);
+  width:100%;
+
+  border-radius:24px;
+
+  border:1px solid rgba(212,175,55,.14);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.05),
+      rgba(255,255,255,.015)
+    );
+
+  backdrop-filter:blur(10px);
+
+  color:#fff;
+
+  outline:none;
+
+  font-family:inherit;
+
+  padding:16px;
+
+  font-size:1rem;
 }
 
 input::placeholder{
@@ -248,129 +393,165 @@ input::placeholder{
 }
 
 .email-note{
+
   margin:10px 0 16px;
+
   color:var(--muted);
+
   font-size:.82rem;
+
   line-height:1.55;
 }
 
 .price-card{
+
   margin-top:14px;
+
   padding:18px;
+
   border-radius:28px;
+
   border:1px solid rgba(212,175,55,.14);
-  background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
-  box-shadow:0 18px 42px rgba(0,0,0,.42);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,.04),
+      rgba(255,255,255,.015)
+    );
+
+  box-shadow:
+    0 18px 42px rgba(0,0,0,.42);
 }
 
 .price-card.featured{
-  background:linear-gradient(180deg, rgba(212,175,55,.12), rgba(255,255,255,.02));
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(212,175,55,.12),
+      rgba(255,255,255,.02)
+    );
 }
 
 .price-top{
+
   display:flex;
+
   justify-content:space-between;
+
   gap:12px;
+
   align-items:flex-start;
+
   margin-bottom:12px;
 }
 
 .price-title{
+
   margin:0;
+
   font-size:1.05rem;
+
   font-weight:900;
+
   color:#fff6df;
 }
 
 .price-sub{
+
   margin:5px 0 0;
+
   color:var(--muted);
+
   font-size:.84rem;
+
   line-height:1.45;
 }
 
 .badge{
+
   padding:6px 10px;
+
   border-radius:999px;
+
   border:1px solid rgba(212,175,55,.18);
+
   color:var(--gold-soft);
+
   background:rgba(255,255,255,.035);
+
   font-size:.68rem;
+
   font-weight:900;
+
   letter-spacing:.1em;
+
   text-transform:uppercase;
-  white-space:nowrap;
 }
 
 .btn{
+
   width:100%;
+
   margin-top:14px;
+
   padding:18px;
+
   border:0;
+
   border-radius:999px;
-  background:linear-gradient(135deg, #c69220 0%, #f3e28a 45%, #b88218 100%);
+
+  background:
+    linear-gradient(
+      135deg,
+      #c69220 0%,
+      #f3e28a 45%,
+      #b88218 100%
+    );
+
   color:#111;
+
   font-size:1rem;
+
   font-weight:900;
+
   letter-spacing:.02em;
+
   cursor:pointer;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  box-shadow:
-    0 14px 28px rgba(0,0,0,.55),
-    inset 0 1px 0 rgba(255,255,255,.25);
 }
 
 .btn-outline{
+
   width:100%;
+
   margin-top:14px;
+
   padding:16px;
+
   border-radius:999px;
+
   border:1px solid rgba(212,175,55,.28);
+
   background:rgba(255,255,255,.04);
+
   color:var(--gold-soft);
+
   font-size:.95rem;
+
   font-weight:900;
+
   cursor:pointer;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  backdrop-filter:blur(10px);
-}
-
-.btn:disabled,
-.btn-outline:disabled{
-  opacity:.65;
-  cursor:not-allowed;
-}
-
-.loader-ring{
-  width:18px;
-  height:18px;
-  border:2px solid rgba(0,0,0,.18);
-  border-top:2px solid #111;
-  border-radius:50%;
-  display:inline-block;
-  margin-right:10px;
-  animation:spin 1s linear infinite;
-}
-
-.loader-ring-light{
-  width:18px;
-  height:18px;
-  border:2px solid rgba(243,226,138,.18);
-  border-top:2px solid var(--gold-soft);
-  border-radius:50%;
-  display:inline-block;
-  margin-right:10px;
-  animation:spin 1s linear infinite;
 }
 
 .message{
+
   margin-top:14px;
+
   font-size:.86rem;
+
   line-height:1.55;
+
   min-height:1.2em;
 }
 
@@ -383,60 +564,94 @@ input::placeholder{
 }
 
 .mini-link{
+
   display:block;
+
   margin-top:18px;
+
   text-align:center;
+
   color:rgba(243,226,138,.9);
+
   text-decoration:none;
+
   font-size:.86rem;
+
   font-weight:800;
 }
 
 .micro{
+
   margin:18px 0 0;
+
   text-align:center;
+
   color:var(--muted);
+
   font-size:.78rem;
+
   line-height:1.6;
 }
 
 .bottom-nav{
+
   position:fixed;
+
   left:50%;
   bottom:10px;
+
   transform:translateX(-50%);
+
   width:calc(100% - 28px);
+
   max-width:400px;
+
   height:68px;
+
   display:grid;
+
   grid-template-columns:repeat(3,1fr);
+
   gap:4px;
+
   padding:8px;
+
   border-radius:24px;
+
   background:rgba(10,10,12,.84);
+
   border:1px solid rgba(212,175,55,.16);
+
   backdrop-filter:blur(26px);
-  box-shadow:0 18px 45px rgba(0,0,0,.72);
+
+  box-shadow:
+    0 18px 45px rgba(0,0,0,.72);
 }
 
 .bottom-nav a{
+
   display:flex;
+
   align-items:center;
+
   justify-content:center;
+
   border-radius:14px;
+
   color:rgba(248,239,217,.48);
+
   text-decoration:none;
+
   font-size:.74rem;
+
   font-weight:800;
 }
 
 .bottom-nav a.active{
-  color:var(--gold-soft);
-  background:rgba(255,255,255,.03);
-}
 
-@keyframes spin{
-  to{ transform:rotate(360deg); }
+  color:var(--gold-soft);
+
+  background:rgba(255,255,255,.03);
 }
 
 </style>
@@ -448,7 +663,11 @@ input::placeholder{
 
   <header class="topbar">
 
-    <a class="icon-btn" href="https://jamaicantruestories.com/pages/dream-interpreter" id="topBackLink" aria-label="Back to interpreter">
+    <a
+      class="icon-btn"
+      href="https://interpreter.jamaicantruestories.com"
+      aria-label="Back to interpreter"
+    >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path d="M15 18l-6-6 6-6"/>
       </svg>
@@ -459,36 +678,61 @@ input::placeholder{
       <p>Dream Interpreter</p>
     </div>
 
-    <span class="icon-btn" aria-hidden="true">
+    <span class="icon-btn">
+
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
         <path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7z"/>
       </svg>
+
     </span>
 
   </header>
 
   <section class="hero">
-    <div class="kicker">Continue Decoding</div>
 
-    <h2>Choose your access.</h2>
+    <div class="kicker">
+      Continue Decoding
+    </div>
+
+    <h2>
+      Choose your access.
+    </h2>
 
     <p>
-      Unlock continued dream interpretations with a subscription,
-      or choose a smaller Dream Pack for limited access.
+      Unlock continued dream interpretations
+      through subscriptions or dream packs.
     </p>
+
   </section>
 
   <section class="panel">
 
-    <div class="section-title">Access Includes</div>
-
-    <div class="access-list">
-      <div class="access-item"><strong>Structured readings</strong> with meaning, effects, and what to do.</div>
-      <div class="access-item"><strong>Doctrine-based output</strong> using your interpreter logic.</div>
-      <div class="access-item"><strong>Secure checkout</strong> powered by Stripe.</div>
+    <div class="section-title">
+      Access Includes
     </div>
 
-    <label for="email">Email</label>
+    <div class="access-list">
+
+      <div class="access-item">
+        <strong>Doctrine-based interpretations</strong>
+        with spiritual meaning, effects, and guidance.
+      </div>
+
+      <div class="access-item">
+        <strong>Structured dream logic</strong>
+        prioritizing action, subject, place, and ending.
+      </div>
+
+      <div class="access-item">
+        <strong>Secure checkout</strong>
+        powered by Stripe.
+      </div>
+
+    </div>
+
+    <label for="email">
+      Email
+    </label>
 
     <input
       id="email"
@@ -499,36 +743,65 @@ input::placeholder{
     />
 
     <div class="email-note">
-      Use the same email you used at checkout to unlock access later.
+      Use the same email you used during checkout.
     </div>
 
-    <button class="btn-outline" id="unlock" type="button">
-      Unlock With Email
+    <button
+      class="btn-outline"
+      id="unlock"
+      type="button"
+    >
+      Unlock Existing Access
     </button>
 
     <div class="price-card featured">
 
       <div class="price-top">
+
         <div>
-          <h3 class="price-title">Subscription</h3>
-          <p class="price-sub">Best for ongoing access and repeated dream interpretation.</p>
+          <h3 class="price-title">
+            Subscription
+          </h3>
+
+          <p class="price-sub">
+            Best for ongoing access and frequent dream interpretation.
+          </p>
         </div>
 
-        <div class="badge">Best</div>
+        <div class="badge">
+          Best
+        </div>
+
       </div>
 
       <form
         action="https://interpreter.jamaicantruestories.com/create-checkout-session"
         method="POST"
         id="checkoutForm"
-        novalidate
       >
-        <input type="hidden" name="email" id="emailHidden" value="" />
-        <input type="hidden" name="return" id="returnHiddenSub" value="" />
 
-        <button class="btn" type="submit" id="subscriptionBtn">
+        <input
+          type="hidden"
+          name="email"
+          id="emailHidden"
+          value=""
+        />
+
+        <input
+          type="hidden"
+          name="return"
+          id="returnHiddenSub"
+          value=""
+        />
+
+        <button
+          class="btn"
+          type="submit"
+          id="subscriptionBtn"
+        >
           Start Subscription
         </button>
+
       </form>
 
     </div>
@@ -536,39 +809,76 @@ input::placeholder{
     <div class="price-card">
 
       <div class="price-top">
+
         <div>
-          <h3 class="price-title">Dream Pack</h3>
-          <p class="price-sub">A lower one-time option for limited interpretations.</p>
+          <h3 class="price-title">
+            Dream Pack
+          </h3>
+
+          <p class="price-sub">
+            Lower one-time option for limited interpretations.
+          </p>
         </div>
 
-        <div class="badge">One-Time</div>
+        <div class="badge">
+          One-Time
+        </div>
+
       </div>
 
       <form
         action="https://interpreter.jamaicantruestories.com/create-dream-pack-checkout-session"
         method="POST"
         id="dreamPackForm"
-        novalidate
       >
-        <input type="hidden" name="email" id="emailHiddenPack" value="" />
-        <input type="hidden" name="return" id="returnHiddenPack" value="" />
 
-        <button class="btn-outline" type="submit" id="dreamPackBtn">
+        <input
+          type="hidden"
+          name="email"
+          id="emailHiddenPack"
+          value=""
+        />
+
+        <input
+          type="hidden"
+          name="return"
+          id="returnHiddenPack"
+          value=""
+        />
+
+        <button
+          class="btn-outline"
+          type="submit"
+          id="dreamPackBtn"
+        >
           Buy Dream Pack
         </button>
+
       </form>
 
     </div>
 
-    <a class="mini-link" href="https://jamaicantruestories.com/pages/dream-interpreter" id="backLink">
-      Return to the interpreter
+    <a
+      class="mini-link"
+      href="https://interpreter.jamaicantruestories.com"
+      id="backLink"
+    >
+      Return to Interpreter
     </a>
 
-    <div id="err" class="message err" role="alert" aria-live="polite"></div>
-    <div id="ok" class="message ok" role="status" aria-live="polite"></div>
+    <div
+      id="err"
+      class="message err"
+    ></div>
+
+    <div
+      id="ok"
+      class="message ok"
+    ></div>
 
     <p class="micro">
-      Cultural and educational only. Not therapy, medical, legal, or financial advice.
+      Cultural and educational only.
+      Not therapy, legal, medical, or financial advice.
     </p>
 
   </section>
@@ -576,238 +886,296 @@ input::placeholder{
 </main>
 
 <nav class="bottom-nav">
-  <a href="https://jamaicantruestories.com/pages/dream-interpreter">Decode</a>
-  <a href="#" class="active">Access</a>
-  <a href="https://jamaicantruestories.com">Home</a>
+
+  <a
+    href="https://interpreter.jamaicantruestories.com"
+  >
+    Decode
+  </a>
+
+  <a
+    href="#"
+    class="active"
+  >
+    Access
+  </a>
+
+  <a
+    href="https://jamaicantruestories.com"
+  >
+    Main Site
+  </a>
+
 </nav>
 
 <script>
-(function () {
-  const API_BASE = window.location.origin.includes("localhost") || window.location.origin.includes("127.0.0.1")
-    ? "http://127.0.0.1:5000"
-    : "https://interpreter.jamaicantruestories.com";
 
-  const DEFAULT_RETURN_URL = "https://jamaicantruestories.com/pages/dream-interpreter";
+(function(){
 
-  const emailInput       = document.getElementById("email");
-  const emailHidden      = document.getElementById("emailHidden");
-  const emailHiddenPack  = document.getElementById("emailHiddenPack");
-  const returnHiddenSub  = document.getElementById("returnHiddenSub");
-  const returnHiddenPack = document.getElementById("returnHiddenPack");
-  const unlockBtn        = document.getElementById("unlock");
-  const err              = document.getElementById("err");
-  const ok               = document.getElementById("ok");
-  const backLink         = document.getElementById("backLink");
-  const topBackLink      = document.getElementById("topBackLink");
-  const checkoutForm     = document.getElementById("checkoutForm");
-  const dreamPackForm    = document.getElementById("dreamPackForm");
-  const subscriptionBtn  = document.getElementById("subscriptionBtn");
-  const dreamPackBtn     = document.getElementById("dreamPackBtn");
+  const API_BASE =
+    window.location.origin.includes("localhost")
+      ? "http://127.0.0.1:5000"
+      : "https://interpreter.jamaicantruestories.com";
 
-  function normalizeEmail(email) {
-    return String(email || "").trim().toLowerCase();
+  const DEFAULT_RETURN_URL =
+    "https://interpreter.jamaicantruestories.com";
+
+  const emailInput =
+    document.getElementById("email");
+
+  const emailHidden =
+    document.getElementById("emailHidden");
+
+  const emailHiddenPack =
+    document.getElementById("emailHiddenPack");
+
+  const returnHiddenSub =
+    document.getElementById("returnHiddenSub");
+
+  const returnHiddenPack =
+    document.getElementById("returnHiddenPack");
+
+  const unlockBtn =
+    document.getElementById("unlock");
+
+  const err =
+    document.getElementById("err");
+
+  const ok =
+    document.getElementById("ok");
+
+  const subscriptionBtn =
+    document.getElementById("subscriptionBtn");
+
+  const dreamPackBtn =
+    document.getElementById("dreamPackBtn");
+
+  function normalizeEmail(email){
+
+    return String(email || "")
+      .trim()
+      .toLowerCase();
   }
 
-  function setMsg(type, text) {
-    if (type === "err") {
+  function validEmail(email){
+
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      .test(normalizeEmail(email));
+  }
+
+  function setMsg(type,text){
+
+    if(type === "err"){
+
       err.textContent = text || "";
       ok.textContent = "";
-    } else {
+
+    }else{
+
       ok.textContent = text || "";
       err.textContent = "";
     }
   }
 
-  function validEmail(email) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
-  }
+  function syncEmail(){
 
-  function syncEmail() {
-    const value = normalizeEmail(emailInput.value);
+    const value =
+      normalizeEmail(emailInput.value);
+
     emailInput.value = value;
+
     emailHidden.value = value;
+
     emailHiddenPack.value = value;
   }
 
-  function saveEmail() {
-    const val = normalizeEmail(emailInput.value);
-    if (val) {
-      try {
-        localStorage.setItem("jts_email", val);
-      } catch (e) {}
-    }
-  }
+  function requireValidEmail(message){
 
-  function getEmailFromStorage() {
-    try {
-      return normalizeEmail(localStorage.getItem("jts_email") || "");
-    } catch (e) {
-      return "";
-    }
-  }
+    const email =
+      normalizeEmail(emailInput.value);
 
-  function getEmailFromURL() {
-    try {
-      const u = new URL(window.location.href);
-      return normalizeEmail(u.searchParams.get("email") || "");
-    } catch (e) {
-      return "";
-    }
-  }
-
-  function getReturnFromURL() {
-    try {
-      const u = new URL(window.location.href);
-      return u.searchParams.get("return") || "";
-    } catch (e) {
-      return "";
-    }
-  }
-
-  function requireValidEmail(message) {
-    const email = normalizeEmail(emailInput.value);
     syncEmail();
 
-    if (!email) {
-      setMsg("err", message || "Please enter your email first.");
+    if(!email){
+
+      setMsg(
+        "err",
+        message || "Please enter your email."
+      );
+
       emailInput.focus();
+
       return null;
     }
 
-    if (!validEmail(email)) {
-      setMsg("err", "Please enter a valid email address.");
+    if(!validEmail(email)){
+
+      setMsg(
+        "err",
+        "Please enter a valid email address."
+      );
+
       emailInput.focus();
+
       return null;
     }
 
-    saveEmail();
-    setMsg("err", "");
     return email;
   }
 
-  function setBusy(btn, busyText, busy, light) {
-    if (!btn) return;
+  returnHiddenSub.value =
+    DEFAULT_RETURN_URL;
 
-    if (!btn.dataset.originalHtml) {
-      btn.dataset.originalHtml = btn.innerHTML;
-    }
+  returnHiddenPack.value =
+    DEFAULT_RETURN_URL;
 
-    btn.disabled = !!busy;
+  emailInput.addEventListener(
+    "input",
+    syncEmail
+  );
 
-    btn.innerHTML = busy
-      ? `<span class="${light ? "loader-ring-light" : "loader-ring"}"></span>${busyText}`
-      : btn.dataset.originalHtml;
-  }
+  unlockBtn.addEventListener(
+    "click",
+    async function(){
 
-  const prefillEmail = getEmailFromURL() || getEmailFromStorage();
+      setMsg("err","");
+      setMsg("ok","");
 
-  if (prefillEmail) {
-    emailInput.value = prefillEmail;
-  }
+      const email =
+        requireValidEmail(
+          "Please enter your email to unlock access."
+        );
 
-  const returnUrl = getReturnFromURL() || DEFAULT_RETURN_URL;
-
-  backLink.href = returnUrl;
-  topBackLink.href = returnUrl;
-  returnHiddenSub.value = returnUrl;
-  returnHiddenPack.value = returnUrl;
-
-  syncEmail();
-
-  emailInput.addEventListener("input", function () {
-    syncEmail();
-    saveEmail();
-    setMsg("err", "");
-  });
-
-  emailInput.addEventListener("blur", function () {
-    syncEmail();
-    saveEmail();
-  });
-
-  unlockBtn.addEventListener("click", async function () {
-    if (unlockBtn.disabled) return;
-
-    setMsg("err", "");
-    setMsg("ok", "");
-
-    const email = requireValidEmail("Please enter your email to unlock access.");
-    if (!email) return;
-
-    setBusy(unlockBtn, "Checking...", true, true);
-
-    try {
-      const res = await fetch(API_BASE + "/check-access", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email }),
-        credentials: "include"
-      });
-
-      const data = await res.json().catch(function () { return {}; });
-
-      if (!res.ok) {
-        setMsg("err", data.message || data.error || "No active access found for that email.");
+      if(!email){
         return;
       }
 
-      setMsg("ok", "Access confirmed. Redirecting...");
+      unlockBtn.disabled = true;
 
-      setTimeout(function () {
-        window.location.href = data.return_url || returnUrl;
-      }, 700);
+      unlockBtn.textContent =
+        "Checking Access...";
 
-    } catch (e) {
-      setMsg("err", "Something went wrong checking access. Please try again.");
-    } finally {
-      setBusy(unlockBtn, "Checking...", false, true);
+      try{
+
+        const res = await fetch(
+          API_BASE + "/check-access",
+          {
+
+            method:"POST",
+
+            headers:{
+              "Content-Type":"application/json"
+            },
+
+            body:JSON.stringify({
+              email:email
+            }),
+
+            credentials:"include"
+          }
+        );
+
+        const data =
+          await res.json();
+
+        if(!res.ok){
+
+          setMsg(
+            "err",
+            data.message ||
+            data.error ||
+            "No active access found."
+          );
+
+          return;
+        }
+
+        setMsg(
+          "ok",
+          "Access confirmed. Redirecting..."
+        );
+
+        setTimeout(function(){
+
+          window.location.href =
+            data.return_url ||
+            DEFAULT_RETURN_URL;
+
+        },700);
+
+      }catch(e){
+
+        setMsg(
+          "err",
+          "Something went wrong checking access."
+        );
+
+      }finally{
+
+        unlockBtn.disabled = false;
+
+        unlockBtn.textContent =
+          "Unlock Existing Access";
+      }
     }
-  });
+  );
 
-  checkoutForm.addEventListener("submit", function (e) {
-    if (subscriptionBtn.disabled) {
-      e.preventDefault();
-      return;
-    }
+  document
+    .getElementById("checkoutForm")
+    .addEventListener(
+      "submit",
+      function(e){
 
-    setMsg("err", "");
-    setMsg("ok", "");
+        const email =
+          requireValidEmail(
+            "Please enter your email before checkout."
+          );
 
-    const email = requireValidEmail("Please enter your email before starting subscription checkout.");
+        if(!email){
 
-    if (!email) {
-      e.preventDefault();
-      return;
-    }
+          e.preventDefault();
 
-    emailHidden.value = email;
-    returnHiddenSub.value = returnUrl;
+          return;
+        }
 
-    setBusy(subscriptionBtn, "Redirecting...", true, false);
-  });
+        emailHidden.value = email;
 
-  dreamPackForm.addEventListener("submit", function (e) {
-    if (dreamPackBtn.disabled) {
-      e.preventDefault();
-      return;
-    }
+        subscriptionBtn.disabled = true;
 
-    setMsg("err", "");
-    setMsg("ok", "");
+        subscriptionBtn.textContent =
+          "Redirecting...";
+      }
+    );
 
-    const email = requireValidEmail("Please enter your email before buying a Dream Pack.");
+  document
+    .getElementById("dreamPackForm")
+    .addEventListener(
+      "submit",
+      function(e){
 
-    if (!email) {
-      e.preventDefault();
-      return;
-    }
+        const email =
+          requireValidEmail(
+            "Please enter your email before checkout."
+          );
 
-    emailHiddenPack.value = email;
-    returnHiddenPack.value = returnUrl;
+        if(!email){
 
-    setBusy(dreamPackBtn, "Redirecting...", true, true);
-  });
+          e.preventDefault();
+
+          return;
+        }
+
+        emailHiddenPack.value = email;
+
+        dreamPackBtn.disabled = true;
+
+        dreamPackBtn.textContent =
+          "Redirecting...";
+      }
+    );
+
 })();
+
 </script>
 
 </body>

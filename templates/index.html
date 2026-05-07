@@ -9,15 +9,14 @@
 
 <style>
 :root{
-  --bg:#050506;
+  --bg:#030405;
   --card:#090a0d;
-  --card2:#101116;
   --gold:#d4af37;
-  --gold2:#f3d477;
+  --gold2:#f6d878;
   --cream:#fff4dc;
   --text:#f8efd9;
   --muted:rgba(248,239,217,.62);
-  --line:rgba(212,175,55,.30);
+  --line:rgba(212,175,55,.28);
   --line2:rgba(212,175,55,.48);
 }
 
@@ -32,33 +31,49 @@ body{
   margin:0;
   font-family:Inter,system-ui,sans-serif;
   background:
-    radial-gradient(circle at 10% 6%, rgba(212,175,55,.14), transparent 28%),
-    radial-gradient(circle at 92% 16%, rgba(243,212,119,.08), transparent 30%),
-    linear-gradient(180deg,#030405,#060606 50%,#020202);
+    radial-gradient(circle at 50% 0%, rgba(212,175,55,.16), transparent 28%),
+    radial-gradient(circle at 12% 15%, rgba(212,175,55,.10), transparent 24%),
+    radial-gradient(circle at 90% 8%, rgba(243,212,119,.06), transparent 25%),
+    linear-gradient(180deg,#020303,#050506 48%,#020202);
   color:var(--text);
   overflow-x:hidden;
+}
+
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  background:
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px);
+  background-size:42px 42px;
+  opacity:.13;
+  pointer-events:none;
+  z-index:-2;
 }
 
 .app{
   max-width:430px;
   min-height:100svh;
   margin:0 auto;
-  padding:max(20px, env(safe-area-inset-top)) 14px 150px;
+  padding:max(18px, env(safe-area-inset-top)) 14px 145px;
   position:relative;
 }
 
 .menu-panel{
   position:fixed;
   top:0;
-  left:-280px;
-  width:260px;
+  left:-290px;
+  width:270px;
   height:100vh;
-  background:#07080a;
+  background:
+    radial-gradient(circle at top, rgba(212,175,55,.10), transparent 34%),
+    #07080a;
   border-right:1px solid var(--line2);
   z-index:100;
   padding:26px 22px;
   transition:.25s ease;
-  box-shadow:20px 0 60px rgba(0,0,0,.70);
+  box-shadow:24px 0 70px rgba(0,0,0,.76);
 }
 
 .menu-panel.open{left:0;}
@@ -89,59 +104,62 @@ body{
 }
 
 .icon-btn{
-  width:56px;
-  height:56px;
+  width:52px;
+  height:52px;
   border-radius:50%;
-  border:1px solid rgba(212,175,55,.42);
-  background:rgba(8,8,10,.70);
+  border:1px solid rgba(212,175,55,.44);
+  background:rgba(8,8,10,.72);
   color:var(--gold2);
   display:flex;
   align-items:center;
   justify-content:center;
   backdrop-filter:blur(18px);
   box-shadow:
-    0 12px 28px rgba(0,0,0,.42),
-    inset 0 1px 0 rgba(255,255,255,.05);
+    0 14px 32px rgba(0,0,0,.50),
+    inset 0 1px 0 rgba(255,255,255,.06);
   text-decoration:none;
 }
 
 .icon-btn svg{
-  width:23px;
-  height:23px;
+  width:22px;
+  height:22px;
   stroke-width:2.3;
 }
 
 .brand{
   flex:1;
   text-align:center;
+  padding-top:2px;
 }
 
 .logo-mark{
-  width:122px;
-  height:122px;
+  width:116px;
+  height:116px;
   object-fit:contain;
-  margin:0 auto 6px;
+  margin:0 auto 7px;
   display:block;
   filter:
-    drop-shadow(0 0 12px rgba(212,175,55,.24))
-    drop-shadow(0 0 28px rgba(212,175,55,.16));
+    drop-shadow(0 0 10px rgba(212,175,55,.25))
+    drop-shadow(0 0 26px rgba(212,175,55,.16));
 }
 
 .brand h1{
   margin:0;
   font-family:Cinzel,Georgia,serif;
-  font-size:1.55rem;
-  line-height:1.04;
+  font-size:1.46rem;
+  line-height:1.05;
   color:var(--gold2);
   text-transform:uppercase;
-  text-shadow:0 0 18px rgba(212,175,55,.16);
+  letter-spacing:.01em;
+  text-shadow:0 0 18px rgba(212,175,55,.17);
 }
 
 .brand p{
-  margin:10px 0 0;
-  font-size:.88rem;
-  line-height:1.4;
-  color:var(--cream);
+  margin:9px auto 0;
+  max-width:260px;
+  font-size:.84rem;
+  line-height:1.42;
+  color:rgba(255,244,220,.88);
 }
 
 .hero-card,
@@ -150,40 +168,56 @@ body{
   border-radius:30px;
   border:1px solid var(--line);
   background:
-    radial-gradient(circle at top, rgba(212,175,55,.08), transparent 38%),
-    linear-gradient(180deg, rgba(13,15,19,.96), rgba(4,5,7,.99));
+    radial-gradient(circle at top center, rgba(212,175,55,.075), transparent 38%),
+    linear-gradient(180deg, rgba(14,16,20,.97), rgba(4,5,7,.99));
   box-shadow:
     0 28px 70px rgba(0,0,0,.58),
-    inset 0 1px 0 rgba(255,255,255,.04);
+    inset 0 1px 0 rgba(255,255,255,.045);
+  position:relative;
+  overflow:hidden;
+}
+
+.hero-card::before,
+.input-card::before,
+.quick-symbols::before{
+  content:"";
+  position:absolute;
+  left:20px;
+  right:20px;
+  top:0;
+  height:1px;
+  background:linear-gradient(90deg, transparent, rgba(246,216,120,.65), transparent);
+  opacity:.6;
 }
 
 .hero-card{
-  padding:28px 22px;
+  padding:26px 22px 28px;
   margin-bottom:18px;
 }
 
 .kicker{
   color:var(--gold2);
-  font-size:.76rem;
+  font-size:.73rem;
   font-weight:900;
   letter-spacing:.16em;
   text-transform:uppercase;
 }
 
 .hero-card h2{
-  margin:16px 0 16px;
+  margin:15px 0 15px;
   font-family:Cinzel,Georgia,serif;
-  font-size:2.85rem;
+  font-size:2.65rem;
   font-weight:800;
-  line-height:1;
+  line-height:1.02;
   color:var(--cream);
+  letter-spacing:-.035em;
 }
 
 .hero-card p{
   margin:0;
   color:var(--muted);
   line-height:1.65;
-  font-size:1rem;
+  font-size:.98rem;
 }
 
 .input-card{
@@ -202,13 +236,14 @@ label{
 input,
 textarea{
   width:100%;
-  border-radius:24px;
+  border-radius:22px;
   border:1px solid rgba(212,175,55,.22);
   background:
     linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.018));
   color:#fff;
   outline:none;
   font-family:inherit;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
 }
 
 input{
@@ -218,7 +253,7 @@ input{
 }
 
 textarea{
-  min-height:235px;
+  min-height:220px;
   resize:vertical;
   padding:18px;
   line-height:1.7;
@@ -268,60 +303,65 @@ input::placeholder{
   padding:18px;
   border:0;
   border-radius:999px;
-  background:linear-gradient(180deg,#f6d778,#bd8223);
+  background:
+    linear-gradient(180deg,#ffe28a 0%, #d9a83a 52%, #ad721d 100%);
   color:#130c03;
   font-family:Cinzel,Georgia,serif;
   font-size:1rem;
   font-weight:900;
   cursor:pointer;
   box-shadow:
-    0 16px 32px rgba(0,0,0,.58),
-    inset 0 1px 0 rgba(255,255,255,.30);
+    0 16px 34px rgba(0,0,0,.62),
+    0 0 24px rgba(212,175,55,.13),
+    inset 0 1px 0 rgba(255,255,255,.38);
 }
 
 .helper{
   margin:15px 0 0;
   text-align:center;
   color:var(--muted);
-  font-size:.84rem;
+  font-size:.82rem;
   line-height:1.6;
 }
 
 .quick-symbols{
-  padding:24px 16px 32px;
+  padding:22px 16px 28px;
   margin-bottom:20px;
   text-align:center;
 }
 
 .quick-symbols h2{
-  margin:0 0 18px;
+  margin:0 0 16px;
   font-family:Cinzel,Georgia,serif;
   color:var(--gold2);
-  font-size:1.75rem;
+  font-size:1.45rem;
+  letter-spacing:.03em;
 }
 
 .symbol-row{
   display:flex;
-  gap:12px;
+  gap:10px;
   overflow-x:auto;
-  padding:4px 4px 86px;
+  padding:2px 3px 74px;
   scrollbar-width:none;
 }
 
 .symbol-row::-webkit-scrollbar{display:none;}
 
 .symbol-pill{
-  min-width:90px;
-  min-height:104px;
-  border-radius:26px;
-  border:1px solid rgba(212,175,55,.45);
-  background:rgba(255,255,255,.035);
+  min-width:72px;
+  min-height:82px;
+  border-radius:20px;
+  border:1px solid rgba(212,175,55,.38);
+  background:
+    radial-gradient(circle at top, rgba(212,175,55,.08), transparent 45%),
+    rgba(255,255,255,.028);
   color:var(--gold2);
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
-  gap:6px;
+  gap:5px;
   cursor:pointer;
   text-decoration:none;
   position:relative;
@@ -335,23 +375,23 @@ input::placeholder{
 
 .symbol-pill.open{
   border-color:rgba(243,212,119,.82);
-  box-shadow:0 0 20px rgba(212,175,55,.18);
+  box-shadow:0 0 18px rgba(212,175,55,.15);
 }
 
 .symbol-pill svg{
-  width:40px;
-  height:40px;
+  width:30px;
+  height:30px;
   fill:none;
   stroke:var(--gold2);
-  stroke-width:3;
+  stroke-width:2.6;
   stroke-linecap:round;
   stroke-linejoin:round;
-  filter:drop-shadow(0 0 8px rgba(212,175,55,.28));
+  filter:drop-shadow(0 0 7px rgba(212,175,55,.24));
 }
 
 .symbol-pill span{
   display:block;
-  font-size:.75rem;
+  font-size:.64rem;
   color:var(--cream);
   font-weight:900;
 }
@@ -360,16 +400,16 @@ input::placeholder{
   display:none;
   position:absolute;
   left:50%;
-  top:112px;
+  top:90px;
   transform:translateX(-50%);
-  width:178px;
-  padding:11px;
-  border-radius:15px;
+  width:168px;
+  padding:10px;
+  border-radius:14px;
   background:#08090b;
-  border:1px solid rgba(212,175,55,.50);
+  border:1px solid rgba(212,175,55,.48);
   color:var(--cream);
-  font-size:.72rem;
-  line-height:1.38;
+  font-size:.70rem;
+  line-height:1.36;
   z-index:30;
   box-shadow:0 16px 38px rgba(0,0,0,.68);
 }
@@ -379,13 +419,13 @@ input::placeholder{
 }
 
 .see-more{
-  box-shadow:0 0 18px rgba(212,175,55,.42);
+  box-shadow:0 0 17px rgba(212,175,55,.32);
 }
 
 .quick-symbols p{
-  margin:-58px 0 0;
+  margin:-48px 0 0;
   color:var(--muted);
-  font-size:.84rem;
+  font-size:.80rem;
 }
 
 .result{
@@ -398,7 +438,9 @@ input::placeholder{
   border-radius:24px;
   margin-top:14px;
   padding:20px;
-  background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+  background:
+    radial-gradient(circle at top, rgba(212,175,55,.06), transparent 38%),
+    linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
   border:1px solid rgba(212,175,55,.18);
   box-shadow:0 18px 42px rgba(0,0,0,.42);
   animation:cardReveal .55s forwards;
@@ -462,7 +504,7 @@ input::placeholder{
   transform:translateX(-50%);
   width:calc(100% - 28px);
   max-width:400px;
-  height:76px;
+  height:74px;
   display:grid;
   grid-template-columns:repeat(4,1fr);
   gap:4px;
@@ -511,9 +553,10 @@ input::placeholder{
 @keyframes cardReveal{to{opacity:1;transform:translateY(0);}}
 
 @media(max-width:380px){
-  .brand h1{font-size:1.36rem;}
+  .brand h1{font-size:1.28rem;}
   .logo-mark{width:104px;height:104px;}
-  .hero-card h2{font-size:2.38rem;}
+  .hero-card h2{font-size:2.25rem;}
+  .symbol-pill{min-width:68px;min-height:78px;}
 }
 </style>
 </head>
@@ -540,7 +583,7 @@ input::placeholder{
     </button>
 
     <div class="brand">
-      <img src="/static/dream-logo.png" alt="Caribbean Dream Interpreter" class="logo-mark" />
+      <img src="{{ url_for('static', filename='dream-logo.png') }}" alt="Caribbean Dream Interpreter" class="logo-mark" />
       <h1>Caribbean<br>Dream Interpreter</h1>
       <p>The way Caribbean elders understand dreams</p>
     </div>

@@ -402,6 +402,47 @@ input::placeholder{
   line-height:1.48;
 }
 
+/* ADS */
+
+.ad-card{
+  display:block;
+  margin:14px 0 0;
+  padding:12px;
+  border-radius:20px;
+  border:1px solid rgba(212,175,55,.16);
+  background:
+    radial-gradient(circle at top, rgba(212,175,55,.055), transparent 42%),
+    rgba(255,255,255,.025);
+  box-shadow:0 14px 34px rgba(0,0,0,.32);
+}
+
+.ad-card.hidden{
+  display:none;
+}
+
+.ad-label{
+  margin:0 0 8px;
+  color:rgba(248,239,217,.42);
+  font-size:.58rem;
+  font-weight:900;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  text-align:center;
+}
+
+.ad-placeholder{
+  min-height:84px;
+  border-radius:16px;
+  border:1px dashed rgba(212,175,55,.22);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:rgba(248,239,217,.36);
+  font-size:.72rem;
+  text-align:center;
+  padding:12px;
+}
+
 /* GUIDED DETAILS */
 
 .guided-panel{
@@ -1110,6 +1151,13 @@ input::placeholder{
 
       <button id="interpret" class="primary" type="button">Decode Dream</button>
 
+      <div class="ad-card" id="decodeAd">
+        <div class="ad-label">Sponsored</div>
+        <div class="ad-placeholder">
+          Ad space for free users
+        </div>
+      </div>
+
       <p class="helper">Your dreams are private on this device. Journal entries are saved in this browser.</p>
     </section>
 
@@ -1182,7 +1230,7 @@ input::placeholder{
         <div class="premium-icon">♕</div>
         <div>
           <h3>Go Premium</h3>
-          <p>Unlock deeper symbol insights and pattern tracking.</p>
+          <p>Remove ads, unlock deeper insights, and support the interpreter.</p>
         </div>
       </div>
 
@@ -1346,11 +1394,30 @@ function addJournalEntry(entry){
 function showAccessStatus(html){
   accessStatus.style.display = "block";
   accessStatus.innerHTML = html;
+  refreshAds();
 }
 
 function hideAccessStatus(){
   accessStatus.style.display = "none";
   accessStatus.innerHTML = "";
+  refreshAds();
+}
+
+function userHasPaidAccess(){
+  const statusText = String(accessStatus?.textContent || "").toLowerCase();
+
+  return (
+    statusText.includes("subscription active") ||
+    statusText.includes("dream pack active")
+  );
+}
+
+function refreshAds(){
+  const decodeAd = document.getElementById("decodeAd");
+
+  if(!decodeAd) return;
+
+  decodeAd.classList.toggle("hidden", userHasPaidAccess());
 }
 
 function switchTab(tab){
@@ -2098,6 +2165,7 @@ renderGuidedSymbols();
 renderSymbols();
 renderJournal();
 refreshAccount();
+refreshAds();
 </script>
 
 </body>

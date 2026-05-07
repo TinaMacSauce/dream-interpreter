@@ -10,26 +10,31 @@
 <style>
 :root{
   --bg:#050506;
-  --card:#0b0d10;
+  --card:#090a0d;
+  --card2:#101116;
   --gold:#d4af37;
   --gold2:#f3d477;
   --cream:#fff4dc;
   --text:#f8efd9;
-  --muted:rgba(248,239,217,.66);
-  --line:rgba(212,175,55,.34);
-  --danger:#ffb3b3;
-  --success:#9ae6b4;
+  --muted:rgba(248,239,217,.62);
+  --line:rgba(212,175,55,.30);
+  --line2:rgba(212,175,55,.48);
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;}
+
+html{
+  scroll-behavior:smooth;
+  -webkit-text-size-adjust:100%;
+}
+
 body{
   margin:0;
   font-family:Inter,system-ui,sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(212,175,55,.13), transparent 30%),
-    radial-gradient(circle at bottom right, rgba(212,175,55,.08), transparent 38%),
-    linear-gradient(180deg,#030405,#050506 55%,#020202);
+    radial-gradient(circle at 10% 6%, rgba(212,175,55,.14), transparent 28%),
+    radial-gradient(circle at 92% 16%, rgba(243,212,119,.08), transparent 30%),
+    linear-gradient(180deg,#030405,#060606 50%,#020202);
   color:var(--text);
   overflow-x:hidden;
 }
@@ -38,72 +43,8 @@ body{
   max-width:430px;
   min-height:100svh;
   margin:0 auto;
-  padding:max(20px, env(safe-area-inset-top)) 14px 118px;
+  padding:max(20px, env(safe-area-inset-top)) 14px 150px;
   position:relative;
-}
-
-.app::before{
-  content:"";
-  position:fixed;
-  inset:0;
-  background:
-    radial-gradient(circle at 10% 10%, rgba(212,175,55,.10), transparent 24%),
-    radial-gradient(circle at 90% 18%, rgba(243,212,119,.07), transparent 22%);
-  pointer-events:none;
-  z-index:-1;
-}
-
-.topbar{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:10px;
-  margin-bottom:18px;
-}
-
-.icon-btn{
-  width:54px;
-  height:54px;
-  border-radius:50%;
-  border:1px solid rgba(212,175,55,.40);
-  background:rgba(10,10,12,.64);
-  color:var(--gold2);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  backdrop-filter:blur(18px);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
-  text-decoration:none;
-}
-
-.icon-btn svg{width:22px;height:22px;stroke-width:2.3;}
-
-.brand{
-  flex:1;
-  text-align:center;
-}
-
-.logo-mark{
-  width:96px;
-  height:96px;
-  object-fit:contain;
-  margin:0 auto 4px;
-  display:block;
-}
-
-.brand h1{
-  margin:0;
-  font-family:Cinzel,Georgia,serif;
-  font-size:1.68rem;
-  line-height:1;
-  color:var(--gold2);
-  text-shadow:0 0 18px rgba(212,175,55,.16);
-}
-
-.brand p{
-  margin:8px 0 0;
-  font-size:.78rem;
-  color:var(--cream);
 }
 
 .menu-panel{
@@ -112,12 +53,12 @@ body{
   left:-280px;
   width:260px;
   height:100vh;
-  background:#08090b;
-  border-right:1px solid var(--line);
-  z-index:80;
+  background:#07080a;
+  border-right:1px solid var(--line2);
+  z-index:100;
   padding:26px 22px;
   transition:.25s ease;
-  box-shadow:20px 0 60px rgba(0,0,0,.65);
+  box-shadow:20px 0 60px rgba(0,0,0,.70);
 }
 
 .menu-panel.open{left:0;}
@@ -139,37 +80,102 @@ body{
   font-weight:800;
 }
 
+.topbar{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:22px;
+}
+
+.icon-btn{
+  width:56px;
+  height:56px;
+  border-radius:50%;
+  border:1px solid rgba(212,175,55,.42);
+  background:rgba(8,8,10,.70);
+  color:var(--gold2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  backdrop-filter:blur(18px);
+  box-shadow:
+    0 12px 28px rgba(0,0,0,.42),
+    inset 0 1px 0 rgba(255,255,255,.05);
+  text-decoration:none;
+}
+
+.icon-btn svg{
+  width:23px;
+  height:23px;
+  stroke-width:2.3;
+}
+
+.brand{
+  flex:1;
+  text-align:center;
+}
+
+.logo-mark{
+  width:122px;
+  height:122px;
+  object-fit:contain;
+  margin:0 auto 6px;
+  display:block;
+  filter:
+    drop-shadow(0 0 12px rgba(212,175,55,.24))
+    drop-shadow(0 0 28px rgba(212,175,55,.16));
+}
+
+.brand h1{
+  margin:0;
+  font-family:Cinzel,Georgia,serif;
+  font-size:1.55rem;
+  line-height:1.04;
+  color:var(--gold2);
+  text-transform:uppercase;
+  text-shadow:0 0 18px rgba(212,175,55,.16);
+}
+
+.brand p{
+  margin:10px 0 0;
+  font-size:.88rem;
+  line-height:1.4;
+  color:var(--cream);
+}
+
 .hero-card,
 .input-card,
-.quick-symbols,
-.symbols-full{
-  border-radius:26px;
+.quick-symbols{
+  border-radius:30px;
   border:1px solid var(--line);
   background:
-    radial-gradient(circle at top, rgba(212,175,55,.08), transparent 35%),
-    linear-gradient(180deg, rgba(14,16,20,.96), rgba(4,5,7,.98));
-  box-shadow:0 24px 60px rgba(0,0,0,.56);
+    radial-gradient(circle at top, rgba(212,175,55,.08), transparent 38%),
+    linear-gradient(180deg, rgba(13,15,19,.96), rgba(4,5,7,.99));
+  box-shadow:
+    0 28px 70px rgba(0,0,0,.58),
+    inset 0 1px 0 rgba(255,255,255,.04);
 }
 
 .hero-card{
-  padding:24px 20px;
+  padding:28px 22px;
   margin-bottom:18px;
 }
 
 .kicker{
   color:var(--gold2);
-  font-size:.74rem;
+  font-size:.76rem;
   font-weight:900;
-  letter-spacing:.13em;
+  letter-spacing:.16em;
   text-transform:uppercase;
 }
 
 .hero-card h2{
-  margin:14px 0 14px;
+  margin:16px 0 16px;
   font-family:Cinzel,Georgia,serif;
-  font-size:2.9rem;
+  font-size:2.85rem;
   font-weight:800;
-  line-height:.98;
+  line-height:1;
   color:var(--cream);
 }
 
@@ -181,7 +187,7 @@ body{
 }
 
 .input-card{
-  padding:20px;
+  padding:22px;
   margin-bottom:18px;
 }
 
@@ -196,9 +202,10 @@ label{
 input,
 textarea{
   width:100%;
-  border-radius:22px;
+  border-radius:24px;
   border:1px solid rgba(212,175,55,.22);
-  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.015));
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.018));
   color:#fff;
   outline:none;
   font-family:inherit;
@@ -211,7 +218,7 @@ input{
 }
 
 textarea{
-  min-height:220px;
+  min-height:235px;
   resize:vertical;
   padding:18px;
   line-height:1.7;
@@ -219,7 +226,9 @@ textarea{
 }
 
 textarea::placeholder,
-input::placeholder{color:rgba(248,239,217,.32);}
+input::placeholder{
+  color:rgba(248,239,217,.32);
+}
 
 .status-line{
   margin:0 0 14px;
@@ -244,12 +253,12 @@ input::placeholder{color:rgba(248,239,217,.32);}
 
 .chip{
   border-radius:18px;
-  border:1px solid rgba(212,175,55,.20);
-  background:rgba(255,255,255,.04);
+  border:1px solid rgba(212,175,55,.22);
+  background:rgba(255,255,255,.035);
   color:var(--text);
   padding:14px 10px;
   font-size:.82rem;
-  font-weight:800;
+  font-weight:900;
   cursor:pointer;
 }
 
@@ -258,105 +267,130 @@ input::placeholder{color:rgba(248,239,217,.32);}
   margin-top:18px;
   padding:18px;
   border:0;
-  border-radius:18px;
-  background:linear-gradient(180deg,#f4d37d,#bd8324);
-  color:#140d03;
+  border-radius:999px;
+  background:linear-gradient(180deg,#f6d778,#bd8223);
+  color:#130c03;
   font-family:Cinzel,Georgia,serif;
   font-size:1rem;
   font-weight:900;
   cursor:pointer;
-  box-shadow:0 14px 28px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.28);
+  box-shadow:
+    0 16px 32px rgba(0,0,0,.58),
+    inset 0 1px 0 rgba(255,255,255,.30);
 }
 
 .helper{
-  margin:14px 0 0;
+  margin:15px 0 0;
   text-align:center;
   color:var(--muted);
-  font-size:.82rem;
+  font-size:.84rem;
   line-height:1.6;
 }
 
 .quick-symbols{
-  padding:22px 16px;
-  margin-bottom:18px;
+  padding:24px 16px 32px;
+  margin-bottom:20px;
   text-align:center;
 }
 
-.quick-symbols h2,
-.symbols-full h2{
-  margin:0 0 16px;
+.quick-symbols h2{
+  margin:0 0 18px;
   font-family:Cinzel,Georgia,serif;
   color:var(--gold2);
-  font-size:1.72rem;
+  font-size:1.75rem;
 }
 
 .symbol-row{
   display:flex;
-  gap:10px;
+  gap:12px;
   overflow-x:auto;
-  padding:2px 2px 10px;
+  padding:4px 4px 86px;
   scrollbar-width:none;
 }
 
 .symbol-row::-webkit-scrollbar{display:none;}
 
 .symbol-pill{
-  min-width:74px;
-  height:74px;
-  border-radius:50%;
-  border:1px solid rgba(212,175,55,.48);
+  min-width:90px;
+  min-height:104px;
+  border-radius:26px;
+  border:1px solid rgba(212,175,55,.45);
   background:rgba(255,255,255,.035);
   color:var(--gold2);
-  font-size:1.45rem;
   display:flex;
   flex-direction:column;
   align-items:center;
   justify-content:center;
+  gap:6px;
   cursor:pointer;
+  text-decoration:none;
+  position:relative;
+  overflow:visible;
+  transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.symbol-pill:active{
+  transform:scale(.96);
+}
+
+.symbol-pill.open{
+  border-color:rgba(243,212,119,.82);
+  box-shadow:0 0 20px rgba(212,175,55,.18);
+}
+
+.symbol-pill svg{
+  width:40px;
+  height:40px;
+  fill:none;
+  stroke:var(--gold2);
+  stroke-width:3;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  filter:drop-shadow(0 0 8px rgba(212,175,55,.28));
 }
 
 .symbol-pill span{
   display:block;
-  margin-top:4px;
-  font-size:.68rem;
+  font-size:.75rem;
   color:var(--cream);
-  font-weight:800;
+  font-weight:900;
+}
+
+.symbol-pill small{
+  display:none;
+  position:absolute;
+  left:50%;
+  top:112px;
+  transform:translateX(-50%);
+  width:178px;
+  padding:11px;
+  border-radius:15px;
+  background:#08090b;
+  border:1px solid rgba(212,175,55,.50);
+  color:var(--cream);
+  font-size:.72rem;
+  line-height:1.38;
+  z-index:30;
+  box-shadow:0 16px 38px rgba(0,0,0,.68);
+}
+
+.symbol-pill.open small{
+  display:block;
 }
 
 .see-more{
-  box-shadow:0 0 18px rgba(212,175,55,.44);
+  box-shadow:0 0 18px rgba(212,175,55,.42);
 }
 
-.quick-symbols p,
-.symbols-full p{
-  margin:8px 0 0;
+.quick-symbols p{
+  margin:-58px 0 0;
   color:var(--muted);
   font-size:.84rem;
 }
 
-.symbols-full{
-  padding:22px 16px;
-  margin-bottom:18px;
-  text-align:center;
+.result{
+  margin-top:24px;
 }
-
-.symbol-grid{
-  margin-top:16px;
-  display:grid;
-  grid-template-columns:repeat(2,1fr);
-  gap:10px;
-}
-
-.symbol-grid button{
-  border-radius:16px;
-  border:1px solid rgba(212,175,55,.28);
-  background:rgba(255,255,255,.035);
-  color:var(--cream);
-  padding:14px;
-  font-weight:900;
-}
-
-.result{margin-top:24px;}
 
 .result-card{
   opacity:0;
@@ -428,13 +462,13 @@ input::placeholder{color:rgba(248,239,217,.32);}
   transform:translateX(-50%);
   width:calc(100% - 28px);
   max-width:400px;
-  height:74px;
+  height:76px;
   display:grid;
   grid-template-columns:repeat(4,1fr);
   gap:4px;
   padding:8px;
-  border-radius:24px;
-  background:rgba(8,9,11,.94);
+  border-radius:25px;
+  background:rgba(7,8,10,.96);
   border:1px solid rgba(212,175,55,.26);
   backdrop-filter:blur(26px);
   box-shadow:0 18px 45px rgba(0,0,0,.72);
@@ -448,7 +482,7 @@ input::placeholder{color:rgba(248,239,217,.32);}
   color:rgba(248,239,217,.52);
   font-size:.72rem;
   font-weight:900;
-  border-radius:16px;
+  border-radius:17px;
   text-decoration:none;
   display:flex;
   flex-direction:column;
@@ -477,9 +511,9 @@ input::placeholder{color:rgba(248,239,217,.32);}
 @keyframes cardReveal{to{opacity:1;transform:translateY(0);}}
 
 @media(max-width:380px){
-  .brand h1{font-size:1.42rem;}
-  .logo-mark{width:82px;height:82px;}
-  .hero-card h2{font-size:2.45rem;}
+  .brand h1{font-size:1.36rem;}
+  .logo-mark{width:104px;height:104px;}
+  .hero-card h2{font-size:2.38rem;}
 }
 </style>
 </head>
@@ -489,8 +523,8 @@ input::placeholder{color:rgba(248,239,217,.32);}
 <div class="menu-panel" id="menuPanel">
   <button id="closeMenu" type="button">×</button>
   <a href="#decode">Decode Dream</a>
-  <a href="#journal">Journal</a>
-  <a href="#symbols">Symbols</a>
+  <a href="/journal">Journal</a>
+  <a href="/symbols">Symbols</a>
   <a href="/upgrade">Access</a>
 </div>
 
@@ -550,43 +584,46 @@ input::placeholder{color:rgba(248,239,217,.32);}
     <h2>✦ Quick Symbols ✦</h2>
 
     <div class="symbol-row">
-      <button class="symbol-pill" type="button" data-symbol="snake">🐍<span>Snake</span></button>
-      <button class="symbol-pill" type="button" data-symbol="hair">〰<span>Hair</span></button>
-      <button class="symbol-pill" type="button" data-symbol="teeth">🦷<span>Teeth</span></button>
-      <button class="symbol-pill" type="button" data-symbol="water">💧<span>Water</span></button>
-      <button class="symbol-pill" type="button" data-symbol="house">⌂<span>House</span></button>
-      <button class="symbol-pill see-more" type="button" id="openSymbolsBtn">⋮⋮<span>See More</span></button>
+
+      <button class="symbol-pill" type="button" data-symbol="snake">
+        <svg viewBox="0 0 64 64"><path d="M18 45c9 8 29 4 28-8-.8-9-17-7-16-18 .8-8 13-9 19-2"/><circle cx="49" cy="17" r="2"/></svg>
+        <span>Snake</span>
+        <small>Snake symbolizes enemies or opposition. Pay attention to what the snake is doing.</small>
+      </button>
+
+      <button class="symbol-pill" type="button" data-symbol="hair">
+        <svg viewBox="0 0 64 64"><path d="M22 52c-6-15-4-33 10-40 14 7 16 25 10 40"/><path d="M25 24c-2 10-1 20 3 28"/><path d="M39 24c2 10 1 20-3 28"/></svg>
+        <span>Hair</span>
+        <small>Hair represents problems, burdens, or ongoing issues.</small>
+      </button>
+
+      <button class="symbol-pill" type="button" data-symbol="teeth">
+        <svg viewBox="0 0 64 64"><path d="M22 12c-8 6-5 23 0 38 2 5 7 4 8-1l2-10 2 10c1 5 6 6 8 1 5-15 8-32 0-38-5-4-10 0-10 0s-5-4-10 0z"/></svg>
+        <span>Teeth</span>
+        <small>Teeth are treated as a serious warning symbol. Stay prayerful and do not panic.</small>
+      </button>
+
+      <button class="symbol-pill" type="button" data-symbol="water">
+        <svg viewBox="0 0 64 64"><path d="M32 8C20 24 16 33 16 42a16 16 0 0 0 32 0c0-9-4-18-16-34z"/><path d="M22 43c5 5 15 5 20 0"/></svg>
+        <span>Water</span>
+        <small>Water points to decision making. Clean or dirty water changes the meaning.</small>
+      </button>
+
+      <button class="symbol-pill" type="button" data-symbol="house">
+        <svg viewBox="0 0 64 64"><path d="M10 32 32 14l22 18"/><path d="M16 30v24h32V30"/><path d="M27 54V40h10v14"/></svg>
+        <span>House</span>
+        <small>House represents your personal life or private matters.</small>
+      </button>
+
+      <a class="symbol-pill see-more" href="/symbols">
+        <svg viewBox="0 0 64 64"><circle cx="18" cy="18" r="4"/><circle cx="32" cy="18" r="4"/><circle cx="46" cy="18" r="4"/><circle cx="18" cy="32" r="4"/><circle cx="32" cy="32" r="4"/><circle cx="46" cy="32" r="4"/><circle cx="18" cy="46" r="4"/><circle cx="32" cy="46" r="4"/><circle cx="46" cy="46" r="4"/></svg>
+        <span>See All</span>
+        <small>Open the full symbol dictionary.</small>
+      </a>
+
     </div>
 
-    <p>Tap a symbol to start or see more in Symbols.</p>
-  </section>
-
-  <section class="symbols-full" id="symbols">
-    <h2>Dream Symbols</h2>
-    <p>Explore common Caribbean dream symbols and add one to your dream entry.</p>
-
-    <div class="symbol-grid">
-      <button type="button" data-symbol="dog">Dog</button>
-      <button type="button" data-symbol="cat">Cat</button>
-      <button type="button" data-symbol="dead person">Dead Person</button>
-      <button type="button" data-symbol="baby">Baby</button>
-      <button type="button" data-symbol="road">Road</button>
-      <button type="button" data-symbol="blood">Blood</button>
-      <button type="button" data-symbol="keys">Keys</button>
-      <button type="button" data-symbol="door">Door</button>
-      <button type="button" data-symbol="fire">Fire</button>
-      <button type="button" data-symbol="falling">Falling</button>
-      <button type="button" data-symbol="chasing">Chasing</button>
-      <button type="button" data-symbol="crying">Crying</button>
-      <button type="button" data-symbol="laughing">Laughing</button>
-      <button type="button" data-symbol="dirty water">Dirty Water</button>
-      <button type="button" data-symbol="clean water">Clean Water</button>
-    </div>
-  </section>
-
-  <section class="symbols-full" id="journal">
-    <h2>Journal</h2>
-    <p>Your saved journal area can go here later.</p>
+    <p>Tap a symbol to add it. Tap again to reveal a short meaning.</p>
   </section>
 
   <div id="result" class="result"></div>
@@ -595,8 +632,8 @@ input::placeholder{color:rgba(248,239,217,.32);}
 
 <nav class="bottom-nav">
   <button class="active" type="button" data-scroll="decode">⌂<span>Decode</span></button>
-  <button type="button" data-scroll="journal">▤<span>Journal</span></button>
-  <button type="button" data-scroll="symbols">☾<span>Symbols</span></button>
+  <a href="/journal">▤<span>Journal</span></a>
+  <a href="/symbols">☾<span>Symbols</span></a>
   <a href="/upgrade">♙<span>Access</span></a>
 </nav>
 
@@ -621,7 +658,6 @@ const menuBtn = document.getElementById("menuBtn");
 const menuPanel = document.getElementById("menuPanel");
 const closeMenu = document.getElementById("closeMenu");
 const editBtn = document.getElementById("editBtn");
-const openSymbolsBtn = document.getElementById("openSymbolsBtn");
 
 function esc(s){
   return String(s || "")
@@ -681,9 +717,7 @@ menuBtn.onclick = () => menuPanel.classList.add("open");
 closeMenu.onclick = () => menuPanel.classList.remove("open");
 
 document.querySelectorAll(".menu-panel a").forEach(link => {
-  link.addEventListener("click", () => {
-    menuPanel.classList.remove("open");
-  });
+  link.addEventListener("click", () => menuPanel.classList.remove("open"));
 });
 
 editBtn.onclick = () => {
@@ -691,24 +725,25 @@ editBtn.onclick = () => {
   setTimeout(() => dreamEl.focus(), 300);
 };
 
-openSymbolsBtn.onclick = () => scrollToId("symbols");
-
 document.querySelectorAll("[data-scroll]").forEach(tab => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll(".bottom-nav button").forEach(b => b.classList.remove("active"));
-    tab.classList.add("active");
-    scrollToId(tab.dataset.scroll);
-  });
+  tab.addEventListener("click", () => scrollToId(tab.dataset.scroll));
 });
 
-document.querySelectorAll("[data-symbol]").forEach(btnSymbol => {
-  btnSymbol.addEventListener("click", () => {
-    const symbol = btnSymbol.dataset.symbol;
+document.querySelectorAll(".symbol-pill").forEach(pill => {
+  pill.addEventListener("click", function(e){
+    if(this.tagName.toLowerCase() === "a") return;
+
+    const symbol = this.dataset.symbol;
+
     dreamEl.value = dreamEl.value.trim()
       ? dreamEl.value.trim() + " " + symbol
       : symbol;
-    scrollToId("decode");
-    setTimeout(() => dreamEl.focus(), 300);
+
+    document.querySelectorAll(".symbol-pill").forEach(p => {
+      if(p !== this) p.classList.remove("open");
+    });
+
+    this.classList.toggle("open");
   });
 });
 

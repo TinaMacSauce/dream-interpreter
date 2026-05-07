@@ -5,95 +5,299 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Jamaican Dream Interpreter</title>
 
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
 <style>
-body {
+:root{
+  --bg:#050506;
+  --card:#101014;
+  --card2:#151419;
+  --gold:#d4af37;
+  --gold2:#f3e28a;
+  --text:#f7eed6;
+  --muted:rgba(247,238,214,.62);
+  --line:rgba(212,175,55,.18);
+}
+
+*{box-sizing:border-box}
+
+body{
   margin:0;
-  font-family:Inter, sans-serif;
-  background:#050509;
-  color:#f5e7c6;
+  font-family:Inter,system-ui,sans-serif;
+  background:
+    radial-gradient(circle at top, rgba(212,175,55,.12), transparent 35%),
+    linear-gradient(180deg,#08080b,#030304);
+  color:var(--text);
 }
 
-.container {
-  max-width:720px;
-  margin:auto;
-  padding:20px;
+.app{
+  max-width:430px;
+  min-height:100svh;
+  margin:0 auto;
+  padding:18px 16px 96px;
 }
 
-h1 {
-  font-family:Cinzel, serif;
-  text-align:center;
-  color:#f3e28a;
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:24px;
 }
 
-textarea, input {
-  width:100%;
-  padding:12px;
-  border-radius:10px;
-  border:1px solid #444;
-  background:#000;
-  color:#fff;
-  margin-top:6px;
+.icon-btn{
+  width:42px;
+  height:42px;
+  border-radius:50%;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.04);
+  color:var(--gold2);
+  font-size:1.1rem;
 }
 
-button {
-  width:100%;
-  padding:14px;
-  margin-top:14px;
-  border-radius:999px;
-  border:none;
-  font-weight:bold;
-  background:linear-gradient(90deg,#d4af37,#f3e28a);
-  cursor:pointer;
+.brand h1{
+  margin:0;
+  font-size:1.25rem;
+  letter-spacing:-.04em;
 }
 
-.card {
-  background:#0b0a10;
-  padding:14px;
-  border-radius:12px;
-  margin-top:12px;
-  border:1px solid #333;
+.brand p{
+  margin:4px 0 0;
+  color:var(--muted);
+  font-size:.78rem;
 }
 
-.label {
-  font-size:0.75rem;
-  color:#d4af37;
-  margin-bottom:6px;
+.hero{
+  margin-bottom:18px;
+}
+
+.kicker{
+  color:var(--gold);
+  font-size:.74rem;
+  font-weight:800;
+  letter-spacing:.14em;
   text-transform:uppercase;
 }
 
-.logic-line {
+.hero h2{
+  margin:8px 0 8px;
+  font-size:2.15rem;
+  line-height:1.05;
+  letter-spacing:-.06em;
+}
+
+.hero p{
+  margin:0;
+  color:var(--muted);
+  line-height:1.55;
+  font-size:.95rem;
+}
+
+.input-card{
+  border:1px solid var(--line);
+  border-radius:30px;
+  padding:18px;
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.015));
+  box-shadow:0 24px 60px rgba(0,0,0,.55);
+}
+
+label{
+  display:block;
+  font-size:.82rem;
+  font-weight:800;
+  color:var(--gold2);
+  margin:0 0 8px;
+}
+
+input,textarea{
+  width:100%;
+  border:1px solid rgba(212,175,55,.16);
+  background:rgba(0,0,0,.46);
+  color:#fff;
+  border-radius:20px;
+  padding:15px;
+  font-family:inherit;
+  outline:none;
+}
+
+input{
+  margin-bottom:14px;
+}
+
+textarea{
+  min-height:260px;
+  resize:vertical;
+  line-height:1.65;
+  font-size:1rem;
+}
+
+textarea::placeholder,
+input::placeholder{
+  color:rgba(247,238,214,.35);
+}
+
+.chips{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:14px;
+}
+
+.chip{
+  border:1px solid rgba(212,175,55,.14);
+  background:rgba(255,255,255,.045);
+  color:var(--text);
+  border-radius:16px;
+  padding:13px 10px;
+  font-size:.78rem;
+  font-weight:800;
+}
+
+.primary{
+  width:100%;
+  margin-top:16px;
+  padding:16px;
+  border:0;
+  border-radius:999px;
+  background:linear-gradient(90deg,var(--gold),var(--gold2));
+  color:#111;
+  font-weight:900;
+  font-size:.98rem;
+  letter-spacing:.02em;
+  cursor:pointer;
+  box-shadow:0 14px 28px rgba(0,0,0,.5);
+}
+
+.helper{
+  text-align:center;
+  color:var(--muted);
+  font-size:.78rem;
+  line-height:1.5;
+  margin:14px 0 0;
+}
+
+.result{
+  margin-top:22px;
+}
+
+.result-card{
+  background:rgba(16,16,20,.86);
+  border:1px solid var(--line);
+  border-radius:24px;
+  padding:16px;
+  margin-top:12px;
+  box-shadow:0 18px 42px rgba(0,0,0,.38);
+}
+
+.result-card.featured{
+  background:linear-gradient(180deg,rgba(212,175,55,.10),rgba(255,255,255,.025));
+}
+
+.label{
+  color:var(--gold2);
+  font-size:.72rem;
+  font-weight:900;
+  letter-spacing:.13em;
+  text-transform:uppercase;
+  margin-bottom:8px;
+}
+
+.result-card div:last-child{
+  color:rgba(247,238,214,.9);
+  line-height:1.65;
+  font-size:.93rem;
+}
+
+.logic-line{
+  padding:10px;
+  margin-top:8px;
+  background:rgba(0,0,0,.28);
+  border:1px solid rgba(212,175,55,.10);
+  border-radius:14px;
+  line-height:1.55;
+  font-size:.88rem;
+}
+
+.bottom-nav{
+  position:fixed;
+  left:50%;
+  bottom:14px;
+  transform:translateX(-50%);
+  width:calc(100% - 28px);
+  max-width:400px;
+  height:72px;
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:4px;
   padding:8px;
-  margin-bottom:6px;
-  background:#111;
-  border-radius:8px;
+  border-radius:26px;
+  background:rgba(10,10,12,.84);
+  backdrop-filter:blur(22px);
+  border:1px solid rgba(212,175,55,.16);
+  box-shadow:0 18px 45px rgba(0,0,0,.75);
 }
 
-.summary {
-  background:#151020;
+.bottom-nav button{
+  border:0;
+  background:transparent;
+  color:rgba(247,238,214,.52);
+  font-size:.72rem;
+  font-weight:800;
 }
 
+.bottom-nav button.active{
+  color:var(--gold2);
+}
 </style>
 </head>
 
 <body>
 
-<div class="container">
+<main class="app">
 
-<h1>Dream Interpreter</h1>
+  <header class="topbar">
+    <button class="icon-btn" type="button">☰</button>
+    <div class="brand">
+      <h1>Dream Interpreter</h1>
+      <p>Private dream journal</p>
+    </div>
+    <button class="icon-btn" type="button">✎</button>
+  </header>
 
-<input id="email" placeholder="Enter your email" />
-<textarea id="dream" placeholder="Write your dream here..."></textarea>
+  <section class="hero">
+    <div class="kicker">Decode one dream</div>
+    <h2>What did you dream?</h2>
+    <p>Write the dream clearly. Include the ending, emotions, people, places, and key symbols.</p>
+  </section>
 
-<button id="interpret">Interpret Dream</button>
+  <section class="input-card">
+    <label for="email">Email</label>
+    <input id="email" type="email" placeholder="you@example.com" />
 
-<div id="result"></div>
+    <label for="dream">Dream entry</label>
+    <textarea id="dream" placeholder="Example: I was being chased through my old school. I felt afraid. I kept running and finally escaped."></textarea>
 
-</div>
+    <div class="chips">
+      <button class="chip" type="button" id="templateBtn">Use template</button>
+      <button class="chip" type="button" id="clearBtn">Clear dream</button>
+    </div>
+
+    <button id="interpret" class="primary">Decode Dream</button>
+
+    <p class="helper">Your first interpretations are free. Journal features can be expanded later.</p>
+  </section>
+
+  <div id="result" class="result"></div>
+
+</main>
+
+<nav class="bottom-nav">
+  <button class="active" type="button">Decode</button>
+  <button type="button">Journal</button>
+  <button type="button">Symbols</button>
+  <button type="button">Account</button>
+</nav>
 
 <script>
-
 const API = window.location.origin.includes("localhost")
   ? "http://127.0.0.1:5000"
   : "https://interpreter.jamaicantruestories.com";
@@ -106,7 +310,6 @@ function esc(s){
 }
 
 function render(data){
-
   const result = document.getElementById("result");
 
   const interp = data.interpretation || {};
@@ -117,71 +320,101 @@ function render(data){
   const subject = event.primary_subject || "";
   const place = event.primary_place || {};
   const ending = event.primary_ending || {};
-
   const readable = data.narration?.readable_summary || "";
 
   result.innerHTML = `
+    <div class="result-card featured">
+      <div class="label">Readable Summary</div>
+      <div>${esc(readable)}</div>
+    </div>
 
-  <div class="card">
+    <div class="result-card">
+      <div class="label">Dream Logic</div>
+      <div class="logic-line"><b>Action:</b> ${esc(action.name || "")} ${action.meaning ? "— "+esc(action.meaning):""}</div>
+      <div class="logic-line"><b>Subject:</b> ${esc(subject || facts.top_symbols?.join(", ") || "")}</div>
+      <div class="logic-line"><b>Place:</b> ${esc(place.name || "")} ${place.meaning ? "— "+esc(place.meaning):""}</div>
+      <div class="logic-line"><b>Ending:</b> ${esc(ending.name || "")} ${ending.meaning ? "— "+esc(ending.meaning):""}</div>
+    </div>
 
-    <div class="label">Dream Logic</div>
+    <div class="result-card">
+      <div class="label">Spiritual Meaning</div>
+      <div>${esc(interp.spiritual_meaning)}</div>
+    </div>
 
-    <div class="logic-line"><b>1. Action:</b> ${esc(action.name || "")} ${action.meaning ? "— "+esc(action.meaning):""}</div>
+    <div class="result-card">
+      <div class="label">Physical Effects</div>
+      <div>${esc(interp.effects_in_physical_realm)}</div>
+    </div>
 
-    <div class="logic-line"><b>2. Subject:</b> ${esc(subject || facts.top_symbols?.join(", ") || "")}</div>
-
-    <div class="logic-line"><b>3. Place:</b> ${esc(place.name || "")} ${place.meaning ? "— "+esc(place.meaning):""}</div>
-
-    <div class="logic-line"><b>4. Ending:</b> ${esc(ending.name || "")} ${ending.meaning ? "— "+esc(ending.meaning):""}</div>
-
-  </div>
-
-  <div class="card summary">
-    <div class="label">Readable Summary</div>
-    <div>${esc(readable)}</div>
-  </div>
-
-  <div class="card">
-    <div class="label">Spiritual Meaning</div>
-    <div>${esc(interp.spiritual_meaning)}</div>
-  </div>
-
-  <div class="card">
-    <div class="label">Effects</div>
-    <div>${esc(interp.effects_in_physical_realm)}</div>
-  </div>
-
-  <div class="card">
-    <div class="label">What To Do</div>
-    <div>${esc(interp.what_to_do)}</div>
-  </div>
-
+    <div class="result-card">
+      <div class="label">What To Do</div>
+      <div>${esc(interp.what_to_do)}</div>
+    </div>
   `;
+
+  result.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
-document.getElementById("interpret").onclick = async () => {
+document.getElementById("templateBtn").onclick = () => {
+  document.getElementById("dream").value =
+`Dream:
+[What happened?]
 
+Symbols:
+- 
+- 
+- 
+
+Emotion:
+[What did you feel?]
+
+Ending:
+[How did it end?]`;
+};
+
+document.getElementById("clearBtn").onclick = () => {
+  document.getElementById("dream").value = "";
+  document.getElementById("dream").focus();
+};
+
+document.getElementById("interpret").onclick = async () => {
   const dream = document.getElementById("dream").value.trim();
   const email = document.getElementById("email").value.trim();
+  const btn = document.getElementById("interpret");
 
   if(!dream){
-    alert("Enter your dream");
+    alert("Enter your dream first.");
     return;
   }
 
-  const res = await fetch(API + "/interpret", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({
-      text:dream,
-      email:email
-    })
-  });
+  btn.disabled = true;
+  btn.textContent = "Decoding...";
 
-  const data = await res.json();
-  render(data);
+  try{
+    const res = await fetch(API + "/interpret", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        text:dream,
+        email:email
+      })
+    });
+
+    const data = await res.json();
+    render(data);
+
+  }catch(e){
+    document.getElementById("result").innerHTML = `
+      <div class="result-card">
+        <div class="label">Error</div>
+        <div>Something went wrong calling the interpreter API.</div>
+      </div>
+    `;
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Decode Dream";
+  }
 };
-
 </script>
 
 </body>

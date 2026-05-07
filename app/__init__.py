@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -111,13 +111,11 @@ def create_app() -> Flask:
     # ============================================================
     @app.before_request
     def attach_request_id() -> None:
-        request.request_id = request.headers.get("X-Request-ID") or str(
-            uuid.uuid4()
-        )
+        g.request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
 
     @app.after_request
     def apply_response_headers(response):
-        request_id = getattr(request, "request_id", "")
+        request_id = getattr(g, "request_id", "")
 
         if request_id:
             response.headers["X-Request-ID"] = request_id
@@ -131,8 +129,15 @@ def create_app() -> Flask:
             "camera=(), microphone=(), geolocation=()"
         )
 
-        # Helpful browser caching behavior for app HTML/API responses.
-        if request.path.startswith("/interpret") or request.path.startswith("/check-access"):
+        # Helpful browser caching behavior for app/API responses.
+        no_store_paths = (
+            "/interpret",
+            "/check-access",
+            "/create-checkout-session",
+            "/create-dream-pack-checkout-session",
+        )
+
+        if request.path.startswith(no_store_paths):
             response.headers["Cache-Control"] = "no-store"
 
         return response
@@ -150,7 +155,7 @@ def create_app() -> Flask:
         payload: dict[str, Any] = {
             "error": error,
             "message": message,
-            "request_id": getattr(request, "request_id", None),
+            "request_id": getattr(g, "request_id", None),
         }
 
         if details is not None:
@@ -160,6 +165,11 @@ def create_app() -> Flask:
 
     # ============================================================
     # Error Handlers
+    # Note:
+    # Flask does not recognize 402 as a registerable global error
+    # handler unless you define a custom HTTPException subclass.
+    # Your routes may still manually return:
+    # return {"error": "payment_required"}, 402
     # ============================================================
     @app.errorhandler(400)
     def bad_request(error):
@@ -175,14 +185,6 @@ def create_app() -> Flask:
             status_code=401,
             error="unauthorized",
             message="Authentication is required.",
-        )
-
-    @app.errorhandler(402)
-    def payment_required(error):
-        return error_response(
-            status_code=402,
-            error="payment_required",
-            message="Payment or active access is required.",
         )
 
     @app.errorhandler(403)

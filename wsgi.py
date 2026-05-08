@@ -1,8 +1,16 @@
 import os
 
+from flask import render_template
+
 from app import create_app
 
 app = create_app()
+
+
+@app.route("/privacy.html")
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html")
 
 
 if __name__ == "__main__":

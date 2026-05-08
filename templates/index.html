@@ -492,6 +492,142 @@ input::placeholder{
   padding:12px;
 }
 
+/* REWARDED AD MODAL */
+
+.reward-modal{
+  position:fixed;
+  inset:0;
+  z-index:300;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  background:rgba(0,0,0,.78);
+  backdrop-filter:blur(18px);
+}
+
+.reward-modal.show{
+  display:flex;
+}
+
+.reward-box{
+  width:100%;
+  max-width:392px;
+  border-radius:24px;
+  border:1px solid rgba(212,175,55,.34);
+  background:
+    radial-gradient(circle at top center, rgba(212,175,55,.14), transparent 40%),
+    linear-gradient(180deg, rgba(18,19,24,.98), rgba(4,5,7,.99));
+  box-shadow:
+    0 28px 80px rgba(0,0,0,.72),
+    inset 0 1px 0 rgba(255,255,255,.06);
+  padding:18px;
+  text-align:center;
+  position:relative;
+  overflow:hidden;
+}
+
+.reward-box::before{
+  content:"";
+  position:absolute;
+  left:18px;
+  right:18px;
+  top:0;
+  height:1px;
+  background:linear-gradient(90deg, transparent, rgba(248,221,125,.72), transparent);
+}
+
+.reward-kicker{
+  margin:0 0 8px;
+  color:var(--gold2);
+  font-size:.62rem;
+  font-weight:900;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+}
+
+.reward-title{
+  margin:0;
+  font-family:Cinzel,Georgia,serif;
+  color:var(--cream);
+  font-size:1.24rem;
+  line-height:1.12;
+}
+
+.reward-copy{
+  margin:10px auto 14px;
+  color:var(--muted);
+  font-size:.8rem;
+  line-height:1.48;
+  max-width:310px;
+}
+
+.reward-ad-space{
+  min-height:142px;
+  border-radius:20px;
+  border:1px dashed rgba(212,175,55,.3);
+  background:
+    radial-gradient(circle at center, rgba(212,175,55,.07), transparent 48%),
+    rgba(0,0,0,.28);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  color:rgba(248,239,217,.48);
+  font-size:.8rem;
+  line-height:1.4;
+}
+
+.reward-count{
+  margin:12px 0 0;
+  color:var(--gold2);
+  font-size:.76rem;
+  font-weight:900;
+}
+
+.reward-actions{
+  display:grid;
+  gap:9px;
+  margin-top:14px;
+}
+
+.reward-actions button,
+.reward-actions a{
+  width:100%;
+  border-radius:17px;
+  padding:13px 14px;
+  font-weight:900;
+  text-decoration:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.reward-continue{
+  border:0;
+  background:
+    linear-gradient(180deg,#ffe99d 0%, #dfb443 54%, #a96f1c 100%);
+  color:#150d02;
+}
+
+.reward-continue:disabled{
+  opacity:.52;
+  cursor:not-allowed;
+}
+
+.reward-upgrade{
+  border:1px solid rgba(212,175,55,.28);
+  background:rgba(255,255,255,.035);
+  color:var(--gold2);
+}
+
+.reward-note{
+  margin:11px 0 0;
+  color:rgba(248,239,217,.38);
+  font-size:.66rem;
+  line-height:1.4;
+}
+
 /* GUIDED DETAILS */
 
 .guided-panel{
@@ -1355,6 +1491,38 @@ input::placeholder{
   </button>
 </nav>
 
+<div class="reward-modal" id="rewardModal" aria-hidden="true">
+  <div class="reward-box" role="dialog" aria-modal="true" aria-labelledby="rewardTitle">
+    <div class="reward-kicker">Sponsored Access</div>
+    <h2 class="reward-title" id="rewardTitle">Watch to Continue</h2>
+    <p class="reward-copy">
+      Free dream decoding is supported by ads. Watch this sponsored message to unlock your interpretation.
+    </p>
+
+    <div class="reward-ad-space" id="rewardAdSpace">
+      Video ad space for free users
+    </div>
+
+    <div class="reward-count" id="rewardCount">
+      Continue available in 5 seconds
+    </div>
+
+    <div class="reward-actions">
+      <button class="reward-continue" type="button" id="rewardContinue" disabled>
+        Continue Decode
+      </button>
+
+      <a class="reward-upgrade" id="rewardUpgrade" href="#">
+        Skip Ads With $1 Dream Decode
+      </a>
+    </div>
+
+    <p class="reward-note">
+      This placeholder can be connected to a real rewarded video ad network later.
+    </p>
+  </div>
+</div>
+
 <script>
 const HOSTED_APP = "https://interpreter.jamaicantruestories.com";
 
@@ -1393,8 +1561,16 @@ const menuBtn = document.getElementById("menuBtn");
 const menuPanel = document.getElementById("menuPanel");
 const closeMenu = document.getElementById("closeMenu");
 
+const rewardModal = document.getElementById("rewardModal");
+const rewardContinue = document.getElementById("rewardContinue");
+const rewardCount = document.getElementById("rewardCount");
+const rewardUpgrade = document.getElementById("rewardUpgrade");
+
 let journalFilter = "all";
 let selectedGuidedSymbols = [];
+let rewardReady = false;
+let rewardTimer = null;
+let pendingRewardDecode = false;
 
 const SYMBOLS = [
   {name:"Dog", icon:"🐕", meaning:"Chasing, pressure, loyalty, warning", key:"dog", category:"animal"},
@@ -1515,6 +1691,55 @@ function refreshAds(){
   if(!decodeAd) return;
 
   decodeAd.classList.toggle("hidden", userHasPaidAccess());
+}
+
+function shouldShowRewardAd(){
+  return !userHasPaidAccess();
+}
+
+function openRewardModal(){
+  rewardReady = false;
+  pendingRewardDecode = true;
+
+  if(rewardTimer){
+    clearInterval(rewardTimer);
+    rewardTimer = null;
+  }
+
+  rewardContinue.disabled = true;
+  rewardContinue.textContent = "Continue Decode";
+
+  let seconds = 5;
+  rewardCount.textContent = "Continue available in " + seconds + " seconds";
+  rewardUpgrade.href = upgradeUrl(emailEl.value);
+
+  rewardModal.classList.add("show");
+  rewardModal.setAttribute("aria-hidden","false");
+
+  rewardTimer = setInterval(function(){
+    seconds -= 1;
+
+    if(seconds > 0){
+      rewardCount.textContent = "Continue available in " + seconds + " seconds";
+      return;
+    }
+
+    clearInterval(rewardTimer);
+    rewardTimer = null;
+    rewardReady = true;
+    rewardCount.textContent = "Sponsored message complete";
+    rewardContinue.disabled = false;
+  },1000);
+}
+
+function closeRewardModal(){
+  rewardModal.classList.remove("show");
+  rewardModal.setAttribute("aria-hidden","true");
+
+  if(rewardTimer){
+    clearInterval(rewardTimer);
+    rewardTimer = null;
+  }
 }
 
 function switchTab(tab){
@@ -1976,6 +2201,10 @@ function refreshAccount(){
   if(accountDreamPackReturn){
     accountDreamPackReturn.value = getReturnUrl();
   }
+
+  if(rewardUpgrade){
+    rewardUpgrade.href = premiumUrl;
+  }
 }
 
 function exportJournal(){
@@ -2025,6 +2254,110 @@ function importJournalFile(file){
   };
 
   reader.readAsText(file);
+}
+
+async function runInterpretation(){
+  const dream = buildDreamPayload();
+  const rawDream = dreamEl.value.trim();
+  const email = normalizeEmail(emailEl.value);
+
+  if(!rawDream){
+    alert("Enter your dream first.");
+    dreamEl.focus();
+    return;
+  }
+
+  if(email && !validEmail(email)){
+    switchTab("account");
+    alert("Enter a valid email or clear the email field.");
+    emailEl.focus();
+    return;
+  }
+
+  if(email){
+    saveEmail(email);
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = `<span class="loader-ring"></span> Decoding Dream...`;
+  result.classList.remove("show");
+  result.innerHTML = "";
+
+  try{
+    const res = await fetch(API + "/interpret", {
+      method:"POST",
+      mode:"cors",
+      credentials:"include",
+      headers:{
+        "Content-Type":"application/json",
+        "Accept":"application/json"
+      },
+      body:JSON.stringify({
+        text:dream,
+        email:email
+      })
+    });
+
+    const data = await readResponse(res);
+
+    if(res.status === 402){
+      window.location.href = upgradeUrl(email);
+      return;
+    }
+
+    if(!res.ok){
+      renderError(
+        "Interpreter Error",
+        data.error || data.message || data.details || "Something went wrong calling the interpreter API.",
+        false
+      );
+      return;
+    }
+
+    if(data.is_paid){
+      showAccessStatus("<strong>Access:</strong> Subscription active.");
+    }else if(data.dream_pack?.active){
+      showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining.");
+    }else if(typeof data.free_uses_left === "number"){
+      showAccessStatus("<strong>Access:</strong> Free mode • " + esc(String(data.free_uses_left)) + " free use(s) left.");
+    }
+
+    const mapped = mapInterpretation(data, dream);
+    const entryId = "dream_" + Date.now();
+
+    const entry = {
+      id:entryId,
+      createdAt:new Date().toISOString(),
+      dreamText:rawDream,
+      fullPrompt:dream,
+      summary:mapped.mainMeaning,
+      interpretation:mapped,
+      matchedSymbols:mapped.matchedSymbols,
+      favorite:false,
+      metadata:{
+        emotion:emotionEl.value,
+        ending:endingEl.value,
+        place:placeEl.value.trim(),
+        people:peopleEl.value.trim(),
+        selectedSymbols:selectedGuidedSymbols.slice()
+      },
+      source:"api",
+      accessType:data.is_paid ? "subscription" : data.dream_pack?.active ? "pack" : "free"
+    };
+
+    renderResultCards(mapped, rawDream, entryId);
+    addJournalEntry(entry);
+
+  }catch(e){
+    renderError(
+      "Network Error",
+      "The interpreter could not be reached. Check the Render deployment, domain, or CORS settings.",
+      false
+    );
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Decode Dream";
+  }
 }
 
 menuBtn.onclick = () => menuPanel.classList.add("open");
@@ -2186,9 +2519,7 @@ if(accountDreamPackForm){
 }
 
 btn.onclick = async () => {
-  const dream = buildDreamPayload();
   const rawDream = dreamEl.value.trim();
-  const email = normalizeEmail(emailEl.value);
 
   if(!rawDream){
     alert("Enter your dream first.");
@@ -2196,104 +2527,28 @@ btn.onclick = async () => {
     return;
   }
 
-  if(email && !validEmail(email)){
-    switchTab("account");
-    alert("Enter a valid email or clear the email field.");
-    emailEl.focus();
+  if(shouldShowRewardAd()){
+    openRewardModal();
     return;
   }
 
-  if(email){
-    saveEmail(email);
-  }
+  await runInterpretation();
+};
 
-  btn.disabled = true;
-  btn.innerHTML = `<span class="loader-ring"></span> Decoding Dream...`;
-  result.classList.remove("show");
-  result.innerHTML = "";
+rewardContinue.onclick = async () => {
+  if(!rewardReady || !pendingRewardDecode) return;
 
-  try{
-    const res = await fetch(API + "/interpret", {
-      method:"POST",
-      mode:"cors",
-      credentials:"include",
-      headers:{
-        "Content-Type":"application/json",
-        "Accept":"application/json"
-      },
-      body:JSON.stringify({
-        text:dream,
-        email:email
-      })
-    });
+  closeRewardModal();
+  pendingRewardDecode = false;
 
-    const data = await readResponse(res);
-
-    if(res.status === 402){
-      window.location.href = upgradeUrl(email);
-      return;
-    }
-
-    if(!res.ok){
-      renderError(
-        "Interpreter Error",
-        data.error || data.message || data.details || "Something went wrong calling the interpreter API.",
-        false
-      );
-      return;
-    }
-
-    if(data.is_paid){
-      showAccessStatus("<strong>Access:</strong> Subscription active.");
-    }else if(data.dream_pack?.active){
-      showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining.");
-    }else if(typeof data.free_uses_left === "number"){
-      showAccessStatus("<strong>Access:</strong> Free mode • " + esc(String(data.free_uses_left)) + " free use(s) left.");
-    }
-
-    const mapped = mapInterpretation(data, dream);
-    const entryId = "dream_" + Date.now();
-
-    const entry = {
-      id:entryId,
-      createdAt:new Date().toISOString(),
-      dreamText:rawDream,
-      fullPrompt:dream,
-      summary:mapped.mainMeaning,
-      interpretation:mapped,
-      matchedSymbols:mapped.matchedSymbols,
-      favorite:false,
-      metadata:{
-        emotion:emotionEl.value,
-        ending:endingEl.value,
-        place:placeEl.value.trim(),
-        people:peopleEl.value.trim(),
-        selectedSymbols:selectedGuidedSymbols.slice()
-      },
-      source:"api",
-      accessType:data.is_paid ? "subscription" : data.dream_pack?.active ? "pack" : "free"
-    };
-
-    renderResultCards(mapped, rawDream, entryId);
-    addJournalEntry(entry);
-
-  }catch(e){
-    renderError(
-      "Network Error",
-      "The interpreter could not be reached. Check the Render deployment, domain, or CORS settings.",
-      false
-    );
-  }finally{
-    btn.disabled = false;
-    btn.textContent = "Decode Dream";
-  }
+  await runInterpretation();
 };
 
 const savedEmail = loadEmail();
 
 if(savedEmail){
   emailEl.value = savedEmail;
-  showAccessStatus("<strong>Email saved:</strong> " + esc(savedEmail));
+  showAccessStatus('<strong>Email saved:</strong> ' + esc(savedEmail));
 }else{
   hideAccessStatus();
 }

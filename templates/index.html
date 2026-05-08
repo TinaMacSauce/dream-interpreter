@@ -86,6 +86,27 @@ button{
   margin:0 auto;
   padding:max(13px, env(safe-area-inset-top)) 18px 148px;
   position:relative;
+  isolation:isolate;
+}
+
+.app::before{
+  content:"";
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  height:230px;
+  background:
+    linear-gradient(180deg, rgba(2,3,3,.08), rgba(2,3,3,.72)),
+    url("/static/palm-hero.png") top center / cover no-repeat;
+  opacity:.26;
+  pointer-events:none;
+  z-index:0;
+}
+
+.app > *{
+  position:relative;
+  z-index:1;
 }
 
 /* MENU */
@@ -192,6 +213,16 @@ button{
   white-space:nowrap;
 }
 
+.brand::after{
+  content:"";
+  display:block;
+  width:86px;
+  height:1px;
+  margin:8px auto 0;
+  background:linear-gradient(90deg, transparent, rgba(248,221,125,.78), transparent);
+  opacity:.75;
+}
+
 /* SCREENS */
 
 .screen{
@@ -253,6 +284,23 @@ button{
   height:1px;
   background:linear-gradient(90deg, transparent, rgba(246,216,120,.55), transparent);
   opacity:.62;
+  z-index:0;
+  pointer-events:none;
+}
+
+.card::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:url("/static/palm-texture.png") center / cover no-repeat;
+  opacity:.045;
+  pointer-events:none;
+  z-index:0;
+}
+
+.card > *{
+  position:relative;
+  z-index:1;
 }
 
 .decode-card{

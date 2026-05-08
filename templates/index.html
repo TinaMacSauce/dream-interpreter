@@ -99,7 +99,7 @@ button{
   background:
     linear-gradient(180deg, rgba(2,3,3,.08), rgba(2,3,3,.72)),
     url("/static/palm-hero.png") top center / cover no-repeat;
-  opacity:.18;
+  opacity:.26;
   pointer-events:none;
   z-index:0;
 }
@@ -985,6 +985,22 @@ input::placeholder{
   font-size:.84rem;
 }
 
+.subscription-link{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin-top:10px;
+  width:100%;
+  padding:12px 15px;
+  border-radius:17px;
+  border:1px solid rgba(212,175,55,.3);
+  background:rgba(255,255,255,.035);
+  color:var(--gold2);
+  text-decoration:none;
+  font-weight:900;
+  font-size:.82rem;
+}
+
 /* BOTTOM NAV */
 
 .bottom-nav{
@@ -1293,6 +1309,10 @@ input::placeholder{
       <a class="upgrade-link" id="upgradeAccount" href="#">
         Start $1 Dream Decode
       </a>
+
+      <a class="subscription-link" id="subscriptionAccount" href="#">
+        View Premium Subscription
+      </a>
     </section>
   </section>
 
@@ -1344,6 +1364,7 @@ const journalList = document.getElementById("journalList");
 const journalSearch = document.getElementById("journalSearch");
 const memberLine = document.getElementById("memberLine");
 const upgradeAccount = document.getElementById("upgradeAccount");
+const subscriptionAccount = document.getElementById("subscriptionAccount");
 const guidedPanel = document.getElementById("guidedPanel");
 const emotionEl = document.getElementById("emotion");
 const endingEl = document.getElementById("ending");
@@ -1916,6 +1937,7 @@ function renderGuidedSymbols(){
 function refreshAccount(){
   const email = loadEmail();
   const count = readJournal().length;
+  const url = upgradeUrl(email);
 
   if(emailEl.value !== email){
     emailEl.value = email;
@@ -1925,7 +1947,11 @@ function refreshAccount(){
     ? "Email saved • " + count + " dream(s)"
     : "Local journal mode • " + count + " dream(s)";
 
-  upgradeAccount.href = upgradeUrl(email);
+  upgradeAccount.href = url;
+
+  if(subscriptionAccount){
+    subscriptionAccount.href = url;
+  }
 }
 
 function exportJournal(){

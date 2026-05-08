@@ -1141,6 +1141,27 @@ input::placeholder{
   font-size:.82rem;
 }
 
+/* LEGAL */
+
+.legal-links{
+  margin:14px 0 0;
+  display:flex;
+  justify-content:center;
+  gap:12px;
+  flex-wrap:wrap;
+}
+
+.legal-links a{
+  color:rgba(248,221,125,.88);
+  text-decoration:none;
+  font-size:.72rem;
+  font-weight:850;
+}
+
+.legal-links a:hover{
+  text-decoration:underline;
+}
+
 /* BOTTOM NAV */
 
 .bottom-nav{
@@ -1431,7 +1452,7 @@ input::placeholder{
       <button class="setting-row" type="button" id="exportBtn">Export Journal <span>›</span></button>
       <button class="setting-row" type="button" id="importBtn">Import Journal <span>›</span></button>
       <button class="setting-row" type="button" id="clearJournalBtn">Clear Local Journal <span>›</span></button>
-      <button class="setting-row" type="button" id="privacyBtn">Privacy & Security <span>›</span></button>
+      <a class="setting-row" href="/privacy.html" style="text-decoration:none;">Privacy Policy <span>›</span></a>
       <button class="setting-row" type="button" id="supportBtn">Help & Support <span>›</span></button>
     </section>
 
@@ -1465,6 +1486,10 @@ input::placeholder{
         View Premium Subscription
       </a>
     </section>
+
+    <div class="legal-links">
+      <a href="/privacy.html">Privacy Policy</a>
+    </div>
   </section>
 
 </main>
@@ -2478,10 +2503,6 @@ document.getElementById("clearJournalBtn").onclick = () => {
     renderJournal();
     refreshAccount();
   }
-};
-
-document.getElementById("privacyBtn").onclick = () => {
-  alert("MVP privacy: journal entries are stored in this browser using localStorage. Interpretations are sent to the interpreter API when you tap Decode Dream.");
 };
 
 document.getElementById("supportBtn").onclick = () => {

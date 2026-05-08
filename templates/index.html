@@ -84,7 +84,7 @@ button{
   max-width:430px;
   min-height:100svh;
   margin:0 auto;
-  padding:max(13px, env(safe-area-inset-top)) 18px 96px;
+  padding:max(13px, env(safe-area-inset-top)) 18px 148px;
   position:relative;
 }
 
@@ -505,6 +505,7 @@ input::placeholder{
 .result{
   display:none;
   margin-top:14px;
+  padding-bottom:28px;
 }
 
 .result.show{
@@ -894,6 +895,7 @@ input::placeholder{
 .premium-icon{
   width:40px;
   height:40px;
+  min-width:40px;
   border-radius:15px;
   color:var(--gold2);
   border:1px solid rgba(212,175,55,.28);
@@ -901,6 +903,8 @@ input::placeholder{
   align-items:center;
   justify-content:center;
   background:radial-gradient(circle, rgba(212,175,55,.17), rgba(255,255,255,.02));
+  font-weight:900;
+  font-size:.86rem;
 }
 
 .premium-title h3{
@@ -913,6 +917,7 @@ input::placeholder{
   margin:3px 0 0;
   color:var(--muted);
   font-size:.7rem;
+  line-height:1.4;
 }
 
 .upgrade-link{
@@ -1011,6 +1016,7 @@ input::placeholder{
   .app{
     padding-left:14px;
     padding-right:14px;
+    padding-bottom:154px;
   }
 
   .brand h1{
@@ -1229,14 +1235,16 @@ input::placeholder{
 
     <section class="card premium-card">
       <div class="premium-title">
-        <div class="premium-icon">♕</div>
+        <div class="premium-icon">$1</div>
         <div>
-          <h3>Go Premium</h3>
-          <p>Remove ads, unlock deeper insights, and support the interpreter.</p>
+          <h3>$1 Dream Decode</h3>
+          <p>Decode one dream for $1, or choose Premium for ongoing access.</p>
         </div>
       </div>
 
-      <a class="upgrade-link" id="upgradeAccount" href="#">Upgrade to Premium</a>
+      <a class="upgrade-link" id="upgradeAccount" href="#">
+        Start $1 Dream Decode
+      </a>
     </section>
   </section>
 

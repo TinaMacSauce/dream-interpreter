@@ -1,0 +1,25 @@
+{
+  "name": "Jamaican Dream Interpreter",
+  "short_name": "Dream Interpreter",
+  "description": "Decode dreams using Caribbean-inspired dream interpretation, save your journal, and track dream patterns.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#020303",
+  "theme_color": "#020303",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

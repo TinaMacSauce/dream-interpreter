@@ -1,1574 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Jamaican Dream Interpreter</title>
-
-<link rel="manifest" href="/static/manifest.json" />
-<meta name="theme-color" content="#020303" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Dream Interpreter" />
-<link rel="apple-touch-icon" href="/static/icon-192.png" />
-
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-
-<style>
-:root{
-  --bg:#020303;
-  --panel:#08090c;
-  --card:#0d0e12;
-  --gold:#d4af37;
-  --gold2:#f8dd7d;
-  --cream:#fff4dc;
-  --text:#f8efd9;
-  --muted:rgba(248,239,217,.58);
-  --line:rgba(212,175,55,.24);
-  --line2:rgba(212,175,55,.48);
-  --danger:#ffb4a8;
-  --success:#9ae6b4;
-  --emerald:#3fbf75;
-  --emeraldSoft:rgba(63,191,117,.045);
-  --emeraldLine:rgba(111,231,168,.10);
-}
-
-*{
-  box-sizing:border-box;
-  -webkit-tap-highlight-color:transparent;
-}
-
-html{
-  scroll-behavior:smooth;
-  -webkit-text-size-adjust:100%;
-}
-
-body{
-  margin:0;
-  font-family:Inter,system-ui,sans-serif;
-  font-size:14px;
-  background:
-    radial-gradient(circle at 50% -5%, rgba(212,175,55,.17), transparent 31%),
-    radial-gradient(circle at 16% 8%, rgba(63,191,117,.045), transparent 24%),
-    radial-gradient(circle at 88% 12%, rgba(63,191,117,.035), transparent 26%),
-    radial-gradient(circle at 12% 9%, rgba(212,175,55,.078), transparent 25%),
-    radial-gradient(circle at 92% 14%, rgba(246,216,120,.052), transparent 26%),
-    linear-gradient(180deg,#020303,#040806 52%,#020202);
-  color:var(--text);
-  overflow-x:hidden;
-}
-
-body::before{
-  content:"";
-  position:fixed;
-  inset:0;
-  background:
-    linear-gradient(rgba(255,255,255,.014) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.01) 1px, transparent 1px);
-  background-size:42px 42px;
-  opacity:.11;
-  pointer-events:none;
-  z-index:-3;
-}
-
-body::after{
-  content:"";
-  position:fixed;
-  inset:0;
-  background:radial-gradient(circle at center, transparent 34%, rgba(0,0,0,.62) 100%);
-  pointer-events:none;
-  z-index:-2;
-}
-
-button,
-input,
-textarea,
-select{
-  font:inherit;
-}
-
-button{
-  cursor:pointer;
-}
-
-.app{
-  width:100%;
-  max-width:430px;
-  min-height:100svh;
-  margin:0 auto;
-  padding:max(13px, env(safe-area-inset-top)) 18px 148px;
-  position:relative;
-  isolation:isolate;
-}
-
-.app::before{
-  content:"";
-  position:absolute;
-  top:0;
-  left:0;
-  right:0;
-  height:230px;
-  background:
-    radial-gradient(circle at 50% 4%, rgba(63,191,117,.055), transparent 42%),
-    linear-gradient(180deg, rgba(2,3,3,.04), rgba(2,3,3,.62)),
-    url("/static/palm-hero.png") top center / cover no-repeat;
-  opacity:.38;
-  pointer-events:none;
-  z-index:0;
-}
-
-.app > *{
-  position:relative;
-  z-index:1;
-}
-
-/* MENU */
-
-.menu-panel{
-  position:fixed;
-  top:0;
-  left:-292px;
-  width:270px;
-  height:100vh;
-  background:
-    radial-gradient(circle at top, rgba(212,175,55,.12), transparent 35%),
-    radial-gradient(circle at 40% 0%, rgba(63,191,117,.04), transparent 38%),
-    #07080a;
-  border-right:1px solid var(--line2);
-  z-index:100;
-  padding:24px 20px;
-  transition:.25s ease;
-  box-shadow:24px 0 70px rgba(0,0,0,.76);
-}
-
-.menu-panel.open{
-  left:0;
-}
-
-.menu-panel button{
-  background:none;
-  border:0;
-  color:var(--gold2);
-  font-size:32px;
-  margin-bottom:18px;
-}
-
-.menu-panel a{
-  display:block;
-  color:var(--cream);
-  text-decoration:none;
-  padding:14px 0;
-  border-bottom:1px solid rgba(212,175,55,.16);
-  font-weight:800;
-}
-
-/* TOP BAR */
-
-.topbar{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  margin-bottom:14px;
-}
-
-.icon-btn{
-  width:46px;
-  height:46px;
-  min-width:46px;
-  border-radius:50%;
-  border:1.4px solid rgba(248,221,125,.55);
-  background:
-    radial-gradient(circle at center, rgba(212,175,55,.125), rgba(63,191,117,.035) 42%, rgba(5,6,8,.9) 62%);
-  color:var(--gold2);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  backdrop-filter:blur(18px);
-  box-shadow:
-    0 0 16px rgba(212,175,55,.16),
-    0 12px 28px rgba(0,0,0,.48),
-    inset 0 1px 0 rgba(255,255,255,.08);
-  text-decoration:none;
-}
-
-.icon-btn svg{
-  width:22px;
-  height:22px;
-  stroke-width:2.7;
-  stroke:currentColor;
-  fill:none;
-  stroke-linecap:round;
-  stroke-linejoin:round;
-}
-
-.brand{
-  flex:1;
-  text-align:center;
-}
-
-.brand h1{
-  margin:0;
-  font-family:Cinzel,Georgia,serif;
-  font-size:1.04rem;
-  line-height:1.08;
-  color:var(--gold2);
-  text-transform:uppercase;
-  letter-spacing:.15em;
-  text-shadow:0 0 18px rgba(212,175,55,.22);
-}
-
-.brand p{
-  margin:4px auto 0;
-  font-size:.54rem;
-  color:rgba(255,244,220,.72);
-  text-transform:uppercase;
-  letter-spacing:.16em;
-  white-space:nowrap;
-}
-
-.brand::after{
-  content:"";
-  display:block;
-  width:86px;
-  height:1px;
-  margin:8px auto 0;
-  background:linear-gradient(90deg, transparent, rgba(248,221,125,.78), transparent);
-  opacity:.75;
-}
-
-/* SCREENS */
-
-.screen{
-  display:none;
-  animation:screenIn .22s ease both;
-}
-
-.screen.active{
-  display:block;
-}
-
-@keyframes screenIn{
-  from{opacity:.45;transform:translateY(7px);}
-  to{opacity:1;transform:translateY(0);}
-}
-
-.page-title{
-  text-align:center;
-  margin:6px 0 16px;
-}
-
-.page-title h2{
-  margin:0;
-  font-family:Cinzel,Georgia,serif;
-  color:var(--gold2);
-  font-size:1.03rem;
-  line-height:1.15;
-}
-
-.page-title p{
-  margin:8px auto 0;
-  max-width:275px;
-  color:var(--muted);
-  font-size:.8rem;
-  line-height:1.42;
-}
-
-/* CARDS */
-
-.card{
-  border-radius:22px;
-  border:1px solid var(--line);
-  background:
-    radial-gradient(circle at top center, rgba(212,175,55,.064), transparent 38%),
-    radial-gradient(circle at 12% 0%, rgba(63,191,117,.035), transparent 34%),
-    linear-gradient(180deg, rgba(17,18,23,.96), rgba(6,7,10,.985));
-  box-shadow:
-    0 20px 54px rgba(0,0,0,.5),
-    inset 0 1px 0 rgba(255,255,255,.045);
-  position:relative;
-  overflow:hidden;
-}
-
-.card::before{
-  content:"";
-  position:absolute;
-  left:18px;
-  right:18px;
-  top:0;
-  height:1px;
-  background:linear-gradient(90deg, transparent, rgba(63,191,117,.10), rgba(246,216,120,.55), rgba(63,191,117,.10), transparent);
-  opacity:.62;
-  z-index:0;
-  pointer-events:none;
-}
-
-.card::after{
-  content:"";
-  position:absolute;
-  inset:0;
-  background:url("/static/palm-texture.png") center / cover no-repeat;
-  opacity:.075;
-  pointer-events:none;
-  z-index:0;
-}
-
-.card > *{
-  position:relative;
-  z-index:1;
-}
-
-.decode-card{
-  padding:16px;
-  margin-bottom:14px;
-}
-
-.decode-card h2{
-  margin:0 0 7px;
-  color:var(--gold2);
-  font-size:.96rem;
-}
-
-.decode-card .sub{
-  margin:0 0 14px;
-  color:rgba(255,244,220,.7);
-  font-size:.79rem;
-  line-height:1.42;
-}
-
-/* FORMS */
-
-textarea,
-input,
-select{
-  width:100%;
-  border-radius:17px;
-  border:1px solid rgba(212,175,55,.25);
-  background:
-    radial-gradient(circle at top left, rgba(255,255,255,.04), transparent 38%),
-    linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012));
-  color:#fff;
-  outline:none;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
-}
-
-textarea{
-  min-height:145px;
-  resize:vertical;
-  padding:14px;
-  line-height:1.55;
-  font-size:.88rem;
-}
-
-input,
-select{
-  padding:13px 14px;
-  font-size:.88rem;
-}
-
-select option{
-  color:#111;
-}
-
-textarea::placeholder,
-input::placeholder{
-  color:rgba(248,239,217,.36);
-}
-
-.count-row{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  margin-top:6px;
-  color:rgba(248,239,217,.4);
-  font-size:.68rem;
-}
-
-.status-line{
-  margin:0 0 12px;
-  padding:10px 12px;
-  border-radius:15px;
-  border:1px solid rgba(212,175,55,.17);
-  background:rgba(0,0,0,.24);
-  color:var(--muted);
-  font-size:.76rem;
-  line-height:1.45;
-  display:none;
-}
-
-.status-line strong{
-  color:var(--gold2);
-}
-
-/* ACTIONS */
-
-.chips{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:9px;
-  margin-top:14px;
-}
-
-.chip{
-  min-height:42px;
-  border-radius:15px;
-  border:1px solid rgba(212,175,55,.22);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.038), rgba(255,255,255,.014));
-  color:var(--text);
-  padding:8px 10px;
-  font-size:.72rem;
-  font-weight:850;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:7px;
-}
-
-.chip span:first-child{
-  color:var(--gold2);
-}
-
-.primary{
-  width:100%;
-  margin-top:15px;
-  padding:15px 16px;
-  border:0;
-  border-radius:18px;
-  background:
-    linear-gradient(180deg,#ffe99d 0%, #dfb443 54%, #a96f1c 100%);
-  color:#150d02;
-  font-size:.9rem;
-  font-weight:900;
-  box-shadow:
-    0 14px 32px rgba(0,0,0,.58),
-    0 0 24px rgba(212,175,55,.14),
-    inset 0 1px 0 rgba(255,255,255,.42);
-}
-
-.secondary{
-  width:100%;
-  margin-top:10px;
-  padding:13px 14px;
-  border-radius:17px;
-  border:1px solid rgba(212,175,55,.28);
-  background:rgba(255,255,255,.035);
-  color:var(--gold2);
-  font-size:.82rem;
-  font-weight:900;
-}
-
-.helper{
-  margin:13px 0 0;
-  text-align:center;
-  color:var(--muted);
-  font-size:.73rem;
-  line-height:1.48;
-}
-
-/* ADS */
-
-.ad-card{
-  display:block;
-  margin:14px 0 0;
-  padding:12px;
-  border-radius:20px;
-  border:1px solid rgba(212,175,55,.16);
-  background:
-    radial-gradient(circle at top, rgba(212,175,55,.055), transparent 42%),
-    rgba(255,255,255,.025);
-  box-shadow:0 14px 34px rgba(0,0,0,.32);
-}
-
-.ad-card.hidden{
-  display:none;
-}
-
-.ad-label{
-  margin:0 0 8px;
-  color:rgba(248,239,217,.42);
-  font-size:.58rem;
-  font-weight:900;
-  letter-spacing:.14em;
-  text-transform:uppercase;
-  text-align:center;
-}
-
-.ad-placeholder{
-  min-height:84px;
-  border-radius:16px;
-  border:1px dashed rgba(212,175,55,.22);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  color:rgba(248,239,217,.36);
-  font-size:.72rem;
-  text-align:center;
-  padding:12px;
-}
-
-/* REWARDED AD MODAL */
-
-.reward-modal{
-  position:fixed;
-  inset:0;
-  z-index:300;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  padding:18px;
-  background:rgba(0,0,0,.78);
-  backdrop-filter:blur(18px);
-}
-
-.reward-modal.show{
-  display:flex;
-}
-
-.reward-box{
-  width:100%;
-  max-width:392px;
-  border-radius:24px;
-  border:1px solid rgba(212,175,55,.34);
-  background:
-    radial-gradient(circle at top center, rgba(212,175,55,.14), transparent 40%),
-    linear-gradient(180deg, rgba(18,19,24,.98), rgba(4,5,7,.99));
-  box-shadow:
-    0 28px 80px rgba(0,0,0,.72),
-    inset 0 1px 0 rgba(255,255,255,.06);
-  padding:18px;
-  text-align:center;
-  position:relative;
-  overflow:hidden;
-}
-
-.reward-box::before{
-  content:"";
-  position:absolute;
-  left:18px;
-  right:18px;
-  top:0;
-  height:1px;
-  background:linear-gradient(90deg, transparent, rgba(248,221,125,.72), transparent);
-}
-
-.reward-kicker{
-  margin:0 0 8px;
-  color:var(--gold2);
-  font-size:.62rem;
-  font-weight:900;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-}
-
-.reward-title{
-  margin:0;
-  font-family:Cinzel,Georgia,serif;
-  color:var(--cream);
-  font-size:1.24rem;
-  line-height:1.12;
-}
-
-.reward-copy{
-  margin:10px auto 14px;
-  color:var(--muted);
-  font-size:.8rem;
-  line-height:1.48;
-  max-width:310px;
-}
-
-.reward-ad-space{
-  min-height:142px;
-  border-radius:20px;
-  border:1px dashed rgba(212,175,55,.3);
-  background:
-    radial-gradient(circle at center, rgba(212,175,55,.07), transparent 48%),
-    rgba(0,0,0,.28);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:16px;
-  color:rgba(248,239,217,.48);
-  font-size:.8rem;
-  line-height:1.4;
-}
-
-.reward-count{
-  margin:12px 0 0;
-  color:var(--gold2);
-  font-size:.76rem;
-  font-weight:900;
-}
-
-.reward-actions{
-  display:grid;
-  gap:9px;
-  margin-top:14px;
-}
-
-.reward-actions button,
-.reward-actions a{
-  width:100%;
-  border-radius:17px;
-  padding:13px 14px;
-  font-weight:900;
-  text-decoration:none;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-
-.reward-continue{
-  border:0;
-  background:
-    linear-gradient(180deg,#ffe99d 0%, #dfb443 54%, #a96f1c 100%);
-  color:#150d02;
-}
-
-.reward-continue:disabled{
-  opacity:.52;
-  cursor:not-allowed;
-}
-
-.reward-upgrade{
-  border:1px solid rgba(212,175,55,.28);
-  background:rgba(255,255,255,.035);
-  color:var(--gold2);
-}
-
-.reward-note{
-  margin:11px 0 0;
-  color:rgba(248,239,217,.38);
-  font-size:.66rem;
-  line-height:1.4;
-}
-
-/* GUIDED DETAILS */
-
-.guided-panel{
-  display:none;
-  margin-top:12px;
-  padding:13px;
-  border-radius:19px;
-  border:1px solid rgba(212,175,55,.18);
-  background:rgba(0,0,0,.22);
-}
-
-.guided-panel.open{
-  display:block;
-}
-
-.guided-grid{
-  display:grid;
-  gap:10px;
-}
-
-.guided-row{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:9px;
-}
-
-.field label{
-  display:block;
-  margin:0 0 7px;
-  color:var(--gold2);
-  font-size:.68rem;
-  font-weight:900;
-}
-
-.symbol-chip-row{
-  display:flex;
-  flex-wrap:wrap;
-  gap:7px;
-  margin-top:8px;
-}
-
-.tiny-chip{
-  border-radius:999px;
-  border:1px solid rgba(212,175,55,.24);
-  background:rgba(255,255,255,.035);
-  color:var(--text);
-  padding:8px 10px;
-  font-size:.68rem;
-  font-weight:800;
-}
-
-.tiny-chip.selected{
-  color:#160d02;
-  background:linear-gradient(180deg,#ffe99b,#d9a83a);
-}
-
-/* RESULTS */
-
-.result{
-  display:none;
-  margin-top:14px;
-  padding-bottom:28px;
-}
-
-.result.show{
-  display:block;
-}
-
-.result-head{
-  display:flex;
-  justify-content:space-between;
-  gap:12px;
-  align-items:flex-start;
-  margin:0 0 11px;
-}
-
-.result-head h3{
-  margin:0;
-  color:var(--gold2);
-  font-size:.9rem;
-}
-
-.result-head p{
-  margin:4px 0 0;
-  color:var(--muted);
-  font-size:.67rem;
-}
-
-.result-actions{
-  display:flex;
-  gap:7px;
-}
-
-.small-btn{
-  border-radius:999px;
-  border:1px solid rgba(212,175,55,.3);
-  background:rgba(255,255,255,.035);
-  color:var(--gold2);
-  padding:7px 10px;
-  font-weight:850;
-  font-size:.68rem;
-}
-
-.result-card{
-  opacity:0;
-  transform:translateY(11px);
-  border-radius:18px;
-  margin-top:9px;
-  padding:13px;
-  background:
-    radial-gradient(circle at left, rgba(212,175,55,.085), transparent 28%),
-    linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.016));
-  border:1px solid rgba(212,175,55,.17);
-  box-shadow:0 14px 32px rgba(0,0,0,.34);
-  animation:cardReveal .42s forwards;
-}
-
-.result-card.error{
-  border-color:rgba(255,180,168,.34);
-  background:linear-gradient(180deg, rgba(255,92,92,.08), rgba(255,255,255,.015));
-}
-
-.result-card-row{
-  display:grid;
-  grid-template-columns:38px 1fr;
-  gap:11px;
-  align-items:flex-start;
-}
-
-.result-icon{
-  width:38px;
-  height:38px;
-  border-radius:15px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  color:var(--gold2);
-  border:1px solid rgba(212,175,55,.3);
-  background:radial-gradient(circle, rgba(212,175,55,.17), rgba(255,255,255,.02));
-  box-shadow:0 0 20px rgba(212,175,55,.12);
-}
-
-.result-icon svg{
-  width:21px;
-  height:21px;
-  stroke:currentColor;
-  fill:none;
-  stroke-width:2.2;
-  stroke-linecap:round;
-  stroke-linejoin:round;
-}
-
-.label{
-  margin-bottom:5px;
-  color:var(--gold2);
-  font-size:.7rem;
-  font-weight:900;
-}
-
-.result-text{
-  line-height:1.52;
-  color:rgba(248,239,217,.88);
-  font-size:.76rem;
-  white-space:pre-wrap;
-}
-
-.symbol-matches{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:8px;
-  margin-top:9px;
-}
-
-.match-pill{
-  border-radius:14px;
-  border:1px solid rgba(212,175,55,.22);
-  background:rgba(255,255,255,.035);
-  padding:10px;
-}
-
-.match-pill strong{
-  display:block;
-  color:var(--gold2);
-  font-size:.74rem;
-  margin-bottom:4px;
-}
-
-.match-pill span{
-  display:block;
-  color:var(--muted);
-  font-size:.66rem;
-  line-height:1.32;
-}
-
-/* JOURNAL */
-
-.journal-tools{
-  display:flex;
-  gap:8px;
-  margin-bottom:13px;
-}
-
-.search{
-  flex:1;
-}
-
-.filter-btn{
-  width:46px;
-  min-width:46px;
-  border-radius:16px;
-  border:1px solid rgba(212,175,55,.24);
-  background:rgba(255,255,255,.035);
-  color:var(--gold2);
-  font-weight:900;
-}
-
-.pill-tabs{
-  display:flex;
-  gap:8px;
-  margin-bottom:13px;
-}
-
-.pill-tab{
-  flex:1;
-  padding:9px 8px;
-  border-radius:999px;
-  border:1px solid rgba(212,175,55,.17);
-  background:rgba(255,255,255,.025);
-  color:var(--muted);
-  font-size:.69rem;
-  font-weight:850;
-}
-
-.pill-tab.active{
-  color:#130c03;
-  background:linear-gradient(180deg,#f8dc7b,#c4912e);
-}
-
-.journal-list{
-  display:grid;
-  gap:9px;
-}
-
-.empty{
-  padding:24px 16px;
-  text-align:center;
-  color:var(--muted);
-  line-height:1.48;
-  font-size:.8rem;
-}
-
-.journal-item{
-  width:100%;
-  border:1px solid rgba(212,175,55,.17);
-  background:
-    radial-gradient(circle at left, rgba(212,175,55,.08), transparent 28%),
-    rgba(255,255,255,.033);
-  color:var(--text);
-  border-radius:17px;
-  padding:11px;
-  display:grid;
-  grid-template-columns:38px 1fr 64px;
-  gap:9px;
-  align-items:center;
-  text-align:left;
-}
-
-.journal-icon{
-  width:38px;
-  height:38px;
-  border-radius:14px;
-  color:var(--gold2);
-  border:1px solid rgba(212,175,55,.25);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:rgba(212,175,55,.06);
-  font-size:1rem;
-}
-
-.journal-title{
-  font-size:.76rem;
-  font-weight:800;
-  line-height:1.32;
-  margin-bottom:4px;
-}
-
-.journal-date{
-  color:var(--muted);
-  font-size:.63rem;
-}
-
-.entry-actions{
-  display:flex;
-  gap:5px;
-  justify-content:flex-end;
-}
-
-.icon-mini{
-  width:28px;
-  height:28px;
-  border-radius:50%;
-  border:1px solid rgba(212,175,55,.2);
-  background:rgba(255,255,255,.035);
-  color:var(--gold2);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:.85rem;
-}
-
-.danger{
-  color:var(--danger);
-}
-
-/* SYMBOLS */
-
-.symbol-grid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:8px;
-  padding-bottom:10px;
-}
-
-.symbol-card{
-  min-height:96px;
-  border-radius:17px;
-  border:1px solid rgba(212,175,55,.18);
-  background:
-    radial-gradient(circle at top, rgba(212,175,55,.085), transparent 42%),
-    rgba(255,255,255,.033);
-  color:var(--text);
-  padding:10px 7px;
-  text-align:center;
-  overflow:hidden;
-}
-
-.symbol-card .big{
-  color:var(--gold2);
-  font-size:1.35rem;
-  display:block;
-  margin-bottom:7px;
-  line-height:1;
-}
-
-.symbol-card strong{
-  display:block;
-  color:var(--cream);
-  font-size:.72rem;
-  margin-bottom:4px;
-}
-
-.symbol-card span{
-  display:block;
-  color:var(--muted);
-  font-size:.6rem;
-  line-height:1.28;
-}
-
-/* ACCOUNT */
-
-.account-profile{
-  display:flex;
-  align-items:center;
-  gap:13px;
-  padding:15px;
-  margin-bottom:13px;
-}
-
-.avatar{
-  width:54px;
-  height:54px;
-  min-width:54px;
-  border-radius:50%;
-  border:1px solid rgba(246,216,120,.46);
-  background:
-    radial-gradient(circle at 45% 40%, rgba(255,244,220,.58), rgba(212,175,55,.22) 18%, rgba(5,6,8,.95) 54%),
-    #07080a;
-  box-shadow:0 0 28px rgba(212,175,55,.2);
-}
-
-.profile-copy h3{
-  margin:0;
-  color:var(--cream);
-  font-size:.9rem;
-}
-
-.profile-copy p{
-  margin:5px 0 0;
-  color:var(--muted);
-  font-size:.71rem;
-  line-height:1.35;
-}
-
-.form-card{
-  padding:15px;
-  margin-bottom:13px;
-}
-
-.form-card label{
-  display:block;
-  color:var(--gold2);
-  font-weight:850;
-  font-size:.74rem;
-  margin-bottom:8px;
-}
-
-.settings-list{
-  overflow:hidden;
-  margin-bottom:13px;
-}
-
-.setting-row{
-  width:100%;
-  min-height:46px;
-  border:0;
-  border-bottom:1px solid rgba(212,175,55,.12);
-  background:transparent;
-  color:var(--text);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 14px;
-  font-weight:780;
-  font-size:.8rem;
-  text-align:left;
-}
-
-a.setting-row{
-  text-decoration:none;
-}
-
-.setting-row:last-child{
-  border-bottom:0;
-}
-
-.setting-row span{
-  color:var(--gold2);
-}
-
-.premium-card{
-  padding:16px;
-  margin-bottom:10px;
-}
-
-.premium-title{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-bottom:10px;
-}
-
-.premium-icon{
-  width:40px;
-  height:40px;
-  min-width:40px;
-  border-radius:15px;
-  color:var(--gold2);
-  border:1px solid rgba(212,175,55,.28);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:radial-gradient(circle, rgba(212,175,55,.17), rgba(255,255,255,.02));
-  font-weight:900;
-  font-size:.86rem;
-}
-
-.premium-title h3{
-  margin:0;
-  color:var(--gold2);
-  font-size:.92rem;
-}
-
-.premium-title p{
-  margin:3px 0 0;
-  color:var(--muted);
-  font-size:.7rem;
-  line-height:1.4;
-}
-
-.account-checkout-form{
-  margin:0;
-}
-
-.upgrade-link{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  margin-top:13px;
-  width:100%;
-  padding:13px 15px;
-  border-radius:17px;
-  background:
-    linear-gradient(180deg,#ffe99b 0%, #d9a83a 54%, #a96d1b 100%);
-  border:0;
-  color:#160d02;
-  text-decoration:none;
-  font-weight:900;
-  font-size:.84rem;
-}
-
-.subscription-link{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  margin-top:10px;
-  width:100%;
-  padding:12px 15px;
-  border-radius:17px;
-  border:1px solid rgba(212,175,55,.3);
-  background:rgba(255,255,255,.035);
-  color:var(--gold2);
-  text-decoration:none;
-  font-weight:900;
-  font-size:.82rem;
-}
-
-/* LEGAL */
-
-.legal-links{
-  margin:14px 0 0;
-  display:flex;
-  justify-content:center;
-  gap:12px;
-  flex-wrap:wrap;
-}
-
-.legal-links a{
-  color:rgba(248,221,125,.88);
-  text-decoration:none;
-  font-size:.72rem;
-  font-weight:850;
-}
-
-.legal-links a:hover{
-  text-decoration:underline;
-}
-
-/* BOTTOM NAV */
-
-.bottom-nav{
-  position:fixed;
-  left:50%;
-  bottom:max(10px, env(safe-area-inset-bottom));
-  transform:translateX(-50%);
-  width:calc(100% - 36px);
-  max-width:394px;
-  height:68px;
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:4px;
-  padding:8px;
-  border-radius:22px;
-  background:
-    radial-gradient(circle at 50% 0%, rgba(63,191,117,.045), transparent 50%),
-    rgba(7,8,10,.965);
-  border:1px solid rgba(212,175,55,.27);
-  backdrop-filter:blur(26px);
-  box-shadow:0 18px 45px rgba(0,0,0,.72);
-  z-index:40;
-}
-
-.bottom-nav button{
-  border:0;
-  background:transparent;
-  color:rgba(248,239,217,.5);
-  font-size:.62rem;
-  font-weight:850;
-  border-radius:15px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  gap:4px;
-}
-
-.bottom-nav svg{
-  width:19px;
-  height:19px;
-  stroke:currentColor;
-  fill:none;
-  stroke-width:2.2;
-  stroke-linecap:round;
-  stroke-linejoin:round;
-}
-
-.bottom-nav .active{
-  color:var(--gold2);
-  background:rgba(212,175,55,.1);
-}
-
-.loader-ring{
-  width:17px;
-  height:17px;
-  border:2px solid rgba(0,0,0,.18);
-  border-top:2px solid #111;
-  border-radius:50%;
-  display:inline-block;
-  margin-right:9px;
-  vertical-align:-3px;
-  animation:spin 1s linear infinite;
-}
-
-.hidden-file{
-  display:none;
-}
-
-@keyframes spin{
-  to{transform:rotate(360deg);}
-}
-
-@keyframes cardReveal{
-  to{opacity:1;transform:translateY(0);}
-}
-
-@media(max-width:380px){
-  .app{
-    padding-left:14px;
-    padding-right:14px;
-    padding-bottom:154px;
-  }
-
-  .brand h1{
-    font-size:.94rem;
-    letter-spacing:.12em;
-  }
-
-  .brand p{
-    font-size:.49rem;
-    letter-spacing:.12em;
-  }
-
-  .icon-btn{
-    width:42px;
-    height:42px;
-    min-width:42px;
-  }
-
-  .chip{
-    font-size:.68rem;
-    padding:8px;
-  }
-
-  .symbol-card{
-    min-height:92px;
-  }
-}
-</style>
-</head>
-
-<body>
-
-<div class="menu-panel" id="menuPanel">
-  <button id="closeMenu" type="button" aria-label="Close menu">×</button>
-  <a href="#" data-tab-link="decode">Decode Dream</a>
-  <a href="#" data-tab-link="journal">Journal</a>
-  <a href="#" data-tab-link="symbols">Symbols</a>
-  <a href="#" data-tab-link="account">Account</a>
-</div>
-
-<main class="app">
-
-  <header class="topbar">
-    <button class="icon-btn" id="menuBtn" type="button" aria-label="Menu">
-      <svg viewBox="0 0 24 24">
-        <line x1="4" y1="7" x2="20" y2="7"/>
-        <line x1="4" y1="12" x2="20" y2="12"/>
-        <line x1="4" y1="17" x2="20" y2="17"/>
-      </svg>
-    </button>
-
-    <div class="brand">
-      <h1>Jamaican<br>Dream Interpreter</h1>
-      <p>Rooted in Caribbean Beliefs</p>
-    </div>
-
-    <button class="icon-btn" id="sparkBtn" type="button" aria-label="Focus dream input">
-      <svg viewBox="0 0 24 24">
-        <path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2z"/>
-        <path d="M19 15l.8 2.7L22 18.5l-2.2.8L19 22l-.8-2.7-2.2-.8 2.2-.8L19 15z"/>
-      </svg>
-    </button>
-  </header>
-
-  <section class="screen active" id="decodeScreen">
-    <div class="page-title">
-      <h2>Decode Your Dream</h2>
-      <p>Decode one dream. Save the meaning. Track the patterns.</p>
-    </div>
-
-    <section class="card decode-card">
-      <div id="accessStatus" class="status-line"></div>
-
-      <h2>What did you dream?</h2>
-      <p class="sub">Write your dream in as much detail as you can.</p>
-
-      <textarea id="dream" maxlength="2000" placeholder="I was being chased by a dog in my old school. I kept running and finally escaped."></textarea>
-
-      <div class="count-row">
-        <span id="qualityHint">Tip: include the ending and how you felt.</span>
-        <span id="charCount">0/2000</span>
-      </div>
-
-      <div class="chips">
-        <button class="chip" type="button" id="guidedBtn"><span>✦</span> Guided Details <span>›</span></button>
-        <button class="chip" type="button" id="symbolBtn"><span>◇</span> Add symbols <span>›</span></button>
-        <button class="chip" type="button" id="templateBtn"><span>⌘</span> Use template <span>›</span></button>
-        <button class="chip" type="button" id="clearBtn"><span>×</span> Clear dream <span>›</span></button>
-      </div>
-
-      <div class="guided-panel" id="guidedPanel">
-        <div class="guided-grid">
-          <div class="guided-row">
-            <div class="field">
-              <label for="emotion">Emotion</label>
-              <select id="emotion">
-                <option value="">Choose</option>
-                <option>Afraid</option>
-                <option>Peaceful</option>
-                <option>Confused</option>
-                <option>Happy</option>
-                <option>Angry</option>
-                <option>Sad</option>
-                <option>Anxious</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="ending">Ending</label>
-              <select id="ending">
-                <option value="">Choose</option>
-                <option>Escaped</option>
-                <option>Woke up suddenly</option>
-                <option>Was rescued</option>
-                <option>Got lost</option>
-                <option>Won / overcame</option>
-                <option>Still unresolved</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="guided-row">
-            <div class="field">
-              <label for="place">Place</label>
-              <input id="place" type="text" placeholder="School, house, road..." />
-            </div>
-
-            <div class="field">
-              <label for="people">People</label>
-              <input id="people" type="text" placeholder="Mother, stranger..." />
-            </div>
-          </div>
-
-          <div class="field">
-            <label>Quick symbols</label>
-            <div class="symbol-chip-row" id="guidedSymbolChips"></div>
-          </div>
-        </div>
-      </div>
-
-      <button id="interpret" class="primary" type="button">Decode Dream</button>
-
-      <div class="ad-card" id="decodeAd">
-        <div class="ad-label">Sponsored</div>
-        <div class="ad-placeholder">
-          Ad space for free users
-        </div>
-      </div>
-
-      <p class="helper">Your dreams are private on this device. Journal entries are saved in this browser.</p>
-    </section>
-
-    <section id="result" class="result"></section>
-  </section>
-
-  <section class="screen" id="journalScreen">
-    <div class="page-title">
-      <h2>My Journal</h2>
-      <p>Review saved interpretations, favorites, and repeated symbols.</p>
-    </div>
-
-    <div class="journal-tools">
-      <input class="search" id="journalSearch" type="search" placeholder="Search your dreams..." />
-      <button class="filter-btn" type="button" id="clearJournalSearch" aria-label="Clear search">⌕</button>
-    </div>
-
-    <div class="pill-tabs">
-      <button class="pill-tab active" type="button" data-journal-filter="all">All</button>
-      <button class="pill-tab" type="button" data-journal-filter="favorites">Favorites</button>
-      <button class="pill-tab" type="button" data-journal-filter="month">This Month</button>
-    </div>
-
-    <div class="journal-list" id="journalList"></div>
-
-    <button class="primary" type="button" id="newDreamBtn">＋ Add New Dream</button>
-  </section>
-
-  <section class="screen" id="symbolsScreen">
-    <div class="page-title">
-      <h2>Symbol Library</h2>
-      <p>Tap a symbol to add it to your current dream.</p>
-    </div>
-
-    <div class="symbol-grid" id="symbolGrid"></div>
-  </section>
-
-  <section class="screen" id="accountScreen">
-    <div class="page-title">
-      <h2>My Account</h2>
-      <p>Manage access, email, and local journal data.</p>
-    </div>
-
-    <section class="card account-profile">
-      <div class="avatar"></div>
-      <div class="profile-copy">
-        <h3>Dream Explorer</h3>
-        <p id="memberLine">Local journal mode</p>
-      </div>
-    </section>
-
-    <section class="card form-card">
-      <label for="email">Email for access recovery</label>
-      <input id="email" type="email" placeholder="you@example.com" autocomplete="email" inputmode="email" />
-      <p class="helper">This email is sent with interpretations and used for checkout recovery.</p>
-    </section>
-
-    <section class="card settings-list">
-      <button class="setting-row" type="button" id="exportBtn">Export Journal <span>›</span></button>
-      <button class="setting-row" type="button" id="importBtn">Import Journal <span>›</span></button>
-      <button class="setting-row" type="button" id="clearJournalBtn">Clear Local Journal <span>›</span></button>
-      <a class="setting-row" href="/privacy">Privacy Policy <span>›</span></a>
-      <button class="setting-row" type="button" id="supportBtn">Help & Support <span>›</span></button>
-    </section>
-
-    <input class="hidden-file" type="file" id="importFile" accept="application/json" />
-
-    <section class="card premium-card">
-      <div class="premium-title">
-        <div class="premium-icon">$1</div>
-        <div>
-          <h3>$1 Dream Decode</h3>
-          <p>Decode one dream for $1, or choose Premium for ongoing access.</p>
-        </div>
-      </div>
-
-      <form
-        class="account-checkout-form"
-        action="/create-dream-pack-checkout-session"
-        method="POST"
-        id="accountDreamPackForm"
-        novalidate
-      >
-        <input type="hidden" name="email" id="accountDreamPackEmail" value="" />
-        <input type="hidden" name="return" id="accountDreamPackReturn" value="" />
-
-        <button class="upgrade-link" type="submit" id="accountDreamPackBtn">
-          Start $1 Dream Decode
-        </button>
-      </form>
-
-      <a class="subscription-link" id="subscriptionAccount" href="#">
-        View Premium Subscription
-      </a>
-    </section>
-
-    <div class="legal-links">
-      <a href="/privacy">Privacy Policy</a>
-    </div>
-  </section>
-
-</main>
-
-<nav class="bottom-nav">
-  <button class="active" type="button" data-tab="decode">
-    <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
-    <span>Decode</span>
-  </button>
-
-  <button type="button" data-tab="journal">
-    <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 7h6"/><path d="M9 11h6"/><path d="M9 15h4"/></svg>
-    <span>Journal</span>
-  </button>
-
-  <button type="button" data-tab="symbols">
-    <svg viewBox="0 0 24 24"><path d="M12 3c4 4 6 7 6 11a6 6 0 0 1-12 0c0-4 2-7 6-11z"/><path d="M9 15c2 2 4 2 6 0"/></svg>
-    <span>Symbols</span>
-  </button>
-
-  <button type="button" data-tab="account">
-    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-5 14.5-5 16 0"/></svg>
-    <span>Account</span>
-  </button>
-</nav>
-
-<div class="reward-modal" id="rewardModal" aria-hidden="true">
-  <div class="reward-box" role="dialog" aria-modal="true" aria-labelledby="rewardTitle">
-    <div class="reward-kicker">Sponsored Access</div>
-    <h2 class="reward-title" id="rewardTitle">Watch to Continue</h2>
-    <p class="reward-copy">
-      Free dream decoding is supported by ads. Watch this sponsored message to unlock your interpretation.
-    </p>
-
-    <div class="reward-ad-space" id="rewardAdSpace">
-      Video ad space for free users
-    </div>
-
-    <div class="reward-count" id="rewardCount">
-      Continue available in 5 seconds
-    </div>
-
-    <div class="reward-actions">
-      <button class="reward-continue" type="button" id="rewardContinue" disabled>
-        Continue Decode
-      </button>
-
-      <a class="reward-upgrade" id="rewardUpgrade" href="#">
-        Skip Ads With $1 Dream Decode
-      </a>
-    </div>
-
-    <p class="reward-note">
-      This placeholder can be connected to a real rewarded video ad network later.
-    </p>
-  </div>
-</div>
-
 <script>
 const HOSTED_APP = "https://interpreter.jamaicantruestories.com";
 
@@ -1581,8 +10,8 @@ const API =
 const EMAIL_KEY = "jdi_email";
 const LEGACY_EMAIL_KEY = "jts_email";
 const JOURNAL_KEY = "jdi_journal";
-
 const SUPPORT_EMAIL = "tinamaccontent@gmail.com";
+const REWARDED_AD_ID = "ca-app-pub-2148520143702642/6436071510";
 
 const emailEl = document.getElementById("email");
 const dreamEl = document.getElementById("dream");
@@ -1613,98 +42,101 @@ const rewardModal = document.getElementById("rewardModal");
 const rewardContinue = document.getElementById("rewardContinue");
 const rewardCount = document.getElementById("rewardCount");
 const rewardUpgrade = document.getElementById("rewardUpgrade");
+const rewardAdSpace = document.getElementById("rewardAdSpace");
 
 let journalFilter = "all";
 let selectedGuidedSymbols = [];
 let rewardReady = false;
 let rewardTimer = null;
 let pendingRewardDecode = false;
+let nativeRewardInProgress = false;
+let rewardListeners = [];
 
 const SYMBOLS = [
-  {name:"Dog", icon:"🐕", meaning:"Chasing, pressure, loyalty, warning", key:"dog", category:"animal"},
-  {name:"School", icon:"🏫", meaning:"Past lessons, pressure, memory", key:"school", category:"place"},
-  {name:"Water", icon:"〰️", meaning:"Decision, emotions, spiritual state", key:"water", category:"nature"},
-  {name:"Teeth", icon:"🦷", meaning:"Serious warning, anxiety, loss", key:"teeth", category:"body"},
-  {name:"Falling", icon:"🪂", meaning:"Loss of control, fear, transition", key:"falling", category:"action"},
-  {name:"Money", icon:"💰", meaning:"Opportunity, power, worry", key:"money", category:"object"},
-  {name:"House", icon:"⌂", meaning:"Private life, self, family matter", key:"house", category:"place"},
-  {name:"Snake", icon:"蛇", meaning:"Enemy, opposition, hidden issue", key:"snake", category:"animal"},
-  {name:"Car", icon:"🚗", meaning:"Direction, control, life journey", key:"car", category:"object"},
-  {name:"Hair", icon:"〰", meaning:"Burden, ongoing problem, concern", key:"hair", category:"body"},
-  {name:"Road", icon:"⌁", meaning:"Path, decision, journey", key:"road", category:"place"},
-  {name:"Baby", icon:"✺", meaning:"New beginning, responsibility, fragile matter", key:"baby", category:"people"}
+  { name: "Dog", icon: "🐕", meaning: "Chasing, pressure, loyalty, warning", key: "dog", category: "animal" },
+  { name: "School", icon: "🏫", meaning: "Past lessons, pressure, memory", key: "school", category: "place" },
+  { name: "Water", icon: "〰️", meaning: "Decision, emotions, spiritual state", key: "water", category: "nature" },
+  { name: "Teeth", icon: "🦷", meaning: "Serious warning, anxiety, loss", key: "teeth", category: "body" },
+  { name: "Falling", icon: "🪂", meaning: "Loss of control, fear, transition", key: "falling", category: "action" },
+  { name: "Money", icon: "💰", meaning: "Opportunity, power, worry", key: "money", category: "object" },
+  { name: "House", icon: "⌂", meaning: "Private life, self, family matter", key: "house", category: "place" },
+  { name: "Snake", icon: "蛇", meaning: "Enemy, opposition, hidden issue", key: "snake", category: "animal" },
+  { name: "Car", icon: "🚗", meaning: "Direction, control, life journey", key: "car", category: "object" },
+  { name: "Hair", icon: "〰", meaning: "Burden, ongoing problem, concern", key: "hair", category: "body" },
+  { name: "Road", icon: "⌁", meaning: "Path, decision, journey", key: "road", category: "place" },
+  { name: "Baby", icon: "✺", meaning: "New beginning, responsibility, fragile matter", key: "baby", category: "people" }
 ];
 
-function esc(s){
+function esc(s) {
   return String(s || "")
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#039;");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
-function normalizeEmail(email){
+function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
-function validEmail(email){
+function validEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
 }
 
-function saveEmail(email){
+function saveEmail(email) {
   const clean = normalizeEmail(email);
 
-  try{
-    if(clean){
+  try {
+    if (clean) {
       localStorage.setItem(EMAIL_KEY, clean);
       localStorage.setItem(LEGACY_EMAIL_KEY, clean);
-    }else{
+    } else {
       localStorage.removeItem(EMAIL_KEY);
     }
-  }catch(e){}
+  } catch (e) {}
 
   refreshAccount();
 }
 
-function loadEmail(){
-  try{
+function loadEmail() {
+  try {
     return normalizeEmail(
       localStorage.getItem(EMAIL_KEY) ||
       localStorage.getItem(LEGACY_EMAIL_KEY) ||
       ""
     );
-  }catch(e){
+  } catch (e) {
     return "";
   }
 }
 
-function getReturnUrl(){
+function getReturnUrl() {
   return window.location.href.split("#")[0];
 }
 
-function upgradeUrl(email){
+function upgradeUrl(email) {
   const clean = normalizeEmail(email);
   return API + "/upgrade?email=" + encodeURIComponent(clean) + "&return=" + encodeURIComponent(getReturnUrl());
 }
 
-function readJournal(){
-  try{
+function readJournal() {
+  try {
     const raw = localStorage.getItem(JOURNAL_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
-  }catch(e){
+  } catch (e) {
     return [];
   }
 }
 
-function writeJournal(entries){
-  try{
+function writeJournal(entries) {
+  try {
     localStorage.setItem(JOURNAL_KEY, JSON.stringify(entries.slice(0, 200)));
-  }catch(e){}
+  } catch (e) {}
 }
 
-function addJournalEntry(entry){
+function addJournalEntry(entry) {
   const entries = readJournal();
   entries.unshift(entry);
   writeJournal(entries);
@@ -1712,19 +144,19 @@ function addJournalEntry(entry){
   refreshAccount();
 }
 
-function showAccessStatus(html){
+function showAccessStatus(html) {
   accessStatus.style.display = "block";
   accessStatus.innerHTML = html;
   refreshAds();
 }
 
-function hideAccessStatus(){
+function hideAccessStatus() {
   accessStatus.style.display = "none";
   accessStatus.innerHTML = "";
   refreshAds();
 }
 
-function userHasPaidAccess(){
+function userHasPaidAccess() {
   const statusText = String(accessStatus?.textContent || "").toLowerCase();
 
   return (
@@ -1733,100 +165,166 @@ function userHasPaidAccess(){
   );
 }
 
-function refreshAds(){
+function refreshAds() {
   const decodeAd = document.getElementById("decodeAd");
-
-  if(!decodeAd) return;
-
+  if (!decodeAd) return;
   decodeAd.classList.toggle("hidden", userHasPaidAccess());
 }
 
-function shouldShowRewardAd(){
+function shouldShowRewardAd() {
   return !userHasPaidAccess();
 }
 
-function openRewardModal(){
+function setRewardSpace(message) {
+  if (!rewardAdSpace) return;
+  rewardAdSpace.innerHTML = esc(message);
+}
+
+function openRewardModal() {
   rewardReady = false;
   pendingRewardDecode = true;
 
-  if(rewardTimer){
+  if (rewardTimer) {
     clearInterval(rewardTimer);
     rewardTimer = null;
   }
 
   rewardContinue.disabled = true;
   rewardContinue.textContent = "Continue Decode";
-
-  let seconds = 5;
-  rewardCount.textContent = "Continue available in " + seconds + " seconds";
+  rewardCount.textContent = "Loading sponsored message...";
   rewardUpgrade.href = upgradeUrl(emailEl.value);
+  setRewardSpace("Rewarded video will open now.");
 
   rewardModal.classList.add("show");
-  rewardModal.setAttribute("aria-hidden","false");
-
-  rewardTimer = setInterval(function(){
-    seconds -= 1;
-
-    if(seconds > 0){
-      rewardCount.textContent = "Continue available in " + seconds + " seconds";
-      return;
-    }
-
-    clearInterval(rewardTimer);
-    rewardTimer = null;
-    rewardReady = true;
-    rewardCount.textContent = "Sponsored message complete";
-    rewardContinue.disabled = false;
-  },1000);
+  rewardModal.setAttribute("aria-hidden", "false");
 }
 
-function closeRewardModal(){
+function closeRewardModal() {
   rewardModal.classList.remove("show");
-  rewardModal.setAttribute("aria-hidden","true");
+  rewardModal.setAttribute("aria-hidden", "true");
 
-  if(rewardTimer){
+  if (rewardTimer) {
     clearInterval(rewardTimer);
     rewardTimer = null;
   }
 }
 
-function switchTab(tab){
-  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+async function clearRewardListeners() {
+  const oldListeners = rewardListeners.slice();
+  rewardListeners = [];
+  await Promise.all(
+    oldListeners.map(async (listener) => {
+      try {
+        await listener.remove();
+      } catch (e) {}
+    })
+  );
+}
+
+async function showNativeRewardedAd() {
+  if (nativeRewardInProgress) return false;
+
+  const admob = window.Capacitor?.Plugins?.AdMob;
+  if (!admob) {
+    rewardCount.textContent = "Ad system not available in browser preview.";
+    setRewardSpace("Open this page inside the Android app to test rewarded ads.");
+    return false;
+  }
+
+  nativeRewardInProgress = true;
+  rewardReady = false;
+
+  await clearRewardListeners();
+
+  return new Promise(async (resolve) => {
+    let earned = false;
+    let finished = false;
+
+    try {
+      const rewardListener = await admob.addListener("onRewardedVideoAdReward", () => {
+        earned = true;
+        rewardReady = true;
+        rewardCount.textContent = "Reward earned.";
+      });
+
+      const dismissListener = await admob.addListener("onRewardedVideoAdDismissed", async () => {
+        if (finished) return;
+        finished = true;
+        nativeRewardInProgress = false;
+        await clearRewardListeners();
+        resolve(earned);
+      });
+
+      rewardListeners.push(rewardListener, dismissListener);
+
+      rewardCount.textContent = "Loading sponsored message...";
+      setRewardSpace("Preparing rewarded ad...");
+
+      await admob.prepareRewardVideoAd({
+        adId: REWARDED_AD_ID,
+        isTesting: false
+      });
+
+      rewardCount.textContent = "Sponsored message playing...";
+      setRewardSpace("Rewarded ad is playing full screen.");
+      await admob.showRewardVideoAd();
+    } catch (error) {
+      nativeRewardInProgress = false;
+      await clearRewardListeners();
+      console.warn("Rewarded ad failed:", error);
+      rewardCount.textContent = "Ad could not load right now.";
+      setRewardSpace("Please try again in a moment.");
+      resolve(false);
+    }
+  });
+}
+
+function switchTab(tab) {
+  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
   document.getElementById(tab + "Screen").classList.add("active");
 
-  document.querySelectorAll(".bottom-nav button").forEach(b => {
+  document.querySelectorAll(".bottom-nav button").forEach((b) => {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
 
   menuPanel.classList.remove("open");
 
-  if(tab === "journal") renderJournal();
-  if(tab === "symbols") renderSymbols();
-  if(tab === "account") refreshAccount();
+  if (tab === "journal") renderJournal();
+  if (tab === "symbols") renderSymbols();
+  if (tab === "account") refreshAccount();
 
-  window.scrollTo({top:0, behavior:"smooth"});
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function updateCharCount(){
+function updateCharCount() {
   const len = dreamEl.value.length;
   charCount.textContent = len + "/2000";
 
   const dream = dreamEl.value.toLowerCase();
-  const hasEmotion = emotionEl.value || dream.includes("felt") || dream.includes("afraid") || dream.includes("happy") || dream.includes("sad");
-  const hasEnding = endingEl.value || dream.includes("ended") || dream.includes("woke") || dream.includes("escaped");
+  const hasEmotion =
+    emotionEl.value ||
+    dream.includes("felt") ||
+    dream.includes("afraid") ||
+    dream.includes("happy") ||
+    dream.includes("sad");
+  const hasEnding =
+    endingEl.value ||
+    dream.includes("ended") ||
+    dream.includes("woke") ||
+    dream.includes("escaped");
 
-  if(len < 20){
+  if (len < 20) {
     qualityHint.textContent = "Tip: add more dream detail.";
-  }else if(!hasEmotion){
+  } else if (!hasEmotion) {
     qualityHint.textContent = "Tip: add how you felt.";
-  }else if(!hasEnding){
+  } else if (!hasEnding) {
     qualityHint.textContent = "Tip: add how it ended.";
-  }else{
+  } else {
     qualityHint.textContent = "Good detail for interpretation.";
   }
 }
 
-function appendDreamText(text){
+function appendDreamText(text) {
   const clean = String(text || "").trim();
 
   dreamEl.value = dreamEl.value.trim()
@@ -1836,92 +334,92 @@ function appendDreamText(text){
   updateCharCount();
 }
 
-function formatDate(iso){
-  try{
+function formatDate(iso) {
+  try {
     return new Date(iso).toLocaleString([], {
-      month:"short",
-      day:"numeric",
-      year:"numeric",
-      hour:"2-digit",
-      minute:"2-digit"
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
     });
-  }catch(e){
+  } catch (e) {
     return "";
   }
 }
 
-function shortText(text, max){
+function shortText(text, max) {
   const clean = String(text || "").replace(/\s+/g, " ").trim();
   return clean.length > max ? clean.slice(0, max - 3) + "..." : clean;
 }
 
-function buildDreamPayload(){
+function buildDreamPayload() {
   const parts = [];
 
   const dream = dreamEl.value.trim();
-  if(dream) parts.push("Dream:\n" + dream);
+  if (dream) parts.push("Dream:\n" + dream);
 
-  if(emotionEl.value) parts.push("Emotion:\n" + emotionEl.value);
-  if(endingEl.value) parts.push("Ending:\n" + endingEl.value);
-  if(placeEl.value.trim()) parts.push("Place:\n" + placeEl.value.trim());
-  if(peopleEl.value.trim()) parts.push("People:\n" + peopleEl.value.trim());
-  if(selectedGuidedSymbols.length) parts.push("Symbols:\n" + selectedGuidedSymbols.join(", "));
+  if (emotionEl.value) parts.push("Emotion:\n" + emotionEl.value);
+  if (endingEl.value) parts.push("Ending:\n" + endingEl.value);
+  if (placeEl.value.trim()) parts.push("Place:\n" + placeEl.value.trim());
+  if (peopleEl.value.trim()) parts.push("People:\n" + peopleEl.value.trim());
+  if (selectedGuidedSymbols.length) parts.push("Symbols:\n" + selectedGuidedSymbols.join(", "));
 
   return parts.join("\n\n").trim();
 }
 
-function extractSymbols(data, dreamText){
+function extractSymbols(data, dreamText) {
   const facts = data.doctrine_facts || {};
   const fromApi = Array.isArray(facts.top_symbols) ? facts.top_symbols : [];
 
   const detected = SYMBOLS
-    .filter(s => dreamText.toLowerCase().includes(s.key))
-    .map(s => s.name);
+    .filter((s) => dreamText.toLowerCase().includes(s.key))
+    .map((s) => s.name);
 
   return [...new Set([...fromApi, ...selectedGuidedSymbols, ...detected])].slice(0, 6);
 }
 
-function buildPatternSummary(symbols, emotion){
+function buildPatternSummary(symbols, emotion) {
   const entries = readJournal();
   const counts = {};
   const emotionCounts = {};
 
-  entries.forEach(entry => {
-    (entry.matchedSymbols || []).forEach(sym => {
+  entries.forEach((entry) => {
+    (entry.matchedSymbols || []).forEach((sym) => {
       const key = String(sym || "").toLowerCase();
       counts[key] = (counts[key] || 0) + 1;
     });
 
-    if(entry.metadata?.emotion){
+    if (entry.metadata?.emotion) {
       const e = String(entry.metadata.emotion).toLowerCase();
       emotionCounts[e] = (emotionCounts[e] || 0) + 1;
     }
   });
 
   const repeated = symbols
-    .map(sym => {
+    .map((sym) => {
       const key = String(sym || "").toLowerCase();
-      return {name:sym, count:counts[key] || 0};
+      return { name: sym, count: counts[key] || 0 };
     })
-    .filter(x => x.count > 0)
-    .sort((a,b) => b.count - a.count);
+    .filter((x) => x.count > 0)
+    .sort((a, b) => b.count - a.count);
 
-  if(repeated.length){
+  if (repeated.length) {
     return `Pattern noticed: ${repeated[0].name} has appeared ${repeated[0].count + 1} time(s), including this dream. Watch whether this symbol keeps returning with the same emotion or ending.`;
   }
 
-  if(emotion && emotionCounts[String(emotion).toLowerCase()]){
+  if (emotion && emotionCounts[String(emotion).toLowerCase()]) {
     return `Pattern noticed: the emotion "${emotion}" has appeared before in your journal. Compare this dream with earlier dreams that carried the same feeling.`;
   }
 
-  if(entries.length >= 3){
+  if (entries.length >= 3) {
     return "No repeated symbol stands out yet, but your journal is growing enough to begin tracking dream patterns over time.";
   }
 
   return "Pattern tracking will become stronger after you save more dreams.";
 }
 
-function mapInterpretation(data, dreamText){
+function mapInterpretation(data, dreamText) {
   const interp = data.interpretation || {};
   const readable = data.narration?.readable_summary || data.full_interpretation || "";
   const matchedSymbols = extractSymbols(data, dreamText);
@@ -1937,19 +435,19 @@ function mapInterpretation(data, dreamText){
   };
 }
 
-function iconSvg(type){
+function iconSvg(type) {
   const icons = {
-    main:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 5v14"/><path d="M5 12h14"/></svg>`,
-    warning:`<svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7l8-4z"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>`,
-    body:`<svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>`,
-    action:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>`,
-    pattern:`<svg viewBox="0 0 24 24"><path d="M4 18c4-10 8 0 12-10"/><path d="M16 8h4v4"/><path d="M4 6h.01"/><path d="M8 6h.01"/><path d="M12 6h.01"/></svg>`
+    main: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 5v14"/><path d="M5 12h14"/></svg>`,
+    warning: `<svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7l8-4z"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>`,
+    body: `<svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>`,
+    action: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>`,
+    pattern: `<svg viewBox="0 0 24 24"><path d="M4 18c4-10 8 0 12-10"/><path d="M16 8h4v4"/><path d="M4 6h.01"/><path d="M8 6h.01"/><path d="M12 6h.01"/></svg>`
   };
 
   return icons[type] || icons.main;
 }
 
-function resultCard(label, text, icon){
+function resultCard(label, text, icon) {
   return `
     <div class="result-card">
       <div class="result-card-row">
@@ -1963,7 +461,7 @@ function resultCard(label, text, icon){
   `;
 }
 
-function renderResultCards(mapped, dreamText, entryId){
+function renderResultCards(mapped, dreamText, entryId) {
   const now = new Date().toISOString();
 
   result.classList.add("show");
@@ -1977,11 +475,7 @@ function renderResultCards(mapped, dreamText, entryId){
 
         <div class="result-actions">
           <button class="small-btn" type="button" id="editDreamBtn">Edit</button>
-          ${
-            entryId
-              ? `<button class="small-btn" type="button" id="favResultBtn">★</button>`
-              : ""
-          }
+          ${entryId ? `<button class="small-btn" type="button" id="favResultBtn">★</button>` : ""}
         </div>
       </div>
 
@@ -1998,9 +492,8 @@ function renderResultCards(mapped, dreamText, entryId){
         <div class="symbol-matches">
           ${
             mapped.matchedSymbols.length
-              ? mapped.matchedSymbols.map(name => {
-                  const found = SYMBOLS.find(s => s.name.toLowerCase() === String(name).toLowerCase());
-
+              ? mapped.matchedSymbols.map((name) => {
+                  const found = SYMBOLS.find((s) => s.name.toLowerCase() === String(name).toLowerCase());
                   return `
                     <div class="match-pill">
                       <strong>${esc(name)}</strong>
@@ -2018,49 +511,45 @@ function renderResultCards(mapped, dreamText, entryId){
   document.getElementById("editDreamBtn").onclick = () => dreamEl.focus();
 
   const favBtn = document.getElementById("favResultBtn");
-  if(favBtn && entryId){
+  if (favBtn && entryId) {
     favBtn.onclick = () => toggleFavorite(entryId, true);
   }
 
-  result.scrollIntoView({behavior:"smooth", block:"start"});
+  result.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function renderError(title, message, upgrade){
+function renderError(title, message, upgrade) {
   result.classList.add("show");
   result.innerHTML = `
     <div class="result-card error">
       <div class="label">${esc(title)}</div>
       <div class="result-text">${esc(message)}</div>
-      ${
-        upgrade
-          ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl.value))}">View Access Options</a>`
-          : ""
-      }
+      ${upgrade ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl.value))}">View Access Options</a>` : ""}
     </div>
   `;
 
-  result.scrollIntoView({behavior:"smooth", block:"start"});
+  result.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-async function readResponse(res){
+async function readResponse(res) {
   const ct = (res.headers.get("content-type") || "").toLowerCase();
 
-  if(ct.includes("application/json")){
-    try{
+  if (ct.includes("application/json")) {
+    try {
       return await res.json();
-    }catch(e){
+    } catch (e) {
       return {};
     }
   }
 
-  try{
-    return {error: await res.text()};
-  }catch(e){
+  try {
+    return { error: await res.text() };
+  } catch (e) {
     return {};
   }
 }
 
-function renderJournal(){
+function renderJournal() {
   const q = String(journalSearch.value || "").toLowerCase().trim();
   const now = new Date();
   const month = now.getMonth();
@@ -2068,19 +557,19 @@ function renderJournal(){
 
   let entries = readJournal();
 
-  if(journalFilter === "favorites"){
-    entries = entries.filter(e => e.favorite);
+  if (journalFilter === "favorites") {
+    entries = entries.filter((e) => e.favorite);
   }
 
-  if(journalFilter === "month"){
-    entries = entries.filter(e => {
+  if (journalFilter === "month") {
+    entries = entries.filter((e) => {
       const d = new Date(e.createdAt);
       return d.getMonth() === month && d.getFullYear() === year;
     });
   }
 
-  if(q){
-    entries = entries.filter(e =>
+  if (q) {
+    entries = entries.filter((e) =>
       String(e.dreamText || "").toLowerCase().includes(q) ||
       String(e.summary || "").toLowerCase().includes(q) ||
       String((e.matchedSymbols || []).join(" ")).toLowerCase().includes(q) ||
@@ -2088,12 +577,12 @@ function renderJournal(){
     );
   }
 
-  if(!entries.length){
+  if (!entries.length) {
     journalList.innerHTML = `<div class="card empty">No saved dreams yet. Decode a dream and it will appear here.</div>`;
     return;
   }
 
-  journalList.innerHTML = entries.map(entry => `
+  journalList.innerHTML = entries.map((entry) => `
     <div class="journal-item" data-entry-id="${esc(entry.id)}">
       <div class="journal-icon">${esc((entry.matchedSymbols || [])[0] || "☾")}</div>
 
@@ -2109,29 +598,28 @@ function renderJournal(){
     </div>
   `).join("");
 
-  document.querySelectorAll("[data-open-entry]").forEach(item => {
+  document.querySelectorAll("[data-open-entry]").forEach((item) => {
     item.onclick = () => openJournalEntry(item.dataset.openEntry);
   });
 
-  document.querySelectorAll("[data-favorite-entry]").forEach(item => {
-    item.onclick = e => {
+  document.querySelectorAll("[data-favorite-entry]").forEach((item) => {
+    item.onclick = (e) => {
       e.stopPropagation();
       toggleFavorite(item.dataset.favoriteEntry);
     };
   });
 
-  document.querySelectorAll("[data-delete-entry]").forEach(item => {
-    item.onclick = e => {
+  document.querySelectorAll("[data-delete-entry]").forEach((item) => {
+    item.onclick = (e) => {
       e.stopPropagation();
       deleteEntry(item.dataset.deleteEntry);
     };
   });
 }
 
-function openJournalEntry(id){
-  const entry = readJournal().find(e => e.id === id);
-
-  if(!entry) return;
+function openJournalEntry(id) {
+  const entry = readJournal().find((e) => e.id === id);
+  if (!entry) return;
 
   switchTab("decode");
 
@@ -2155,33 +643,33 @@ function openJournalEntry(id){
   }, entry.dreamText || "", entry.id);
 }
 
-function toggleFavorite(id, stayOnDecode){
+function toggleFavorite(id, stayOnDecode) {
   const entries = readJournal();
-  const found = entries.find(e => e.id === id);
+  const found = entries.find((e) => e.id === id);
 
-  if(found){
+  if (found) {
     found.favorite = !found.favorite;
     writeJournal(entries);
   }
 
   renderJournal();
 
-  if(stayOnDecode && found){
+  if (stayOnDecode && found) {
     alert(found.favorite ? "Added to favorites." : "Removed from favorites.");
   }
 }
 
-function deleteEntry(id){
-  if(!confirm("Delete this saved dream from your local journal?")) return;
+function deleteEntry(id) {
+  if (!confirm("Delete this saved dream from your local journal?")) return;
 
-  const entries = readJournal().filter(e => e.id !== id);
+  const entries = readJournal().filter((e) => e.id !== id);
   writeJournal(entries);
   renderJournal();
   refreshAccount();
 }
 
-function renderSymbols(){
-  document.getElementById("symbolGrid").innerHTML = SYMBOLS.map(s => `
+function renderSymbols() {
+  document.getElementById("symbolGrid").innerHTML = SYMBOLS.map((s) => `
     <button class="symbol-card" type="button" data-symbol="${esc(s.key)}">
       <span class="big">${esc(s.icon)}</span>
       <strong>${esc(s.name)}</strong>
@@ -2189,7 +677,7 @@ function renderSymbols(){
     </button>
   `).join("");
 
-  document.querySelectorAll(".symbol-card").forEach(card => {
+  document.querySelectorAll(".symbol-card").forEach((card) => {
     card.onclick = () => {
       appendDreamText(card.dataset.symbol);
       switchTab("decode");
@@ -2198,8 +686,8 @@ function renderSymbols(){
   });
 }
 
-function renderGuidedSymbols(){
-  document.getElementById("guidedSymbolChips").innerHTML = SYMBOLS.slice(0, 9).map(s => `
+function renderGuidedSymbols() {
+  document.getElementById("guidedSymbolChips").innerHTML = SYMBOLS.slice(0, 9).map((s) => `
     <button
       class="tiny-chip ${selectedGuidedSymbols.includes(s.name) ? "selected" : ""}"
       type="button"
@@ -2209,13 +697,13 @@ function renderGuidedSymbols(){
     </button>
   `).join("");
 
-  document.querySelectorAll("[data-guided-symbol]").forEach(btn => {
-    btn.onclick = () => {
-      const symbol = btn.dataset.guidedSymbol;
+  document.querySelectorAll("[data-guided-symbol]").forEach((btnEl) => {
+    btnEl.onclick = () => {
+      const symbol = btnEl.dataset.guidedSymbol;
 
-      if(selectedGuidedSymbols.includes(symbol)){
-        selectedGuidedSymbols = selectedGuidedSymbols.filter(s => s !== symbol);
-      }else{
+      if (selectedGuidedSymbols.includes(symbol)) {
+        selectedGuidedSymbols = selectedGuidedSymbols.filter((s) => s !== symbol);
+      } else {
         selectedGuidedSymbols.push(symbol);
       }
 
@@ -2225,12 +713,12 @@ function renderGuidedSymbols(){
   });
 }
 
-function refreshAccount(){
+function refreshAccount() {
   const email = loadEmail();
   const count = readJournal().length;
   const premiumUrl = upgradeUrl(email);
 
-  if(emailEl.value !== email){
+  if (emailEl.value !== email) {
     emailEl.value = email;
   }
 
@@ -2238,26 +726,26 @@ function refreshAccount(){
     ? "Email saved • " + count + " dream(s)"
     : "Local journal mode • " + count + " dream(s)";
 
-  if(subscriptionAccount){
+  if (subscriptionAccount) {
     subscriptionAccount.href = premiumUrl;
   }
 
-  if(accountDreamPackEmail){
+  if (accountDreamPackEmail) {
     accountDreamPackEmail.value = email;
   }
 
-  if(accountDreamPackReturn){
+  if (accountDreamPackReturn) {
     accountDreamPackReturn.value = getReturnUrl();
   }
 
-  if(rewardUpgrade){
+  if (rewardUpgrade) {
     rewardUpgrade.href = premiumUrl;
   }
 }
 
-function exportJournal(){
+function exportJournal() {
   const entries = readJournal();
-  const blob = new Blob([JSON.stringify(entries, null, 2)], {type:"application/json"});
+  const blob = new Blob([JSON.stringify(entries, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement("a");
@@ -2270,15 +758,15 @@ function exportJournal(){
   URL.revokeObjectURL(url);
 }
 
-function importJournalFile(file){
-  if(!file) return;
+function importJournalFile(file) {
+  if (!file) return;
 
   const reader = new FileReader();
 
   reader.onload = () => {
-    try{
+    try {
       const parsed = JSON.parse(reader.result);
-      if(!Array.isArray(parsed)){
+      if (!Array.isArray(parsed)) {
         alert("Invalid journal file.");
         return;
       }
@@ -2286,8 +774,8 @@ function importJournalFile(file){
       const existing = readJournal();
       const byId = new Map();
 
-      [...parsed, ...existing].forEach(entry => {
-        if(entry && entry.id){
+      [...parsed, ...existing].forEach((entry) => {
+        if (entry && entry.id) {
           byId.set(entry.id, entry);
         }
       });
@@ -2296,7 +784,7 @@ function importJournalFile(file){
       renderJournal();
       refreshAccount();
       alert("Journal imported.");
-    }catch(e){
+    } catch (e) {
       alert("Could not import this journal file.");
     }
   };
@@ -2304,25 +792,25 @@ function importJournalFile(file){
   reader.readAsText(file);
 }
 
-async function runInterpretation(){
+async function runInterpretation() {
   const dream = buildDreamPayload();
   const rawDream = dreamEl.value.trim();
   const email = normalizeEmail(emailEl.value);
 
-  if(!rawDream){
+  if (!rawDream) {
     alert("Enter your dream first.");
     dreamEl.focus();
     return;
   }
 
-  if(email && !validEmail(email)){
+  if (email && !validEmail(email)) {
     switchTab("account");
     alert("Enter a valid email or clear the email field.");
     emailEl.focus();
     return;
   }
 
-  if(email){
+  if (email) {
     saveEmail(email);
   }
 
@@ -2331,29 +819,29 @@ async function runInterpretation(){
   result.classList.remove("show");
   result.innerHTML = "";
 
-  try{
+  try {
     const res = await fetch(API + "/interpret", {
-      method:"POST",
-      mode:"cors",
-      credentials:"include",
-      headers:{
-        "Content-Type":"application/json",
-        "Accept":"application/json"
+      method: "POST",
+      mode: "cors",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
       },
-      body:JSON.stringify({
-        text:dream,
-        email:email
+      body: JSON.stringify({
+        text: dream,
+        email: email
       })
     });
 
     const data = await readResponse(res);
 
-    if(res.status === 402){
+    if (res.status === 402) {
       window.location.href = upgradeUrl(email);
       return;
     }
 
-    if(!res.ok){
+    if (!res.ok) {
       renderError(
         "Interpreter Error",
         data.error || data.message || data.details || "Something went wrong calling the interpreter API.",
@@ -2362,11 +850,11 @@ async function runInterpretation(){
       return;
     }
 
-    if(data.is_paid){
+    if (data.is_paid) {
       showAccessStatus("<strong>Access:</strong> Subscription active.");
-    }else if(data.dream_pack?.active){
+    } else if (data.dream_pack?.active) {
       showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining.");
-    }else if(typeof data.free_uses_left === "number"){
+    } else if (typeof data.free_uses_left === "number") {
       showAccessStatus("<strong>Access:</strong> Free mode • " + esc(String(data.free_uses_left)) + " free use(s) left.");
     }
 
@@ -2374,109 +862,76 @@ async function runInterpretation(){
     const entryId = "dream_" + Date.now();
 
     const entry = {
-      id:entryId,
-      createdAt:new Date().toISOString(),
-      dreamText:rawDream,
-      fullPrompt:dream,
-      summary:mapped.mainMeaning,
-      interpretation:mapped,
-      matchedSymbols:mapped.matchedSymbols,
-      favorite:false,
-      metadata:{
-        emotion:emotionEl.value,
-        ending:endingEl.value,
-        place:placeEl.value.trim(),
-        people:peopleEl.value.trim(),
-        selectedSymbols:selectedGuidedSymbols.slice()
+      id: entryId,
+      createdAt: new Date().toISOString(),
+      dreamText: rawDream,
+      fullPrompt: dream,
+      summary: mapped.mainMeaning,
+      interpretation: mapped,
+      matchedSymbols: mapped.matchedSymbols,
+      favorite: false,
+      metadata: {
+        emotion: emotionEl.value,
+        ending: endingEl.value,
+        place: placeEl.value.trim(),
+        people: peopleEl.value.trim(),
+        selectedSymbols: selectedGuidedSymbols.slice()
       },
-      source:"api",
-      accessType:data.is_paid ? "subscription" : data.dream_pack?.active ? "pack" : "free"
+      source: "api",
+      accessType: data.is_paid ? "subscription" : data.dream_pack?.active ? "pack" : "free"
     };
 
-    renderResultCards(mapped, rawDream, entryId);
     addJournalEntry(entry);
-
-  }catch(e){
+    renderResultCards(mapped, rawDream, entryId);
+  } catch (error) {
     renderError(
       "Network Error",
-      "The interpreter could not be reached. Check the Render deployment, domain, or CORS settings.",
+      "Could not reach the interpretation service. Please try again.",
       false
     );
-  }finally{
+    console.error(error);
+  } finally {
     btn.disabled = false;
-    btn.textContent = "Decode Dream";
+    btn.innerHTML = "Decode Dream";
+    refreshAds();
   }
 }
 
 menuBtn.onclick = () => menuPanel.classList.add("open");
 closeMenu.onclick = () => menuPanel.classList.remove("open");
 
-document.querySelectorAll("[data-tab]").forEach(button => {
-  button.addEventListener("click", () => switchTab(button.dataset.tab));
+document.querySelectorAll("[data-tab]").forEach((button) => {
+  button.onclick = () => switchTab(button.dataset.tab);
 });
 
-document.querySelectorAll("[data-tab-link]").forEach(link => {
-  link.addEventListener("click", e => {
+document.querySelectorAll("[data-tab-link]").forEach((link) => {
+  link.onclick = (e) => {
     e.preventDefault();
     switchTab(link.dataset.tabLink);
-  });
+  };
 });
 
 document.getElementById("sparkBtn").onclick = () => {
   switchTab("decode");
-  setTimeout(() => dreamEl.focus(), 180);
+  dreamEl.focus();
 };
-
-dreamEl.addEventListener("input", updateCharCount);
-emotionEl.addEventListener("change", updateCharCount);
-endingEl.addEventListener("change", updateCharCount);
 
 document.getElementById("guidedBtn").onclick = () => {
   guidedPanel.classList.toggle("open");
 };
 
-document.getElementById("symbolBtn").onclick = () => switchTab("symbols");
+document.getElementById("symbolBtn").onclick = () => {
+  switchTab("symbols");
+};
 
 document.getElementById("templateBtn").onclick = () => {
-  dreamEl.value =
-`Dream:
-[What happened?]
-
-Symbols:
--
--
--
-
-Emotion:
-[What did you feel?]
-
-Ending:
-[How did it end?]`;
-
+  dreamEl.value = "I was in [place] with [person]. I felt [emotion]. Then [main event]. At the end, [ending].";
   updateCharCount();
   dreamEl.focus();
 };
 
 document.getElementById("clearBtn").onclick = () => {
-  if(!dreamEl.value.trim() || confirm("Clear the current dream draft?")){
-    dreamEl.value = "";
-    emotionEl.value = "";
-    endingEl.value = "";
-    placeEl.value = "";
-    peopleEl.value = "";
-    selectedGuidedSymbols = [];
-    renderGuidedSymbols();
-    result.classList.remove("show");
-    result.innerHTML = "";
-    updateCharCount();
-    dreamEl.focus();
-  }
-};
-
-document.getElementById("newDreamBtn").onclick = () => {
   dreamEl.value = "";
-  result.classList.remove("show");
-  result.innerHTML = "";
   emotionEl.value = "";
   endingEl.value = "";
   placeEl.value = "";
@@ -2484,13 +939,19 @@ document.getElementById("newDreamBtn").onclick = () => {
   selectedGuidedSymbols = [];
   renderGuidedSymbols();
   updateCharCount();
+  result.classList.remove("show");
+  result.innerHTML = "";
+  dreamEl.focus();
+};
+
+document.getElementById("newDreamBtn").onclick = () => {
   switchTab("decode");
-  setTimeout(() => dreamEl.focus(), 180);
+  dreamEl.focus();
 };
 
 emailEl.addEventListener("input", () => saveEmail(emailEl.value));
 emailEl.addEventListener("blur", () => saveEmail(emailEl.value));
-
+dreamEl.addEventListener("input", updateCharCount);
 journalSearch.addEventListener("input", renderJournal);
 
 document.getElementById("clearJournalSearch").onclick = () => {
@@ -2498,30 +959,27 @@ document.getElementById("clearJournalSearch").onclick = () => {
   renderJournal();
 };
 
-document.querySelectorAll("[data-journal-filter]").forEach(button => {
+document.querySelectorAll("[data-journal-filter]").forEach((button) => {
   button.onclick = () => {
     journalFilter = button.dataset.journalFilter;
-
-    document.querySelectorAll("[data-journal-filter]").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll("[data-journal-filter]").forEach((b) => b.classList.remove("active"));
     button.classList.add("active");
-
     renderJournal();
   };
 });
 
 document.getElementById("exportBtn").onclick = exportJournal;
-
 document.getElementById("importBtn").onclick = () => {
   document.getElementById("importFile").click();
 };
 
-document.getElementById("importFile").addEventListener("change", e => {
+document.getElementById("importFile").addEventListener("change", (e) => {
   importJournalFile(e.target.files[0]);
   e.target.value = "";
 });
 
 document.getElementById("clearJournalBtn").onclick = () => {
-  if(confirm("Clear all dream journal entries saved in this browser?")){
+  if (confirm("Clear all dream journal entries saved in this browser?")) {
     writeJournal([]);
     renderJournal();
     refreshAccount();
@@ -2532,17 +990,19 @@ document.getElementById("supportBtn").onclick = () => {
   const email = normalizeEmail(emailEl.value);
   const subject = encodeURIComponent("Jamaican Dream Interpreter Support");
   const body = encodeURIComponent(
-    "Hello,\n\nI need help with the Jamaican Dream Interpreter.\n\nMy account email: " + (email || "[enter email here]") + "\n\nIssue:\n"
+    "Hello,\n\nI need help with the Jamaican Dream Interpreter.\n\nMy account email: " +
+      (email || "[enter email here]") +
+      "\n\nIssue:\n"
   );
 
   window.location.href = "mailto:" + SUPPORT_EMAIL + "?subject=" + subject + "&body=" + body;
 };
 
-if(accountDreamPackForm){
-  accountDreamPackForm.addEventListener("submit", function(e){
+if (accountDreamPackForm) {
+  accountDreamPackForm.addEventListener("submit", function (e) {
     const email = normalizeEmail(emailEl.value);
 
-    if(!email){
+    if (!email) {
       e.preventDefault();
       switchTab("account");
       alert("Enter your email before checkout.");
@@ -2550,7 +1010,7 @@ if(accountDreamPackForm){
       return;
     }
 
-    if(!validEmail(email)){
+    if (!validEmail(email)) {
       e.preventDefault();
       switchTab("account");
       alert("Enter a valid email before checkout.");
@@ -2559,10 +1019,8 @@ if(accountDreamPackForm){
     }
 
     saveEmail(email);
-
     accountDreamPackEmail.value = email;
     accountDreamPackReturn.value = getReturnUrl();
-
     accountDreamPackBtn.disabled = true;
     accountDreamPackBtn.innerHTML = `<span class="loader-ring"></span> Redirecting...`;
   });
@@ -2571,29 +1029,63 @@ if(accountDreamPackForm){
 btn.onclick = async () => {
   const rawDream = dreamEl.value.trim();
 
-  if(!rawDream){
+  if (!rawDream) {
     alert("Enter your dream first.");
     dreamEl.focus();
     return;
   }
 
-  if(shouldShowRewardAd()){
-    openRewardModal();
+  if (!shouldShowRewardAd()) {
+    await runInterpretation();
     return;
   }
 
-  await runInterpretation();
+  openRewardModal();
+
+  const rewarded = await showNativeRewardedAd();
+
+  if (rewarded) {
+    closeRewardModal();
+    pendingRewardDecode = false;
+    await runInterpretation();
+    return;
+  }
+
+  rewardReady = false;
+  rewardCount.textContent = "Ad not completed. Tap below to try again.";
+  setRewardSpace("Reward not earned yet.");
+  rewardContinue.disabled = false;
+  rewardContinue.textContent = "Try Again";
 };
 
 rewardContinue.onclick = async () => {
-  if(!rewardReady || !pendingRewardDecode) return;
+  if (!pendingRewardDecode) return;
 
-  closeRewardModal();
-  pendingRewardDecode = false;
+  rewardContinue.disabled = true;
+  rewardContinue.textContent = "Loading...";
 
-  await runInterpretation();
+  const rewarded = await showNativeRewardedAd();
+
+  if (rewarded) {
+    closeRewardModal();
+    pendingRewardDecode = false;
+    await runInterpretation();
+    return;
+  }
+
+  rewardReady = false;
+  rewardCount.textContent = "Ad not completed. Tap below to try again.";
+  setRewardSpace("Reward not earned yet.");
+  rewardContinue.disabled = false;
+  rewardContinue.textContent = "Try Again";
 };
 
+rewardModal.addEventListener("click", (e) => {
+  if (e.target === rewardModal && !nativeRewardInProgress) {
+    closeRewardModal();
+    pendingRewardDecode = false;
+  }
+});
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -2603,10 +1095,10 @@ if ("serviceWorker" in navigator) {
 
 const savedEmail = loadEmail();
 
-if(savedEmail){
+if (savedEmail) {
   emailEl.value = savedEmail;
-  showAccessStatus('<strong>Email saved:</strong> ' + esc(savedEmail));
-}else{
+  showAccessStatus("<strong>Email saved:</strong> " + esc(savedEmail));
+} else {
   hideAccessStatus();
 }
 
@@ -2617,6 +1109,3 @@ renderJournal();
 refreshAccount();
 refreshAds();
 </script>
-
-</body>
-</html>

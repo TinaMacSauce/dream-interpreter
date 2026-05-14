@@ -2432,7 +2432,8 @@ dreamEl.addEventListener("input", updateCharCount);
 emotionEl.addEventListener("change", updateCharCount);
 endingEl.addEventListener("change", updateCharCount);
 
-document.getElementById("guidedBtn").onclick = () => {
+const guidedBtn = document.getElementById("guidedBtn");
+if (guidedBtn) guidedBtn.onclick = () => {
   guidedPanel.classList.toggle("open");
 };
 

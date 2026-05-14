@@ -1581,38 +1581,47 @@ const API =
 const EMAIL_KEY = "jdi_email";
 const LEGACY_EMAIL_KEY = "jts_email";
 const JOURNAL_KEY = "jdi_journal";
-
 const SUPPORT_EMAIL = "tinamaccontent@gmail.com";
 
-const emailEl = document.getElementById("email");
-const dreamEl = document.getElementById("dream");
-const btn = document.getElementById("interpret");
-const result = document.getElementById("result");
-const accessStatus = document.getElementById("accessStatus");
-const charCount = document.getElementById("charCount");
-const qualityHint = document.getElementById("qualityHint");
-const journalList = document.getElementById("journalList");
-const journalSearch = document.getElementById("journalSearch");
-const memberLine = document.getElementById("memberLine");
-const subscriptionAccount = document.getElementById("subscriptionAccount");
-const accountDreamPackForm = document.getElementById("accountDreamPackForm");
-const accountDreamPackEmail = document.getElementById("accountDreamPackEmail");
-const accountDreamPackReturn = document.getElementById("accountDreamPackReturn");
-const accountDreamPackBtn = document.getElementById("accountDreamPackBtn");
-const guidedPanel = document.getElementById("guidedPanel");
-const emotionEl = document.getElementById("emotion");
-const endingEl = document.getElementById("ending");
-const placeEl = document.getElementById("place");
-const peopleEl = document.getElementById("people");
+function byId(id){
+  return document.getElementById(id);
+}
 
-const menuBtn = document.getElementById("menuBtn");
-const menuPanel = document.getElementById("menuPanel");
-const closeMenu = document.getElementById("closeMenu");
+function safeText(el, value){
+  if(el) el.textContent = value;
+}
 
-const rewardModal = document.getElementById("rewardModal");
-const rewardContinue = document.getElementById("rewardContinue");
-const rewardCount = document.getElementById("rewardCount");
-const rewardUpgrade = document.getElementById("rewardUpgrade");
+function safeHtml(el, value){
+  if(el) el.innerHTML = value;
+}
+
+const emailEl = byId("email");
+const dreamEl = byId("dream");
+const btn = byId("interpret");
+const result = byId("result");
+const accessStatus = byId("accessStatus");
+const charCount = byId("charCount");
+const qualityHint = byId("qualityHint");
+const journalList = byId("journalList");
+const journalSearch = byId("journalSearch");
+const memberLine = byId("memberLine");
+const subscriptionAccount = byId("subscriptionAccount");
+const accountDreamPackForm = byId("accountDreamPackForm");
+const accountDreamPackEmail = byId("accountDreamPackEmail");
+const accountDreamPackReturn = byId("accountDreamPackReturn");
+const accountDreamPackBtn = byId("accountDreamPackBtn");
+const guidedPanel = byId("guidedPanel");
+const emotionEl = byId("emotion");
+const endingEl = byId("ending");
+const placeEl = byId("place");
+const peopleEl = byId("people");
+const menuBtn = byId("menuBtn");
+const menuPanel = byId("menuPanel");
+const closeMenu = byId("closeMenu");
+const rewardModal = byId("rewardModal");
+const rewardContinue = byId("rewardContinue");
+const rewardCount = byId("rewardCount");
+const rewardUpgrade = byId("rewardUpgrade");
 
 let journalFilter = "all";
 let selectedGuidedSymbols = [];
@@ -1713,12 +1722,14 @@ function addJournalEntry(entry){
 }
 
 function showAccessStatus(html){
+  if(!accessStatus) return;
   accessStatus.style.display = "block";
   accessStatus.innerHTML = html;
   refreshAds();
 }
 
 function hideAccessStatus(){
+  if(!accessStatus) return;
   accessStatus.style.display = "none";
   accessStatus.innerHTML = "";
   refreshAds();
@@ -1734,10 +1745,8 @@ function userHasPaidAccess(){
 }
 
 function refreshAds(){
-  const decodeAd = document.getElementById("decodeAd");
-
+  const decodeAd = byId("decodeAd");
   if(!decodeAd) return;
-
   decodeAd.classList.toggle("hidden", userHasPaidAccess());
 }
 
@@ -1746,6 +1755,11 @@ function shouldShowRewardAd(){
 }
 
 function openRewardModal(){
+  if(!rewardModal || !rewardContinue || !rewardCount){
+    runInterpretation();
+    return;
+  }
+
   rewardReady = false;
   pendingRewardDecode = true;
 
@@ -1759,7 +1773,10 @@ function openRewardModal(){
 
   let seconds = 5;
   rewardCount.textContent = "Continue available in " + seconds + " seconds";
-  rewardUpgrade.href = upgradeUrl(emailEl.value);
+
+  if(rewardUpgrade){
+    rewardUpgrade.href = upgradeUrl(emailEl ? emailEl.value : "");
+  }
 
   rewardModal.classList.add("show");
   rewardModal.setAttribute("aria-hidden","false");
@@ -1781,6 +1798,8 @@ function openRewardModal(){
 }
 
 function closeRewardModal(){
+  if(!rewardModal) return;
+
   rewardModal.classList.remove("show");
   rewardModal.setAttribute("aria-hidden","true");
 
@@ -1792,13 +1811,15 @@ function closeRewardModal(){
 
 function switchTab(tab){
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-  document.getElementById(tab + "Screen").classList.add("active");
+
+  const screen = byId(tab + "Screen");
+  if(screen) screen.classList.add("active");
 
   document.querySelectorAll(".bottom-nav button").forEach(b => {
     b.classList.toggle("active", b.dataset.tab === tab);
   });
 
-  menuPanel.classList.remove("open");
+  if(menuPanel) menuPanel.classList.remove("open");
 
   if(tab === "journal") renderJournal();
   if(tab === "symbols") renderSymbols();
@@ -1808,12 +1829,27 @@ function switchTab(tab){
 }
 
 function updateCharCount(){
+  if(!dreamEl || !charCount || !qualityHint) return;
+
   const len = dreamEl.value.length;
   charCount.textContent = len + "/2000";
 
   const dream = dreamEl.value.toLowerCase();
-  const hasEmotion = emotionEl.value || dream.includes("felt") || dream.includes("afraid") || dream.includes("happy") || dream.includes("sad");
-  const hasEnding = endingEl.value || dream.includes("ended") || dream.includes("woke") || dream.includes("escaped");
+  const emotionValue = emotionEl ? emotionEl.value : "";
+  const endingValue = endingEl ? endingEl.value : "";
+
+  const hasEmotion =
+    emotionValue ||
+    dream.includes("felt") ||
+    dream.includes("afraid") ||
+    dream.includes("happy") ||
+    dream.includes("sad");
+
+  const hasEnding =
+    endingValue ||
+    dream.includes("ended") ||
+    dream.includes("woke") ||
+    dream.includes("escaped");
 
   if(len < 20){
     qualityHint.textContent = "Tip: add more dream detail.";
@@ -1827,6 +1863,8 @@ function updateCharCount(){
 }
 
 function appendDreamText(text){
+  if(!dreamEl) return;
+
   const clean = String(text || "").trim();
 
   dreamEl.value = dreamEl.value.trim()
@@ -1858,13 +1896,13 @@ function shortText(text, max){
 function buildDreamPayload(){
   const parts = [];
 
-  const dream = dreamEl.value.trim();
+  const dream = dreamEl ? dreamEl.value.trim() : "";
   if(dream) parts.push("Dream:\n" + dream);
 
-  if(emotionEl.value) parts.push("Emotion:\n" + emotionEl.value);
-  if(endingEl.value) parts.push("Ending:\n" + endingEl.value);
-  if(placeEl.value.trim()) parts.push("Place:\n" + placeEl.value.trim());
-  if(peopleEl.value.trim()) parts.push("People:\n" + peopleEl.value.trim());
+  if(emotionEl && emotionEl.value) parts.push("Emotion:\n" + emotionEl.value);
+  if(endingEl && endingEl.value) parts.push("Ending:\n" + endingEl.value);
+  if(placeEl && placeEl.value.trim()) parts.push("Place:\n" + placeEl.value.trim());
+  if(peopleEl && peopleEl.value.trim()) parts.push("People:\n" + peopleEl.value.trim());
   if(selectedGuidedSymbols.length) parts.push("Symbols:\n" + selectedGuidedSymbols.join(", "));
 
   return parts.join("\n\n").trim();
@@ -1925,7 +1963,7 @@ function mapInterpretation(data, dreamText){
   const interp = data.interpretation || {};
   const readable = data.narration?.readable_summary || data.full_interpretation || "";
   const matchedSymbols = extractSymbols(data, dreamText);
-  const patternSummary = buildPatternSummary(matchedSymbols, emotionEl.value);
+  const patternSummary = buildPatternSummary(matchedSymbols, emotionEl ? emotionEl.value : "");
 
   return {
     mainMeaning: readable || "Your dream has been interpreted.",
@@ -1964,6 +2002,8 @@ function resultCard(label, text, icon){
 }
 
 function renderResultCards(mapped, dreamText, entryId){
+  if(!result) return;
+
   const now = new Date().toISOString();
 
   result.classList.add("show");
@@ -2015,9 +2055,12 @@ function renderResultCards(mapped, dreamText, entryId){
     </div>
   `;
 
-  document.getElementById("editDreamBtn").onclick = () => dreamEl.focus();
+  const editDreamBtn = byId("editDreamBtn");
+  if(editDreamBtn && dreamEl){
+    editDreamBtn.onclick = () => dreamEl.focus();
+  }
 
-  const favBtn = document.getElementById("favResultBtn");
+  const favBtn = byId("favResultBtn");
   if(favBtn && entryId){
     favBtn.onclick = () => toggleFavorite(entryId, true);
   }
@@ -2026,6 +2069,8 @@ function renderResultCards(mapped, dreamText, entryId){
 }
 
 function renderError(title, message, upgrade){
+  if(!result) return;
+
   result.classList.add("show");
   result.innerHTML = `
     <div class="result-card error">
@@ -2033,7 +2078,7 @@ function renderError(title, message, upgrade){
       <div class="result-text">${esc(message)}</div>
       ${
         upgrade
-          ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl.value))}">View Access Options</a>`
+          ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl ? emailEl.value : ""))}">View Access Options</a>`
           : ""
       }
     </div>
@@ -2061,7 +2106,9 @@ async function readResponse(res){
 }
 
 function renderJournal(){
-  const q = String(journalSearch.value || "").toLowerCase().trim();
+  if(!journalList) return;
+
+  const q = String(journalSearch?.value || "").toLowerCase().trim();
   const now = new Date();
   const month = now.getMonth();
   const year = now.getFullYear();
@@ -2130,16 +2177,15 @@ function renderJournal(){
 
 function openJournalEntry(id){
   const entry = readJournal().find(e => e.id === id);
-
-  if(!entry) return;
+  if(!entry || !dreamEl) return;
 
   switchTab("decode");
 
   dreamEl.value = entry.dreamText || "";
-  emotionEl.value = entry.metadata?.emotion || "";
-  endingEl.value = entry.metadata?.ending || "";
-  placeEl.value = entry.metadata?.place || "";
-  peopleEl.value = entry.metadata?.people || "";
+  if(emotionEl) emotionEl.value = entry.metadata?.emotion || "";
+  if(endingEl) endingEl.value = entry.metadata?.ending || "";
+  if(placeEl) placeEl.value = entry.metadata?.place || "";
+  if(peopleEl) peopleEl.value = entry.metadata?.people || "";
   selectedGuidedSymbols = entry.metadata?.selectedSymbols || [];
 
   renderGuidedSymbols();
@@ -2181,7 +2227,10 @@ function deleteEntry(id){
 }
 
 function renderSymbols(){
-  document.getElementById("symbolGrid").innerHTML = SYMBOLS.map(s => `
+  const symbolGrid = byId("symbolGrid");
+  if(!symbolGrid) return;
+
+  symbolGrid.innerHTML = SYMBOLS.map(s => `
     <button class="symbol-card" type="button" data-symbol="${esc(s.key)}">
       <span class="big">${esc(s.icon)}</span>
       <strong>${esc(s.name)}</strong>
@@ -2193,13 +2242,16 @@ function renderSymbols(){
     card.onclick = () => {
       appendDreamText(card.dataset.symbol);
       switchTab("decode");
-      dreamEl.focus();
+      if(dreamEl) dreamEl.focus();
     };
   });
 }
 
 function renderGuidedSymbols(){
-  document.getElementById("guidedSymbolChips").innerHTML = SYMBOLS.slice(0, 9).map(s => `
+  const guidedSymbolChips = byId("guidedSymbolChips");
+  if(!guidedSymbolChips) return;
+
+  guidedSymbolChips.innerHTML = SYMBOLS.slice(0, 9).map(s => `
     <button
       class="tiny-chip ${selectedGuidedSymbols.includes(s.name) ? "selected" : ""}"
       type="button"
@@ -2230,13 +2282,15 @@ function refreshAccount(){
   const count = readJournal().length;
   const premiumUrl = upgradeUrl(email);
 
-  if(emailEl.value !== email){
+  if(emailEl && emailEl.value !== email){
     emailEl.value = email;
   }
 
-  memberLine.textContent = email
-    ? "Email saved • " + count + " dream(s)"
-    : "Local journal mode • " + count + " dream(s)";
+  if(memberLine){
+    memberLine.textContent = email
+      ? "Email saved • " + count + " dream(s)"
+      : "Local journal mode • " + count + " dream(s)";
+  }
 
   if(subscriptionAccount){
     subscriptionAccount.href = premiumUrl;
@@ -2305,9 +2359,11 @@ function importJournalFile(file){
 }
 
 async function runInterpretation(){
+  if(!dreamEl || !btn) return;
+
   const dream = buildDreamPayload();
   const rawDream = dreamEl.value.trim();
-  const email = normalizeEmail(emailEl.value);
+  const email = normalizeEmail(emailEl ? emailEl.value : "");
 
   if(!rawDream){
     alert("Enter your dream first.");
@@ -2318,7 +2374,7 @@ async function runInterpretation(){
   if(email && !validEmail(email)){
     switchTab("account");
     alert("Enter a valid email or clear the email field.");
-    emailEl.focus();
+    if(emailEl) emailEl.focus();
     return;
   }
 
@@ -2328,8 +2384,11 @@ async function runInterpretation(){
 
   btn.disabled = true;
   btn.innerHTML = `<span class="loader-ring"></span> Decoding Dream...`;
-  result.classList.remove("show");
-  result.innerHTML = "";
+
+  if(result){
+    result.classList.remove("show");
+    result.innerHTML = "";
+  }
 
   try{
     const res = await fetch(API + "/interpret", {
@@ -2383,10 +2442,10 @@ async function runInterpretation(){
       matchedSymbols:mapped.matchedSymbols,
       favorite:false,
       metadata:{
-        emotion:emotionEl.value,
-        ending:endingEl.value,
-        place:placeEl.value.trim(),
-        people:peopleEl.value.trim(),
+        emotion:emotionEl ? emotionEl.value : "",
+        ending:endingEl ? endingEl.value : "",
+        place:placeEl ? placeEl.value.trim() : "",
+        people:peopleEl ? peopleEl.value.trim() : "",
         selectedSymbols:selectedGuidedSymbols.slice()
       },
       source:"api",
@@ -2402,14 +2461,21 @@ async function runInterpretation(){
       "The interpreter could not be reached. Check the Render deployment, domain, or CORS settings.",
       false
     );
+    console.error(e);
   }finally{
     btn.disabled = false;
     btn.textContent = "Decode Dream";
+    refreshAds();
   }
 }
 
-menuBtn.onclick = () => menuPanel.classList.add("open");
-closeMenu.onclick = () => menuPanel.classList.remove("open");
+if(menuBtn && menuPanel){
+  menuBtn.onclick = () => menuPanel.classList.add("open");
+}
+
+if(closeMenu && menuPanel){
+  closeMenu.onclick = () => menuPanel.classList.remove("open");
+}
 
 document.querySelectorAll("[data-tab]").forEach(button => {
   button.addEventListener("click", () => switchTab(button.dataset.tab));
@@ -2422,27 +2488,42 @@ document.querySelectorAll("[data-tab-link]").forEach(link => {
   });
 });
 
-const sparkBtn = document.getElementById("sparkBtn");
-if (sparkBtn) sparkBtn.onclick = () => {
-  switchTab("decode");
-  setTimeout(() => dreamEl.focus(), 180);
-};
+const sparkBtn = byId("sparkBtn");
+if(sparkBtn){
+  sparkBtn.onclick = () => {
+    switchTab("decode");
+    if(dreamEl) setTimeout(() => dreamEl.focus(), 180);
+  };
+}
 
-dreamEl.addEventListener("input", updateCharCount);
-emotionEl.addEventListener("change", updateCharCount);
-endingEl.addEventListener("change", updateCharCount);
+if(dreamEl){
+  dreamEl.addEventListener("input", updateCharCount);
+}
 
-const guidedBtn = document.getElementById("guidedBtn");
-if (guidedBtn) guidedBtn.onclick = () => {
-  guidedPanel.classList.toggle("open");
-};
+if(emotionEl){
+  emotionEl.addEventListener("change", updateCharCount);
+}
 
-const symbolBtn = document.getElementById("symbolBtn");
-if (symbolBtn) symbolBtn.onclick = () => switchTab("symbols");
+if(endingEl){
+  endingEl.addEventListener("change", updateCharCount);
+}
 
-const templateBtn = document.getElementById("templateBtn");
-if (templateBtn) templateBtn.onclick = () => {
-  dreamEl.value =
+const guidedBtn = byId("guidedBtn");
+if(guidedBtn && guidedPanel){
+  guidedBtn.onclick = () => {
+    guidedPanel.classList.toggle("open");
+  };
+}
+
+const symbolBtn = byId("symbolBtn");
+if(symbolBtn){
+  symbolBtn.onclick = () => switchTab("symbols");
+}
+
+const templateBtn = byId("templateBtn");
+if(templateBtn && dreamEl){
+  templateBtn.onclick = () => {
+    dreamEl.value =
 `Dream:
 [What happened?]
 
@@ -2457,50 +2538,78 @@ Emotion:
 Ending:
 [How did it end?]`;
 
-  updateCharCount();
-  dreamEl.focus();
-};
-
-document.getElementById("clearBtn").onclick = () => {
-  if(!dreamEl.value.trim() || confirm("Clear the current dream draft?")){
-    dreamEl.value = "";
-    emotionEl.value = "";
-    endingEl.value = "";
-    placeEl.value = "";
-    peopleEl.value = "";
-    selectedGuidedSymbols = [];
-    renderGuidedSymbols();
-    result.classList.remove("show");
-    result.innerHTML = "";
     updateCharCount();
     dreamEl.focus();
-  }
-};
+  };
+}
 
-document.getElementById("newDreamBtn").onclick = () => {
-  dreamEl.value = "";
-  result.classList.remove("show");
-  result.innerHTML = "";
-  emotionEl.value = "";
-  endingEl.value = "";
-  placeEl.value = "";
-  peopleEl.value = "";
-  selectedGuidedSymbols = [];
-  renderGuidedSymbols();
-  updateCharCount();
-  switchTab("decode");
-  setTimeout(() => dreamEl.focus(), 180);
-};
+const clearBtn = byId("clearBtn");
+if(clearBtn){
+  clearBtn.onclick = () => {
+    if(!dreamEl) return;
 
-emailEl.addEventListener("input", () => saveEmail(emailEl.value));
-emailEl.addEventListener("blur", () => saveEmail(emailEl.value));
+    if(!dreamEl.value.trim() || confirm("Clear the current dream draft?")){
+      dreamEl.value = "";
 
-journalSearch.addEventListener("input", renderJournal);
+      if(emotionEl) emotionEl.value = "";
+      if(endingEl) endingEl.value = "";
+      if(placeEl) placeEl.value = "";
+      if(peopleEl) peopleEl.value = "";
 
-document.getElementById("clearJournalSearch").onclick = () => {
-  journalSearch.value = "";
-  renderJournal();
-};
+      selectedGuidedSymbols = [];
+      renderGuidedSymbols();
+
+      if(result){
+        result.classList.remove("show");
+        result.innerHTML = "";
+      }
+
+      updateCharCount();
+      dreamEl.focus();
+    }
+  };
+}
+
+const newDreamBtn = byId("newDreamBtn");
+if(newDreamBtn){
+  newDreamBtn.onclick = () => {
+    if(dreamEl) dreamEl.value = "";
+
+    if(result){
+      result.classList.remove("show");
+      result.innerHTML = "";
+    }
+
+    if(emotionEl) emotionEl.value = "";
+    if(endingEl) endingEl.value = "";
+    if(placeEl) placeEl.value = "";
+    if(peopleEl) peopleEl.value = "";
+
+    selectedGuidedSymbols = [];
+    renderGuidedSymbols();
+    updateCharCount();
+    switchTab("decode");
+
+    if(dreamEl) setTimeout(() => dreamEl.focus(), 180);
+  };
+}
+
+if(emailEl){
+  emailEl.addEventListener("input", () => saveEmail(emailEl.value));
+  emailEl.addEventListener("blur", () => saveEmail(emailEl.value));
+}
+
+if(journalSearch){
+  journalSearch.addEventListener("input", renderJournal);
+}
+
+const clearJournalSearch = byId("clearJournalSearch");
+if(clearJournalSearch && journalSearch){
+  clearJournalSearch.onclick = () => {
+    journalSearch.value = "";
+    renderJournal();
+  };
+}
 
 document.querySelectorAll("[data-journal-filter]").forEach(button => {
   button.onclick = () => {
@@ -2513,44 +2622,60 @@ document.querySelectorAll("[data-journal-filter]").forEach(button => {
   };
 });
 
-document.getElementById("exportBtn").onclick = exportJournal;
+const exportBtn = byId("exportBtn");
+if(exportBtn){
+  exportBtn.onclick = exportJournal;
+}
 
-document.getElementById("importBtn").onclick = () => {
-  document.getElementById("importFile").click();
-};
+const importBtn = byId("importBtn");
+const importFile = byId("importFile");
 
-document.getElementById("importFile").addEventListener("change", e => {
-  importJournalFile(e.target.files[0]);
-  e.target.value = "";
-});
+if(importBtn && importFile){
+  importBtn.onclick = () => {
+    importFile.click();
+  };
+}
 
-document.getElementById("clearJournalBtn").onclick = () => {
-  if(confirm("Clear all dream journal entries saved in this browser?")){
-    writeJournal([]);
-    renderJournal();
-    refreshAccount();
-  }
-};
+if(importFile){
+  importFile.addEventListener("change", (e) => {
+    importJournalFile(e.target.files[0]);
+    e.target.value = "";
+  });
+}
 
-document.getElementById("supportBtn").onclick = () => {
-  const email = normalizeEmail(emailEl.value);
-  const subject = encodeURIComponent("Jamaican Dream Interpreter Support");
-  const body = encodeURIComponent(
-    "Hello,\n\nI need help with the Jamaican Dream Interpreter.\n\nMy account email: " + (email || "[enter email here]") + "\n\nIssue:\n"
-  );
+const clearJournalBtn = byId("clearJournalBtn");
+if(clearJournalBtn){
+  clearJournalBtn.onclick = () => {
+    if(confirm("Clear all dream journal entries saved in this browser?")){
+      writeJournal([]);
+      renderJournal();
+      refreshAccount();
+    }
+  };
+}
 
-  window.location.href = "mailto:" + SUPPORT_EMAIL + "?subject=" + subject + "&body=" + body;
-};
+const supportBtn = byId("supportBtn");
+if(supportBtn){
+  supportBtn.onclick = () => {
+    const email = normalizeEmail(emailEl ? emailEl.value : "");
+    const subject = encodeURIComponent("Jamaican Dream Interpreter Support");
+    const body = encodeURIComponent(
+      "Hello,\n\nI need help with the Jamaican Dream Interpreter.\n\nMy account email: " + (email || "[enter email here]") + "\n\nIssue:\n"
+    );
+
+    window.location.href = "mailto:" + SUPPORT_EMAIL + "?subject=" + subject + "&body=" + body;
+  };
+}
 
 if(accountDreamPackForm){
   accountDreamPackForm.addEventListener("submit", function(e){
-    const email = normalizeEmail(emailEl.value);
+    const email = normalizeEmail(emailEl ? emailEl.value : "");
 
     if(!email){
       e.preventDefault();
       switchTab("account");
       alert("Enter your email before checkout.");
-      emailEl.focus();
+      if(emailEl) emailEl.focus();
       return;
     }
 
@@ -2558,48 +2683,64 @@ if(accountDreamPackForm){
       e.preventDefault();
       switchTab("account");
       alert("Enter a valid email before checkout.");
-      emailEl.focus();
+      if(emailEl) emailEl.focus();
       return;
     }
 
     saveEmail(email);
 
-    accountDreamPackEmail.value = email;
-    accountDreamPackReturn.value = getReturnUrl();
+    if(accountDreamPackEmail) accountDreamPackEmail.value = email;
+    if(accountDreamPackReturn) accountDreamPackReturn.value = getReturnUrl();
 
-    accountDreamPackBtn.disabled = true;
-    accountDreamPackBtn.innerHTML = `<span class="loader-ring"></span> Redirecting...`;
+    if(accountDreamPackBtn){
+      accountDreamPackBtn.disabled = true;
+      accountDreamPackBtn.innerHTML = `<span class="loader-ring"></span> Redirecting...`;
+    }
   });
 }
 
-btn.onclick = async () => {
-  const rawDream = dreamEl.value.trim();
+if(btn){
+  btn.onclick = async () => {
+    if(!dreamEl) return;
 
-  if(!rawDream){
-    alert("Enter your dream first.");
-    dreamEl.focus();
-    return;
-  }
+    const rawDream = dreamEl.value.trim();
 
-  if(shouldShowRewardAd()){
-    openRewardModal();
-    return;
-  }
+    if(!rawDream){
+      alert("Enter your dream first.");
+      dreamEl.focus();
+      return;
+    }
 
-  await runInterpretation();
-};
+    if(shouldShowRewardAd()){
+      openRewardModal();
+      return;
+    }
 
-rewardContinue.onclick = async () => {
-  if(!rewardReady || !pendingRewardDecode) return;
+    await runInterpretation();
+  };
+}
 
-  closeRewardModal();
-  pendingRewardDecode = false;
+if(rewardContinue){
+  rewardContinue.onclick = async () => {
+    if(!rewardReady || !pendingRewardDecode) return;
 
-  await runInterpretation();
-};
+    closeRewardModal();
+    pendingRewardDecode = false;
 
+    await runInterpretation();
+  };
+}
 
-if ("serviceWorker" in navigator) {
+if(rewardModal){
+  rewardModal.addEventListener("click", (e) => {
+    if(e.target === rewardModal){
+      closeRewardModal();
+      pendingRewardDecode = false;
+    }
+  });
+}
+
+if("serviceWorker" in navigator){
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/static/service-worker.js").catch(() => {});
   });
@@ -2607,9 +2748,9 @@ if ("serviceWorker" in navigator) {
 
 const savedEmail = loadEmail();
 
-if(savedEmail){
+if(savedEmail && emailEl){
   emailEl.value = savedEmail;
-  showAccessStatus('<strong>Email saved:</strong> ' + esc(savedEmail));
+  showAccessStatus("<strong>Email saved:</strong> " + esc(savedEmail));
 }else{
   hideAccessStatus();
 }

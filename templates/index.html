@@ -2437,7 +2437,8 @@ if (guidedBtn) guidedBtn.onclick = () => {
   guidedPanel.classList.toggle("open");
 };
 
-document.getElementById("symbolBtn").onclick = () => switchTab("symbols");
+const symbolBtn = document.getElementById("symbolBtn");
+if (symbolBtn) symbolBtn.onclick = () => switchTab("symbols");
 
 document.getElementById("templateBtn").onclick = () => {
   dreamEl.value =

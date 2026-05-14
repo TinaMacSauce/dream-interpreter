@@ -2440,7 +2440,8 @@ if (guidedBtn) guidedBtn.onclick = () => {
 const symbolBtn = document.getElementById("symbolBtn");
 if (symbolBtn) symbolBtn.onclick = () => switchTab("symbols");
 
-document.getElementById("templateBtn").onclick = () => {
+const templateBtn = document.getElementById("templateBtn");
+if (templateBtn) templateBtn.onclick = () => {
   dreamEl.value =
 `Dream:
 [What happened?]

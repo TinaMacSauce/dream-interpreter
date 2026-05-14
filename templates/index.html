@@ -1,1023 +1,1940 @@
-<script>
-const HOSTED_APP = "https://interpreter.jamaicantruestories.com";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Jamaican Dream Interpreter</title>
 
-const API =
-  window.location.origin.includes("localhost") ||
-  window.location.origin.includes("127.0.0.1")
-    ? "http://127.0.0.1:5000"
-    : HOSTED_APP;
-
-const EMAIL_KEY = "jdi_email";
-const LEGACY_EMAIL_KEY = "jts_email";
-const JOURNAL_KEY = "jdi_journal";
-
-const SUPPORT_EMAIL = "tinamaccontent@gmail.com";
-
-const emailEl = document.getElementById("email");
-const dreamEl = document.getElementById("dream");
-const btn = document.getElementById("interpret");
-const result = document.getElementById("result");
-const accessStatus = document.getElementById("accessStatus");
-const charCount = document.getElementById("charCount");
-const qualityHint = document.getElementById("qualityHint");
-const journalList = document.getElementById("journalList");
-const journalSearch = document.getElementById("journalSearch");
-const memberLine = document.getElementById("memberLine");
-const subscriptionAccount = document.getElementById("subscriptionAccount");
-const accountDreamPackForm = document.getElementById("accountDreamPackForm");
-const accountDreamPackEmail = document.getElementById("accountDreamPackEmail");
-const accountDreamPackReturn = document.getElementById("accountDreamPackReturn");
-const accountDreamPackBtn = document.getElementById("accountDreamPackBtn");
-const guidedPanel = document.getElementById("guidedPanel");
-const emotionEl = document.getElementById("emotion");
-const endingEl = document.getElementById("ending");
-const placeEl = document.getElementById("place");
-const peopleEl = document.getElementById("people");
-
-const menuBtn = document.getElementById("menuBtn");
-const menuPanel = document.getElementById("menuPanel");
-const closeMenu = document.getElementById("closeMenu");
-
-const rewardModal = document.getElementById("rewardModal");
-const rewardContinue = document.getElementById("rewardContinue");
-const rewardCount = document.getElementById("rewardCount");
-const rewardUpgrade = document.getElementById("rewardUpgrade");
-
-let journalFilter = "all";
-let selectedGuidedSymbols = [];
-let rewardReady = false;
-let rewardTimer = null;
-let pendingRewardDecode = false;
-
-const SYMBOLS = [
-  { name: "Dog", icon: "🐕", meaning: "Chasing, pressure, loyalty, warning", key: "dog", category: "animal" },
-  { name: "School", icon: "🏫", meaning: "Past lessons, pressure, memory", key: "school", category: "place" },
-  { name: "Water", icon: "〰️", meaning: "Decision, emotions, spiritual state", key: "water", category: "nature" },
-  { name: "Teeth", icon: "🦷", meaning: "Serious warning, anxiety, loss", key: "teeth", category: "body" },
-  { name: "Falling", icon: "🪂", meaning: "Loss of control, fear, transition", key: "falling", category: "action" },
-  { name: "Money", icon: "💰", meaning: "Opportunity, power, worry", key: "money", category: "object" },
-  { name: "House", icon: "⌂", meaning: "Private life, self, family matter", key: "house", category: "place" },
-  { name: "Snake", icon: "蛇", meaning: "Enemy, opposition, hidden issue", key: "snake", category: "animal" },
-  { name: "Car", icon: "🚗", meaning: "Direction, control, life journey", key: "car", category: "object" },
-  { name: "Hair", icon: "〰", meaning: "Burden, ongoing problem, concern", key: "hair", category: "body" },
-  { name: "Road", icon: "⌁", meaning: "Path, decision, journey", key: "road", category: "place" },
-  { name: "Baby", icon: "✺", meaning: "New beginning, responsibility, fragile matter", key: "baby", category: "people" }
-];
-
-function esc(s) {
-  return String(s || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-function validEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
-}
-
-function saveEmail(email) {
-  const clean = normalizeEmail(email);
-
-  try {
-    if (clean) {
-      localStorage.setItem(EMAIL_KEY, clean);
-      localStorage.setItem(LEGACY_EMAIL_KEY, clean);
-    } else {
-      localStorage.removeItem(EMAIL_KEY);
-    }
-  } catch (e) {}
-
-  refreshAccount();
-}
-
-function loadEmail() {
-  try {
-    return normalizeEmail(
-      localStorage.getItem(EMAIL_KEY) ||
-      localStorage.getItem(LEGACY_EMAIL_KEY) ||
-      ""
-    );
-  } catch (e) {
-    return "";
-  }
-}
-
-function getReturnUrl() {
-  return window.location.href.split("#")[0];
-}
-
-function upgradeUrl(email) {
-  const clean = normalizeEmail(email);
-  return API + "/upgrade?email=" + encodeURIComponent(clean) + "&return=" + encodeURIComponent(getReturnUrl());
-}
-
-function readJournal() {
-  try {
-    const raw = localStorage.getItem(JOURNAL_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function writeJournal(entries) {
-  try {
-    localStorage.setItem(JOURNAL_KEY, JSON.stringify(entries.slice(0, 200)));
-  } catch (e) {}
-}
-
-function addJournalEntry(entry) {
-  const entries = readJournal();
-  entries.unshift(entry);
-  writeJournal(entries);
-  renderJournal();
-  refreshAccount();
-}
-
-function showAccessStatus(html) {
-  accessStatus.style.display = "block";
-  accessStatus.innerHTML = html;
-  refreshAds();
-}
-
-function hideAccessStatus() {
-  accessStatus.style.display = "none";
-  accessStatus.innerHTML = "";
-  refreshAds();
-}
-
-function userHasPaidAccess() {
-  const statusText = String(accessStatus?.textContent || "").toLowerCase();
-
-  return (
-    statusText.includes("subscription active") ||
-    statusText.includes("dream pack active")
-  );
-}
-
-function refreshAds() {
-  const decodeAd = document.getElementById("decodeAd");
-
-  if (!decodeAd) return;
-
-  decodeAd.classList.toggle("hidden", userHasPaidAccess());
-}
-
-function shouldShowRewardAd() {
-  return !userHasPaidAccess();
-}
-
-function openRewardModal() {
-  rewardReady = false;
-  pendingRewardDecode = true;
-
-  if (rewardTimer) {
-    clearInterval(rewardTimer);
-    rewardTimer = null;
-  }
-
-  rewardContinue.disabled = true;
-  rewardContinue.textContent = "Continue Decode";
-
-  let seconds = 5;
-  rewardCount.textContent = "Continue available in " + seconds + " seconds";
-  rewardUpgrade.href = upgradeUrl(emailEl.value);
-
-  rewardModal.classList.add("show");
-  rewardModal.setAttribute("aria-hidden", "false");
-
-  rewardTimer = setInterval(function () {
-    seconds -= 1;
-
-    if (seconds > 0) {
-      rewardCount.textContent = "Continue available in " + seconds + " seconds";
-      return;
+  <style>
+    :root {
+      --bg: #070707;
+      --panel: #111111;
+      --panel2: #171717;
+      --gold: #d4af37;
+      --gold2: #f3e28a;
+      --text: #f5f5f5;
+      --muted: #b8b8b8;
+      --danger: #ff6b6b;
+      --border: rgba(212, 175, 55, 0.32);
+      --shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
     }
 
-    clearInterval(rewardTimer);
-    rewardTimer = null;
-    rewardReady = true;
-    rewardCount.textContent = "Sponsored message complete";
-    rewardContinue.disabled = false;
-  }, 1000);
-}
-
-function closeRewardModal() {
-  rewardModal.classList.remove("show");
-  rewardModal.setAttribute("aria-hidden", "true");
-
-  if (rewardTimer) {
-    clearInterval(rewardTimer);
-    rewardTimer = null;
-  }
-}
-
-function switchTab(tab) {
-  document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
-  document.getElementById(tab + "Screen").classList.add("active");
-
-  document.querySelectorAll(".bottom-nav button").forEach((b) => {
-    b.classList.toggle("active", b.dataset.tab === tab);
-  });
-
-  menuPanel.classList.remove("open");
-
-  if (tab === "journal") renderJournal();
-  if (tab === "symbols") renderSymbols();
-  if (tab === "account") refreshAccount();
-
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-function updateCharCount() {
-  const len = dreamEl.value.length;
-  charCount.textContent = len + "/2000";
-
-  const dream = dreamEl.value.toLowerCase();
-  const hasEmotion =
-    emotionEl.value ||
-    dream.includes("felt") ||
-    dream.includes("afraid") ||
-    dream.includes("happy") ||
-    dream.includes("sad");
-  const hasEnding =
-    endingEl.value ||
-    dream.includes("ended") ||
-    dream.includes("woke") ||
-    dream.includes("escaped");
-
-  if (len < 20) {
-    qualityHint.textContent = "Tip: add more dream detail.";
-  } else if (!hasEmotion) {
-    qualityHint.textContent = "Tip: add how you felt.";
-  } else if (!hasEnding) {
-    qualityHint.textContent = "Tip: add how it ended.";
-  } else {
-    qualityHint.textContent = "Good detail for interpretation.";
-  }
-}
-
-function appendDreamText(text) {
-  const clean = String(text || "").trim();
-
-  dreamEl.value = dreamEl.value.trim()
-    ? dreamEl.value.trim() + "\n" + clean
-    : clean;
-
-  updateCharCount();
-}
-
-function formatDate(iso) {
-  try {
-    return new Date(iso).toLocaleString([], {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
-  } catch (e) {
-    return "";
-  }
-}
-
-function shortText(text, max) {
-  const clean = String(text || "").replace(/\s+/g, " ").trim();
-  return clean.length > max ? clean.slice(0, max - 3) + "..." : clean;
-}
-
-function buildDreamPayload() {
-  const parts = [];
-
-  const dream = dreamEl.value.trim();
-  if (dream) parts.push("Dream:\n" + dream);
-
-  if (emotionEl.value) parts.push("Emotion:\n" + emotionEl.value);
-  if (endingEl.value) parts.push("Ending:\n" + endingEl.value);
-  if (placeEl.value.trim()) parts.push("Place:\n" + placeEl.value.trim());
-  if (peopleEl.value.trim()) parts.push("People:\n" + peopleEl.value.trim());
-  if (selectedGuidedSymbols.length) parts.push("Symbols:\n" + selectedGuidedSymbols.join(", "));
-
-  return parts.join("\n\n").trim();
-}
-
-function extractSymbols(data, dreamText) {
-  const facts = data.doctrine_facts || {};
-  const fromApi = Array.isArray(facts.top_symbols) ? facts.top_symbols : [];
-
-  const detected = SYMBOLS
-    .filter((s) => dreamText.toLowerCase().includes(s.key))
-    .map((s) => s.name);
-
-  return [...new Set([...fromApi, ...selectedGuidedSymbols, ...detected])].slice(0, 6);
-}
-
-function buildPatternSummary(symbols, emotion) {
-  const entries = readJournal();
-  const counts = {};
-  const emotionCounts = {};
-
-  entries.forEach((entry) => {
-    (entry.matchedSymbols || []).forEach((sym) => {
-      const key = String(sym || "").toLowerCase();
-      counts[key] = (counts[key] || 0) + 1;
-    });
-
-    if (entry.metadata?.emotion) {
-      const e = String(entry.metadata.emotion).toLowerCase();
-      emotionCounts[e] = (emotionCounts[e] || 0) + 1;
+    * {
+      box-sizing: border-box;
     }
-  });
 
-  const repeated = symbols
-    .map((sym) => {
-      const key = String(sym || "").toLowerCase();
-      return { name: sym, count: counts[key] || 0 };
-    })
-    .filter((x) => x.count > 0)
-    .sort((a, b) => b.count - a.count);
-
-  if (repeated.length) {
-    return `Pattern noticed: ${repeated[0].name} has appeared ${repeated[0].count + 1} time(s), including this dream. Watch whether this symbol keeps returning with the same emotion or ending.`;
-  }
-
-  if (emotion && emotionCounts[String(emotion).toLowerCase()]) {
-    return `Pattern noticed: the emotion "${emotion}" has appeared before in your journal. Compare this dream with earlier dreams that carried the same feeling.`;
-  }
-
-  if (entries.length >= 3) {
-    return "No repeated symbol stands out yet, but your journal is growing enough to begin tracking dream patterns over time.";
-  }
-
-  return "Pattern tracking will become stronger after you save more dreams.";
-}
-
-function mapInterpretation(data, dreamText) {
-  const interp = data.interpretation || {};
-  const readable = data.narration?.readable_summary || data.full_interpretation || "";
-  const matchedSymbols = extractSymbols(data, dreamText);
-  const patternSummary = buildPatternSummary(matchedSymbols, emotionEl.value);
-
-  return {
-    mainMeaning: readable || "Your dream has been interpreted.",
-    spiritualWarning: interp.spiritual_meaning || "No specific spiritual warning was returned.",
-    physicalEffects: interp.effects_in_physical_realm || "No specific physical effects were returned.",
-    whatToDo: interp.what_to_do || "Reflect, pray, and pay attention to repeated symbols.",
-    matchedSymbols,
-    patternSummary
-  };
-}
-
-function iconSvg(type) {
-  const icons = {
-    main: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 5v14"/><path d="M5 12h14"/></svg>`,
-    warning: `<svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7l8-4z"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>`,
-    body: `<svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>`,
-    action: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>`,
-    pattern: `<svg viewBox="0 0 24 24"><path d="M4 18c4-10 8 0 12-10"/><path d="M16 8h4v4"/><path d="M4 6h.01"/><path d="M8 6h.01"/><path d="M12 6h.01"/></svg>`
-  };
-
-  return icons[type] || icons.main;
-}
-
-function resultCard(label, text, icon) {
-  return `
-    <div class="result-card">
-      <div class="result-card-row">
-        <div class="result-icon">${iconSvg(icon)}</div>
-        <div>
-          <div class="label">${esc(label)}</div>
-          <div class="result-text">${esc(text)}</div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderResultCards(mapped, dreamText, entryId) {
-  const now = new Date().toISOString();
-
-  result.classList.add("show");
-  result.innerHTML = `
-    <div class="card decode-card">
-      <div class="result-head">
-        <div>
-          <h3>Dream Interpretation</h3>
-          <p>${esc(formatDate(now))}</p>
-        </div>
-
-        <div class="result-actions">
-          <button class="small-btn" type="button" id="editDreamBtn">Edit</button>
-          ${entryId ? `<button class="small-btn" type="button" id="favResultBtn">★</button>` : ""}
-        </div>
-      </div>
-
-      <div class="result-text">${esc(shortText(dreamText, 150))}</div>
-
-      ${resultCard("Main Meaning", mapped.mainMeaning, "main")}
-      ${resultCard("Spiritual Warning", mapped.spiritualWarning, "warning")}
-      ${resultCard("Physical Effects", mapped.physicalEffects, "body")}
-      ${resultCard("What To Do", mapped.whatToDo, "action")}
-      ${resultCard("Dream Pattern", mapped.patternSummary, "pattern")}
-
-      <div class="result-card">
-        <div class="label">Matched Symbols</div>
-        <div class="symbol-matches">
-          ${
-            mapped.matchedSymbols.length
-              ? mapped.matchedSymbols.map((name) => {
-                  const found = SYMBOLS.find((s) => s.name.toLowerCase() === String(name).toLowerCase());
-                  return `
-                    <div class="match-pill">
-                      <strong>${esc(name)}</strong>
-                      <span>${esc(found?.meaning || "Symbol found in your dream.")}</span>
-                    </div>
-                  `;
-                }).join("")
-              : `<div class="result-text">No main symbols detected.</div>`
-          }
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById("editDreamBtn").onclick = () => dreamEl.focus();
-
-  const favBtn = document.getElementById("favResultBtn");
-  if (favBtn && entryId) {
-    favBtn.onclick = () => toggleFavorite(entryId, true);
-  }
-
-  result.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function renderError(title, message, upgrade) {
-  result.classList.add("show");
-  result.innerHTML = `
-    <div class="result-card error">
-      <div class="label">${esc(title)}</div>
-      <div class="result-text">${esc(message)}</div>
-      ${upgrade ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl.value))}">View Access Options</a>` : ""}
-    </div>
-  `;
-
-  result.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-async function readResponse(res) {
-  const ct = (res.headers.get("content-type") || "").toLowerCase();
-
-  if (ct.includes("application/json")) {
-    try {
-      return await res.json();
-    } catch (e) {
-      return {};
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background: radial-gradient(circle at top, #19130a 0%, #080808 42%, #000 100%);
+      color: var(--text);
+      font-family: Georgia, "Times New Roman", serif;
     }
-  }
 
-  try {
-    return { error: await res.text() };
-  } catch (e) {
-    return {};
-  }
-}
+    body {
+      padding-bottom: 90px;
+    }
 
-function renderJournal() {
-  const q = String(journalSearch.value || "").toLowerCase().trim();
-  const now = new Date();
-  const month = now.getMonth();
-  const year = now.getFullYear();
+    button, input, textarea, select {
+      font: inherit;
+    }
 
-  let entries = readJournal();
+    a {
+      color: var(--gold2);
+      text-decoration: none;
+    }
 
-  if (journalFilter === "favorites") {
-    entries = entries.filter((e) => e.favorite);
-  }
+    .app-shell {
+      width: min(980px, 100%);
+      margin: 0 auto;
+      padding: 18px;
+    }
 
-  if (journalFilter === "month") {
-    entries = entries.filter((e) => {
-      const d = new Date(e.createdAt);
-      return d.getMonth() === month && d.getFullYear() === year;
-    });
-  }
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 0 18px;
+    }
 
-  if (q) {
-    entries = entries.filter((e) =>
-      String(e.dreamText || "").toLowerCase().includes(q) ||
-      String(e.summary || "").toLowerCase().includes(q) ||
-      String((e.matchedSymbols || []).join(" ")).toLowerCase().includes(q) ||
-      String(e.metadata?.emotion || "").toLowerCase().includes(q)
-    );
-  }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
 
-  if (!entries.length) {
-    journalList.innerHTML = `<div class="card empty">No saved dreams yet. Decode a dream and it will appear here.</div>`;
-    return;
-  }
+    .brand small {
+      color: var(--gold2);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 11px;
+    }
 
-  journalList.innerHTML = entries.map((entry) => `
-    <div class="journal-item" data-entry-id="${esc(entry.id)}">
-      <div class="journal-icon">${esc((entry.matchedSymbols || [])[0] || "☾")}</div>
+    .brand h1 {
+      margin: 0;
+      font-size: 24px;
+      color: var(--text);
+      line-height: 1.1;
+    }
 
-      <button type="button" style="all:unset;cursor:pointer;" data-open-entry="${esc(entry.id)}">
-        <div class="journal-title">${esc(shortText(entry.dreamText, 72))}</div>
-        <div class="journal-date">${esc(formatDate(entry.createdAt))}${entry.metadata?.emotion ? " • " + esc(entry.metadata.emotion) : ""}</div>
-      </button>
+    .menu-btn {
+      width: 46px;
+      height: 46px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.05);
+      color: var(--gold2);
+      font-size: 24px;
+      cursor: pointer;
+    }
 
-      <div class="entry-actions">
-        <button class="icon-mini" type="button" data-favorite-entry="${esc(entry.id)}">${entry.favorite ? "★" : "☆"}</button>
-        <button class="icon-mini danger" type="button" data-delete-entry="${esc(entry.id)}">×</button>
-      </div>
-    </div>
-  `).join("");
+    .hero {
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 24px;
+      background:
+        linear-gradient(rgba(0,0,0,0.48), rgba(0,0,0,0.88)),
+        radial-gradient(circle at top right, rgba(212,175,55,0.22), transparent 45%),
+        #0b0b0b;
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
 
-  document.querySelectorAll("[data-open-entry]").forEach((item) => {
-    item.onclick = () => openJournalEntry(item.dataset.openEntry);
-  });
+    .hero h2 {
+      margin: 0 0 10px;
+      font-size: 31px;
+      line-height: 1.05;
+      color: var(--gold2);
+    }
 
-  document.querySelectorAll("[data-favorite-entry]").forEach((item) => {
-    item.onclick = (e) => {
-      e.stopPropagation();
-      toggleFavorite(item.dataset.favoriteEntry);
-    };
-  });
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
 
-  document.querySelectorAll("[data-delete-entry]").forEach((item) => {
-    item.onclick = (e) => {
-      e.stopPropagation();
-      deleteEntry(item.dataset.deleteEntry);
-    };
-  });
-}
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 18px;
+    }
 
-function openJournalEntry(id) {
-  const entry = readJournal().find((e) => e.id === id);
-  if (!entry) return;
+    .quick-actions button,
+    .primary-btn,
+    .secondary-btn,
+    .small-btn,
+    .icon-mini,
+    .tiny-chip,
+    .upgrade-link {
+      border: 1px solid var(--border);
+      background: rgba(212,175,55,0.1);
+      color: var(--gold2);
+      border-radius: 16px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
 
-  switchTab("decode");
+    .quick-actions button:hover,
+    .primary-btn:hover,
+    .secondary-btn:hover,
+    .small-btn:hover,
+    .icon-mini:hover,
+    .tiny-chip:hover {
+      transform: translateY(-1px);
+      background: rgba(212,175,55,0.18);
+    }
 
-  dreamEl.value = entry.dreamText || "";
-  emotionEl.value = entry.metadata?.emotion || "";
-  endingEl.value = entry.metadata?.ending || "";
-  placeEl.value = entry.metadata?.place || "";
-  peopleEl.value = entry.metadata?.people || "";
-  selectedGuidedSymbols = entry.metadata?.selectedSymbols || [];
+    .screen {
+      display: none;
+    }
 
-  renderGuidedSymbols();
-  updateCharCount();
+    .screen.active {
+      display: block;
+    }
 
-  renderResultCards({
-    mainMeaning: entry.interpretation?.mainMeaning || entry.summary || "",
-    spiritualWarning: entry.interpretation?.spiritualWarning || "",
-    physicalEffects: entry.interpretation?.physicalEffects || "",
-    whatToDo: entry.interpretation?.whatToDo || "",
-    matchedSymbols: entry.matchedSymbols || [],
-    patternSummary: entry.interpretation?.patternSummary || buildPatternSummary(entry.matchedSymbols || [], entry.metadata?.emotion)
-  }, entry.dreamText || "", entry.id);
-}
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
+      border: 1px solid rgba(212,175,55,0.22);
+      border-radius: 24px;
+      padding: 18px;
+      margin: 14px 0;
+      box-shadow: 0 12px 35px rgba(0,0,0,0.28);
+    }
 
-function toggleFavorite(id, stayOnDecode) {
-  const entries = readJournal();
-  const found = entries.find((e) => e.id === id);
+    .card h3 {
+      margin: 0 0 10px;
+      color: var(--gold2);
+      font-size: 21px;
+    }
 
-  if (found) {
-    found.favorite = !found.favorite;
-    writeJournal(entries);
-  }
+    .card p {
+      color: var(--muted);
+      line-height: 1.5;
+    }
 
-  renderJournal();
+    label {
+      display: block;
+      margin: 14px 0 6px;
+      color: var(--gold2);
+      font-size: 14px;
+    }
 
-  if (stayOnDecode && found) {
-    alert(found.favorite ? "Added to favorites." : "Removed from favorites.");
-  }
-}
+    input,
+    textarea,
+    select {
+      width: 100%;
+      border: 1px solid rgba(212,175,55,0.28);
+      background: rgba(0,0,0,0.48);
+      color: var(--text);
+      border-radius: 18px;
+      padding: 14px;
+      outline: none;
+    }
 
-function deleteEntry(id) {
-  if (!confirm("Delete this saved dream from your local journal?")) return;
+    textarea {
+      min-height: 170px;
+      resize: vertical;
+      line-height: 1.5;
+    }
 
-  const entries = readJournal().filter((e) => e.id !== id);
-  writeJournal(entries);
-  renderJournal();
-  refreshAccount();
-}
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(212,175,55,0.12);
+    }
 
-function renderSymbols() {
-  document.getElementById("symbolGrid").innerHTML = SYMBOLS.map((s) => `
-    <button class="symbol-card" type="button" data-symbol="${esc(s.key)}">
-      <span class="big">${esc(s.icon)}</span>
-      <strong>${esc(s.name)}</strong>
-      <span>${esc(s.meaning)}</span>
-    </button>
-  `).join("");
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
 
-  document.querySelectorAll(".symbol-card").forEach((card) => {
-    card.onclick = () => {
-      appendDreamText(card.dataset.symbol);
-      switchTab("decode");
-      dreamEl.focus();
-    };
-  });
-}
+    .helper-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 8px;
+    }
 
-function renderGuidedSymbols() {
-  document.getElementById("guidedSymbolChips").innerHTML = SYMBOLS.slice(0, 9).map((s) => `
-    <button
-      class="tiny-chip ${selectedGuidedSymbols.includes(s.name) ? "selected" : ""}"
-      type="button"
-      data-guided-symbol="${esc(s.name)}"
-    >
-      ${esc(s.name)}
-    </button>
-  `).join("");
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
 
-  document.querySelectorAll("[data-guided-symbol]").forEach((btnEl) => {
-    btnEl.onclick = () => {
-      const symbol = btnEl.dataset.guidedSymbol;
+    .primary-btn {
+      background: linear-gradient(135deg, #d4af37, #f3e28a);
+      color: #171000;
+      font-weight: bold;
+      border: none;
+      flex: 1;
+    }
 
-      if (selectedGuidedSymbols.includes(symbol)) {
-        selectedGuidedSymbols = selectedGuidedSymbols.filter((s) => s !== symbol);
-      } else {
-        selectedGuidedSymbols.push(symbol);
+    .secondary-btn {
+      background: rgba(255,255,255,0.045);
+      color: var(--text);
+    }
+
+    .decode-ad {
+      border: 1px dashed rgba(212,175,55,0.45);
+      border-radius: 18px;
+      padding: 14px;
+      color: var(--muted);
+      background: rgba(212,175,55,0.055);
+      margin-top: 14px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .guided-panel {
+      display: none;
+      margin-top: 14px;
+    }
+
+    .guided-panel.open {
+      display: block;
+    }
+
+    .chip-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .tiny-chip.selected {
+      background: var(--gold);
+      color: #120d00;
+      font-weight: bold;
+    }
+
+    .result-card {
+      border: 1px solid rgba(212,175,55,0.2);
+      background: rgba(0,0,0,0.25);
+      border-radius: 18px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+
+    .result-card.error {
+      border-color: rgba(255,107,107,0.55);
+    }
+
+    .result-card-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .result-icon {
+      width: 34px;
+      height: 34px;
+      min-width: 34px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: var(--gold2);
+      border: 1px solid var(--border);
+    }
+
+    .result-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .label {
+      color: var(--gold2);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+    }
+
+    .result-text {
+      color: var(--text);
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+
+    .result-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .result-head h3 {
+      margin-bottom: 3px;
+    }
+
+    .result-head p {
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .result-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .small-btn {
+      padding: 8px 11px;
+      border-radius: 12px;
+    }
+
+    .symbol-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .symbol-card {
+      text-align: left;
+      border: 1px solid rgba(212,175,55,0.25);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      border-radius: 20px;
+      padding: 16px;
+      min-height: 130px;
+      cursor: pointer;
+    }
+
+    .symbol-card .big {
+      font-size: 28px;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .symbol-card strong {
+      display: block;
+      color: var(--gold2);
+      margin-bottom: 6px;
+    }
+
+    .symbol-card span:last-child {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .symbol-matches {
+      display: grid;
+      gap: 8px;
+    }
+
+    .match-pill {
+      border: 1px solid rgba(212,175,55,0.18);
+      border-radius: 14px;
+      padding: 10px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .match-pill strong {
+      color: var(--gold2);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .match-pill span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .journal-tools {
+      display: flex;
+      gap: 10px;
+      margin: 12px 0;
+      flex-wrap: wrap;
+    }
+
+    .journal-item {
+      display: grid;
+      grid-template-columns: 44px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      border: 1px solid rgba(212,175,55,0.2);
+      border-radius: 18px;
+      padding: 12px;
+      margin: 10px 0;
+      background: rgba(255,255,255,0.035);
+    }
+
+    .journal-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 15px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border);
+      color: var(--gold2);
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    .journal-title {
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .journal-date {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .entry-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .icon-mini {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+    }
+
+    .icon-mini.danger {
+      color: var(--danger);
+      border-color: rgba(255,107,107,0.35);
+    }
+
+    .empty {
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .access-status {
+      display: none;
+      border: 1px solid rgba(212,175,55,0.28);
+      border-radius: 16px;
+      padding: 12px;
+      margin: 12px 0;
+      color: var(--muted);
+      background: rgba(212,175,55,0.06);
+    }
+
+    .upgrade-link {
+      display: inline-block;
+      margin-top: 12px;
+    }
+
+    .bottom-nav {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 14px;
+      width: min(560px, calc(100% - 24px));
+      background: rgba(10,10,10,0.94);
+      border: 1px solid rgba(212,175,55,0.28);
+      box-shadow: 0 20px 55px rgba(0,0,0,0.5);
+      border-radius: 24px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding: 8px;
+      z-index: 50;
+      backdrop-filter: blur(14px);
+    }
+
+    .bottom-nav button {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 16px;
+      padding: 10px 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .bottom-nav button.active {
+      color: #120d00;
+      background: linear-gradient(135deg, #d4af37, #f3e28a);
+      font-weight: bold;
+    }
+
+    .menu-panel {
+      position: fixed;
+      inset: 0 0 0 auto;
+      width: min(340px, 92%);
+      background: #0b0b0b;
+      border-left: 1px solid var(--border);
+      z-index: 80;
+      transform: translateX(105%);
+      transition: transform 0.2s ease;
+      box-shadow: -20px 0 55px rgba(0,0,0,0.55);
+      padding: 18px;
+    }
+
+    .menu-panel.open {
+      transform: translateX(0);
+    }
+
+    .menu-panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .menu-panel h3 {
+      color: var(--gold2);
+      margin: 0;
+    }
+
+    .menu-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .menu-list button {
+      text-align: left;
+      border: 1px solid rgba(212,175,55,0.22);
+      background: rgba(255,255,255,0.035);
+      color: var(--text);
+      border-radius: 16px;
+      padding: 14px;
+      cursor: pointer;
+    }
+
+    .reward-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.78);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .reward-modal.show {
+      display: flex;
+    }
+
+    .reward-box {
+      width: min(460px, 100%);
+      background: #101010;
+      border: 1px solid rgba(212,175,55,0.36);
+      border-radius: 28px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+
+    .reward-box h3 {
+      color: var(--gold2);
+      margin-top: 0;
+    }
+
+    .reward-box p {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .loader-ring {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(0,0,0,0.25);
+      border-top-color: #120d00;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 720px) {
+      .hero h2 {
+        font-size: 27px;
       }
 
-      renderGuidedSymbols();
-      updateCharCount();
-    };
-  });
-}
+      .quick-actions {
+        grid-template-columns: 1fr;
+      }
 
-function refreshAccount() {
-  const email = loadEmail();
-  const count = readJournal().length;
-  const premiumUrl = upgradeUrl(email);
+      .field-row {
+        grid-template-columns: 1fr;
+      }
 
-  if (emailEl.value !== email) {
-    emailEl.value = email;
-  }
+      .symbol-grid {
+        grid-template-columns: 1fr;
+      }
 
-  memberLine.textContent = email
-    ? "Email saved • " + count + " dream(s)"
-    : "Local journal mode • " + count + " dream(s)";
+      .app-shell {
+        padding: 14px;
+      }
+    }
+  </style>
+</head>
 
-  if (subscriptionAccount) {
-    subscriptionAccount.href = premiumUrl;
-  }
+<body>
+  <div class="app-shell">
+    <header class="top-bar">
+      <div class="brand">
+        <small>Jamaican True Stories</small>
+        <h1>Dream Interpreter</h1>
+      </div>
 
-  if (accountDreamPackEmail) {
-    accountDreamPackEmail.value = email;
-  }
+      <button class="menu-btn" id="menuBtn" type="button" aria-label="Open menu">☰</button>
+    </header>
 
-  if (accountDreamPackReturn) {
-    accountDreamPackReturn.value = getReturnUrl();
-  }
+    <section class="hero">
+      <h2>Decode your dream with meaning, memory, and spiritual reflection.</h2>
+      <p>
+        Write what you remember. Add the feeling, place, people, and ending when you can.
+        The clearer the dream, the stronger the interpretation.
+      </p>
 
-  if (rewardUpgrade) {
-    rewardUpgrade.href = premiumUrl;
-  }
-}
+      <div class="quick-actions">
+        <button type="button" id="sparkBtn">Start Dream</button>
+        <button type="button" id="guidedBtn">Guided Help</button>
+        <button type="button" id="symbolBtn">Symbols</button>
+      </div>
+    </section>
 
-function exportJournal() {
-  const entries = readJournal();
-  const blob = new Blob([JSON.stringify(entries, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+    <div id="accessStatus" class="access-status"></div>
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "jamaican-dream-journal.json";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+    <main>
+      <section id="decodeScreen" class="screen active">
+        <div class="card">
+          <h3>Enter Your Dream</h3>
 
-  URL.revokeObjectURL(url);
-}
+          <label for="email">Email for access or dream pack</label>
+          <input id="email" type="email" placeholder="you@example.com" autocomplete="email" />
 
-function importJournalFile(file) {
-  if (!file) return;
+          <label for="dream">Dream details</label>
+          <textarea id="dream" maxlength="2000" placeholder="Example: I was walking on a road at night. I felt afraid. A dog started chasing me, then I woke up..."></textarea>
 
-  const reader = new FileReader();
+          <div class="helper-row">
+            <span id="qualityHint">Tip: add more dream detail.</span>
+            <span id="charCount">0/2000</span>
+          </div>
 
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(reader.result);
-      if (!Array.isArray(parsed)) {
-        alert("Invalid journal file.");
+          <div id="guidedPanel" class="guided-panel">
+            <div class="field-row">
+              <div>
+                <label for="emotion">How did you feel?</label>
+                <select id="emotion">
+                  <option value="">Select emotion</option>
+                  <option value="afraid">Afraid</option>
+                  <option value="happy">Happy</option>
+                  <option value="sad">Sad</option>
+                  <option value="confused">Confused</option>
+                  <option value="peaceful">Peaceful</option>
+                  <option value="angry">Angry</option>
+                </select>
+              </div>
+
+              <div>
+                <label for="ending">How did it end?</label>
+                <select id="ending">
+                  <option value="">Select ending</option>
+                  <option value="woke up">I woke up</option>
+                  <option value="escaped">I escaped</option>
+                  <option value="got caught">I got caught</option>
+                  <option value="nothing happened">Nothing happened</option>
+                  <option value="unclear">I do not remember</option>
+                </select>
+              </div>
+            </div>
+
+            <label for="place">Place</label>
+            <input id="place" type="text" placeholder="Old school, house, road, church, water, workplace..." />
+
+            <label for="people">People</label>
+            <input id="people" type="text" placeholder="Mother, father, ex, stranger, friend..." />
+
+            <label>Quick symbols</label>
+            <div id="guidedSymbolChips" class="chip-grid"></div>
+          </div>
+
+          <div id="decodeAd" class="decode-ad">
+            Free access may require a sponsored message before decoding.
+          </div>
+
+          <div class="button-row">
+            <button type="button" class="primary-btn" id="interpret">Decode Dream</button>
+            <button type="button" class="secondary-btn" id="templateBtn">Use Template</button>
+            <button type="button" class="secondary-btn" id="clearBtn">Clear</button>
+          </div>
+        </div>
+
+        <div id="result"></div>
+      </section>
+
+      <section id="journalScreen" class="screen">
+        <div class="card">
+          <h3>Dream Journal</h3>
+          <p>Your decoded dreams are saved on this device.</p>
+
+          <input id="journalSearch" type="search" placeholder="Search journal..." />
+
+          <div class="journal-tools">
+            <button type="button" class="small-btn active" data-journal-filter="all">All</button>
+            <button type="button" class="small-btn" data-journal-filter="favorites">Favorites</button>
+            <button type="button" class="small-btn" data-journal-filter="month">This Month</button>
+            <button type="button" class="small-btn" id="clearJournalSearch">Clear Search</button>
+          </div>
+
+          <div class="journal-tools">
+            <button type="button" class="secondary-btn" id="exportBtn">Export</button>
+            <button type="button" class="secondary-btn" id="importBtn">Import</button>
+            <button type="button" class="secondary-btn" id="clearJournalBtn">Clear Journal</button>
+            <input id="importFile" type="file" accept="application/json" class="hidden" />
+          </div>
+        </div>
+
+        <div id="journalList"></div>
+      </section>
+
+      <section id="symbolsScreen" class="screen">
+        <div class="card">
+          <h3>Symbol Library</h3>
+          <p>Tap a symbol to add it to your dream entry.</p>
+        </div>
+
+        <div id="symbolGrid" class="symbol-grid"></div>
+      </section>
+
+      <section id="accountScreen" class="screen">
+        <div class="card">
+          <h3>Account & Access</h3>
+          <p id="memberLine">Local journal mode</p>
+
+          <a id="subscriptionAccount" class="upgrade-link" href="#">View Access Options</a>
+
+          <form id="accountDreamPackForm" method="GET" action="/upgrade">
+            <input id="accountDreamPackEmail" name="email" type="hidden" />
+            <input id="accountDreamPackReturn" name="return" type="hidden" />
+
+            <div class="button-row">
+              <button type="submit" class="primary-btn" id="accountDreamPackBtn">
+                Get Dream Access
+              </button>
+            </div>
+          </form>
+
+          <div class="button-row">
+            <button type="button" class="secondary-btn" id="newDreamBtn">New Dream</button>
+            <button type="button" class="secondary-btn" id="supportBtn">Support</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="bottom-nav">
+    <button type="button" class="active" data-tab="decode">Decode</button>
+    <button type="button" data-tab="journal">Journal</button>
+    <button type="button" data-tab="symbols">Symbols</button>
+    <button type="button" data-tab="account">Account</button>
+  </nav>
+
+  <aside id="menuPanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-panel-head">
+      <h3>Menu</h3>
+      <button type="button" class="icon-mini" id="closeMenu">×</button>
+    </div>
+
+    <div class="menu-list">
+      <button type="button" data-tab-link="decode">Decode a Dream</button>
+      <button type="button" data-tab-link="journal">Dream Journal</button>
+      <button type="button" data-tab-link="symbols">Symbol Library</button>
+      <button type="button" data-tab-link="account">Account</button>
+    </div>
+  </aside>
+
+  <div id="rewardModal" class="reward-modal" aria-hidden="true">
+    <div class="reward-box">
+      <h3>Watch to Continue</h3>
+      <p>
+        Free dream decoding may include a sponsored message.
+        Wait for the message to complete, then continue your interpretation.
+      </p>
+
+      <p id="rewardCount">Continue available in 5 seconds</p>
+
+      <div class="button-row">
+        <button type="button" class="primary-btn" id="rewardContinue" disabled>
+          Continue Decode
+        </button>
+        <a id="rewardUpgrade" class="secondary-btn" href="#">Skip with Access</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const HOSTED_APP = "https://interpreter.jamaicantruestories.com";
+
+    const API =
+      window.location.origin.includes("localhost") ||
+      window.location.origin.includes("127.0.0.1")
+        ? "http://127.0.0.1:5000"
+        : HOSTED_APP;
+
+    const EMAIL_KEY = "jdi_email";
+    const LEGACY_EMAIL_KEY = "jts_email";
+    const JOURNAL_KEY = "jdi_journal";
+    const SUPPORT_EMAIL = "tinamaccontent@gmail.com";
+
+    function $(id) {
+      return document.getElementById(id);
+    }
+
+    function on(el, event, handler) {
+      if (el) el.addEventListener(event, handler);
+    }
+
+    const emailEl = $("email");
+    const dreamEl = $("dream");
+    const btn = $("interpret");
+    const result = $("result");
+    const accessStatus = $("accessStatus");
+    const charCount = $("charCount");
+    const qualityHint = $("qualityHint");
+    const journalList = $("journalList");
+    const journalSearch = $("journalSearch");
+    const memberLine = $("memberLine");
+    const subscriptionAccount = $("subscriptionAccount");
+    const accountDreamPackForm = $("accountDreamPackForm");
+    const accountDreamPackEmail = $("accountDreamPackEmail");
+    const accountDreamPackReturn = $("accountDreamPackReturn");
+    const accountDreamPackBtn = $("accountDreamPackBtn");
+    const guidedPanel = $("guidedPanel");
+    const emotionEl = $("emotion");
+    const endingEl = $("ending");
+    const placeEl = $("place");
+    const peopleEl = $("people");
+
+    const menuBtn = $("menuBtn");
+    const menuPanel = $("menuPanel");
+    const closeMenu = $("closeMenu");
+
+    const rewardModal = $("rewardModal");
+    const rewardContinue = $("rewardContinue");
+    const rewardCount = $("rewardCount");
+    const rewardUpgrade = $("rewardUpgrade");
+
+    let journalFilter = "all";
+    let selectedGuidedSymbols = [];
+    let rewardReady = false;
+    let rewardTimer = null;
+    let pendingRewardDecode = false;
+
+    const SYMBOLS = [
+      { name: "Dog", icon: "🐕", meaning: "Chasing, pressure, loyalty, warning", key: "dog", category: "animal" },
+      { name: "School", icon: "🏫", meaning: "Past lessons, pressure, memory", key: "school", category: "place" },
+      { name: "Water", icon: "〰️", meaning: "Decision, emotions, spiritual state", key: "water", category: "nature" },
+      { name: "Teeth", icon: "🦷", meaning: "Serious warning, anxiety, loss", key: "teeth", category: "body" },
+      { name: "Falling", icon: "🪂", meaning: "Loss of control, fear, transition", key: "falling", category: "action" },
+      { name: "Money", icon: "💰", meaning: "Opportunity, power, worry", key: "money", category: "object" },
+      { name: "House", icon: "⌂", meaning: "Private life, self, family matter", key: "house", category: "place" },
+      { name: "Snake", icon: "蛇", meaning: "Enemy, opposition, hidden issue", key: "snake", category: "animal" },
+      { name: "Car", icon: "🚗", meaning: "Direction, control, life journey", key: "car", category: "object" },
+      { name: "Hair", icon: "〰", meaning: "Burden, ongoing problem, concern", key: "hair", category: "body" },
+      { name: "Road", icon: "⌁", meaning: "Path, decision, journey", key: "road", category: "place" },
+      { name: "Baby", icon: "✺", meaning: "New beginning, responsibility, fragile matter", key: "baby", category: "people" }
+    ];
+
+    function esc(s) {
+      return String(s || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function normalizeEmail(email) {
+      return String(email || "").trim().toLowerCase();
+    }
+
+    function validEmail(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
+    }
+
+    function saveEmail(email) {
+      const clean = normalizeEmail(email);
+
+      try {
+        if (clean) {
+          localStorage.setItem(EMAIL_KEY, clean);
+          localStorage.setItem(LEGACY_EMAIL_KEY, clean);
+        } else {
+          localStorage.removeItem(EMAIL_KEY);
+        }
+      } catch (e) {}
+
+      refreshAccount();
+    }
+
+    function loadEmail() {
+      try {
+        return normalizeEmail(
+          localStorage.getItem(EMAIL_KEY) ||
+          localStorage.getItem(LEGACY_EMAIL_KEY) ||
+          ""
+        );
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function getReturnUrl() {
+      return window.location.href.split("#")[0];
+    }
+
+    function upgradeUrl(email) {
+      const clean = normalizeEmail(email);
+      return API + "/upgrade?email=" + encodeURIComponent(clean) + "&return=" + encodeURIComponent(getReturnUrl());
+    }
+
+    function readJournal() {
+      try {
+        const raw = localStorage.getItem(JOURNAL_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function writeJournal(entries) {
+      try {
+        localStorage.setItem(JOURNAL_KEY, JSON.stringify(entries.slice(0, 200)));
+      } catch (e) {}
+    }
+
+    function addJournalEntry(entry) {
+      const entries = readJournal();
+      entries.unshift(entry);
+      writeJournal(entries);
+      renderJournal();
+      refreshAccount();
+    }
+
+    function showAccessStatus(html) {
+      if (!accessStatus) return;
+      accessStatus.style.display = "block";
+      accessStatus.innerHTML = html;
+      refreshAds();
+    }
+
+    function hideAccessStatus() {
+      if (!accessStatus) return;
+      accessStatus.style.display = "none";
+      accessStatus.innerHTML = "";
+      refreshAds();
+    }
+
+    function userHasPaidAccess() {
+      const statusText = String(accessStatus?.textContent || "").toLowerCase();
+
+      return (
+        statusText.includes("subscription active") ||
+        statusText.includes("dream pack active")
+      );
+    }
+
+    function refreshAds() {
+      const decodeAd = $("decodeAd");
+      if (!decodeAd) return;
+      decodeAd.classList.toggle("hidden", userHasPaidAccess());
+    }
+
+    function shouldShowRewardAd() {
+      return !userHasPaidAccess();
+    }
+
+    function openRewardModal() {
+      if (!rewardModal || !rewardContinue || !rewardCount) {
+        runInterpretation();
         return;
       }
 
-      const existing = readJournal();
-      const byId = new Map();
+      rewardReady = false;
+      pendingRewardDecode = true;
 
-      [...parsed, ...existing].forEach((entry) => {
-        if (entry && entry.id) {
-          byId.set(entry.id, entry);
+      if (rewardTimer) {
+        clearInterval(rewardTimer);
+        rewardTimer = null;
+      }
+
+      rewardContinue.disabled = true;
+      rewardContinue.textContent = "Continue Decode";
+
+      let seconds = 5;
+      rewardCount.textContent = "Continue available in " + seconds + " seconds";
+
+      if (rewardUpgrade && emailEl) {
+        rewardUpgrade.href = upgradeUrl(emailEl.value);
+      }
+
+      rewardModal.classList.add("show");
+      rewardModal.setAttribute("aria-hidden", "false");
+
+      rewardTimer = setInterval(function () {
+        seconds -= 1;
+
+        if (seconds > 0) {
+          rewardCount.textContent = "Continue available in " + seconds + " seconds";
+          return;
+        }
+
+        clearInterval(rewardTimer);
+        rewardTimer = null;
+        rewardReady = true;
+        rewardCount.textContent = "Sponsored message complete";
+        rewardContinue.disabled = false;
+      }, 1000);
+    }
+
+    function closeRewardModal() {
+      if (!rewardModal) return;
+
+      rewardModal.classList.remove("show");
+      rewardModal.setAttribute("aria-hidden", "true");
+
+      if (rewardTimer) {
+        clearInterval(rewardTimer);
+        rewardTimer = null;
+      }
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll(".screen").forEach((s) => s.classList.remove("active"));
+
+      const screen = $(tab + "Screen");
+      if (screen) screen.classList.add("active");
+
+      document.querySelectorAll(".bottom-nav button").forEach((b) => {
+        b.classList.toggle("active", b.dataset.tab === tab);
+      });
+
+      if (menuPanel) menuPanel.classList.remove("open");
+
+      if (tab === "journal") renderJournal();
+      if (tab === "symbols") renderSymbols();
+      if (tab === "account") refreshAccount();
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function updateCharCount() {
+      if (!dreamEl || !charCount || !qualityHint) return;
+
+      const len = dreamEl.value.length;
+      charCount.textContent = len + "/2000";
+
+      const dream = dreamEl.value.toLowerCase();
+      const emotionValue = emotionEl ? emotionEl.value : "";
+      const endingValue = endingEl ? endingEl.value : "";
+
+      const hasEmotion =
+        emotionValue ||
+        dream.includes("felt") ||
+        dream.includes("afraid") ||
+        dream.includes("happy") ||
+        dream.includes("sad");
+
+      const hasEnding =
+        endingValue ||
+        dream.includes("ended") ||
+        dream.includes("woke") ||
+        dream.includes("escaped");
+
+      if (len < 20) {
+        qualityHint.textContent = "Tip: add more dream detail.";
+      } else if (!hasEmotion) {
+        qualityHint.textContent = "Tip: add how you felt.";
+      } else if (!hasEnding) {
+        qualityHint.textContent = "Tip: add how it ended.";
+      } else {
+        qualityHint.textContent = "Good detail for interpretation.";
+      }
+    }
+
+    function appendDreamText(text) {
+      if (!dreamEl) return;
+
+      const clean = String(text || "").trim();
+
+      dreamEl.value = dreamEl.value.trim()
+        ? dreamEl.value.trim() + "\n" + clean
+        : clean;
+
+      updateCharCount();
+    }
+
+    function formatDate(iso) {
+      try {
+        return new Date(iso).toLocaleString([], {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function shortText(text, max) {
+      const clean = String(text || "").replace(/\s+/g, " ").trim();
+      return clean.length > max ? clean.slice(0, max - 3) + "..." : clean;
+    }
+
+    function buildDreamPayload() {
+      const parts = [];
+
+      const dream = dreamEl ? dreamEl.value.trim() : "";
+      if (dream) parts.push("Dream:\n" + dream);
+
+      if (emotionEl && emotionEl.value) parts.push("Emotion:\n" + emotionEl.value);
+      if (endingEl && endingEl.value) parts.push("Ending:\n" + endingEl.value);
+      if (placeEl && placeEl.value.trim()) parts.push("Place:\n" + placeEl.value.trim());
+      if (peopleEl && peopleEl.value.trim()) parts.push("People:\n" + peopleEl.value.trim());
+      if (selectedGuidedSymbols.length) parts.push("Symbols:\n" + selectedGuidedSymbols.join(", "));
+
+      return parts.join("\n\n").trim();
+    }
+
+    function extractSymbols(data, dreamText) {
+      const facts = data.doctrine_facts || {};
+      const fromApi = Array.isArray(facts.top_symbols) ? facts.top_symbols : [];
+
+      const detected = SYMBOLS
+        .filter((s) => dreamText.toLowerCase().includes(s.key))
+        .map((s) => s.name);
+
+      return [...new Set([...fromApi, ...selectedGuidedSymbols, ...detected])].slice(0, 6);
+    }
+
+    function buildPatternSummary(symbols, emotion) {
+      const entries = readJournal();
+      const counts = {};
+      const emotionCounts = {};
+
+      entries.forEach((entry) => {
+        (entry.matchedSymbols || []).forEach((sym) => {
+          const key = String(sym || "").toLowerCase();
+          counts[key] = (counts[key] || 0) + 1;
+        });
+
+        if (entry.metadata?.emotion) {
+          const e = String(entry.metadata.emotion).toLowerCase();
+          emotionCounts[e] = (emotionCounts[e] || 0) + 1;
         }
       });
 
-      writeJournal(Array.from(byId.values()));
+      const repeated = symbols
+        .map((sym) => {
+          const key = String(sym || "").toLowerCase();
+          return { name: sym, count: counts[key] || 0 };
+        })
+        .filter((x) => x.count > 0)
+        .sort((a, b) => b.count - a.count);
+
+      if (repeated.length) {
+        return `Pattern noticed: ${repeated[0].name} has appeared ${repeated[0].count + 1} time(s), including this dream. Watch whether this symbol keeps returning with the same emotion or ending.`;
+      }
+
+      if (emotion && emotionCounts[String(emotion).toLowerCase()]) {
+        return `Pattern noticed: the emotion "${emotion}" has appeared before in your journal. Compare this dream with earlier dreams that carried the same feeling.`;
+      }
+
+      if (entries.length >= 3) {
+        return "No repeated symbol stands out yet, but your journal is growing enough to begin tracking dream patterns over time.";
+      }
+
+      return "Pattern tracking will become stronger after you save more dreams.";
+    }
+
+    function mapInterpretation(data, dreamText) {
+      const interp = data.interpretation || {};
+      const readable = data.narration?.readable_summary || data.full_interpretation || "";
+      const matchedSymbols = extractSymbols(data, dreamText);
+      const patternSummary = buildPatternSummary(matchedSymbols, emotionEl ? emotionEl.value : "");
+
+      return {
+        mainMeaning: readable || "Your dream has been interpreted.",
+        spiritualWarning: interp.spiritual_meaning || "No specific spiritual warning was returned.",
+        physicalEffects: interp.effects_in_physical_realm || "No specific physical effects were returned.",
+        whatToDo: interp.what_to_do || "Reflect, pray, and pay attention to repeated symbols.",
+        matchedSymbols,
+        patternSummary
+      };
+    }
+
+    function iconSvg(type) {
+      const icons = {
+        main: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 5v14"/><path d="M5 12h14"/></svg>`,
+        warning: `<svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7l8-4z"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>`,
+        body: `<svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>`,
+        action: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>`,
+        pattern: `<svg viewBox="0 0 24 24"><path d="M4 18c4-10 8 0 12-10"/><path d="M16 8h4v4"/><path d="M4 6h.01"/><path d="M8 6h.01"/><path d="M12 6h.01"/></svg>`
+      };
+
+      return icons[type] || icons.main;
+    }
+
+    function resultCard(label, text, icon) {
+      return `
+        <div class="result-card">
+          <div class="result-card-row">
+            <div class="result-icon">${iconSvg(icon)}</div>
+            <div>
+              <div class="label">${esc(label)}</div>
+              <div class="result-text">${esc(text)}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderResultCards(mapped, dreamText, entryId) {
+      if (!result) return;
+
+      const now = new Date().toISOString();
+
+      result.classList.add("show");
+      result.innerHTML = `
+        <div class="card decode-card">
+          <div class="result-head">
+            <div>
+              <h3>Dream Interpretation</h3>
+              <p>${esc(formatDate(now))}</p>
+            </div>
+
+            <div class="result-actions">
+              <button class="small-btn" type="button" id="editDreamBtn">Edit</button>
+              ${entryId ? `<button class="small-btn" type="button" id="favResultBtn">★</button>` : ""}
+            </div>
+          </div>
+
+          <div class="result-text">${esc(shortText(dreamText, 150))}</div>
+
+          ${resultCard("Main Meaning", mapped.mainMeaning, "main")}
+          ${resultCard("Spiritual Warning", mapped.spiritualWarning, "warning")}
+          ${resultCard("Physical Effects", mapped.physicalEffects, "body")}
+          ${resultCard("What To Do", mapped.whatToDo, "action")}
+          ${resultCard("Dream Pattern", mapped.patternSummary, "pattern")}
+
+          <div class="result-card">
+            <div class="label">Matched Symbols</div>
+            <div class="symbol-matches">
+              ${
+                mapped.matchedSymbols.length
+                  ? mapped.matchedSymbols.map((name) => {
+                      const found = SYMBOLS.find((s) => s.name.toLowerCase() === String(name).toLowerCase());
+                      return `
+                        <div class="match-pill">
+                          <strong>${esc(name)}</strong>
+                          <span>${esc(found?.meaning || "Symbol found in your dream.")}</span>
+                        </div>
+                      `;
+                    }).join("")
+                  : `<div class="result-text">No main symbols detected.</div>`
+              }
+            </div>
+          </div>
+        </div>
+      `;
+
+      const editDreamBtn = $("editDreamBtn");
+      if (editDreamBtn && dreamEl) {
+        editDreamBtn.onclick = () => dreamEl.focus();
+      }
+
+      const favBtn = $("favResultBtn");
+      if (favBtn && entryId) {
+        favBtn.onclick = () => toggleFavorite(entryId, true);
+      }
+
+      result.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function renderError(title, message, upgrade) {
+      if (!result) return;
+
+      result.classList.add("show");
+      result.innerHTML = `
+        <div class="result-card error">
+          <div class="label">${esc(title)}</div>
+          <div class="result-text">${esc(message)}</div>
+          ${upgrade ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl ? emailEl.value : ""))}">View Access Options</a>` : ""}
+        </div>
+      `;
+
+      result.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    async function readResponse(res) {
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+
+      if (ct.includes("application/json")) {
+        try {
+          return await res.json();
+        } catch (e) {
+          return {};
+        }
+      }
+
+      try {
+        return { error: await res.text() };
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function renderJournal() {
+      if (!journalList) return;
+
+      const q = String(journalSearch?.value || "").toLowerCase().trim();
+      const now = new Date();
+      const month = now.getMonth();
+      const year = now.getFullYear();
+
+      let entries = readJournal();
+
+      if (journalFilter === "favorites") {
+        entries = entries.filter((e) => e.favorite);
+      }
+
+      if (journalFilter === "month") {
+        entries = entries.filter((e) => {
+          const d = new Date(e.createdAt);
+          return d.getMonth() === month && d.getFullYear() === year;
+        });
+      }
+
+      if (q) {
+        entries = entries.filter((e) =>
+          String(e.dreamText || "").toLowerCase().includes(q) ||
+          String(e.summary || "").toLowerCase().includes(q) ||
+          String((e.matchedSymbols || []).join(" ")).toLowerCase().includes(q) ||
+          String(e.metadata?.emotion || "").toLowerCase().includes(q)
+        );
+      }
+
+      if (!entries.length) {
+        journalList.innerHTML = `<div class="card empty">No saved dreams yet. Decode a dream and it will appear here.</div>`;
+        return;
+      }
+
+      journalList.innerHTML = entries.map((entry) => `
+        <div class="journal-item" data-entry-id="${esc(entry.id)}">
+          <div class="journal-icon">${esc((entry.matchedSymbols || [])[0] || "☾")}</div>
+
+          <button type="button" style="all:unset;cursor:pointer;" data-open-entry="${esc(entry.id)}">
+            <div class="journal-title">${esc(shortText(entry.dreamText, 72))}</div>
+            <div class="journal-date">${esc(formatDate(entry.createdAt))}${entry.metadata?.emotion ? " • " + esc(entry.metadata.emotion) : ""}</div>
+          </button>
+
+          <div class="entry-actions">
+            <button class="icon-mini" type="button" data-favorite-entry="${esc(entry.id)}">${entry.favorite ? "★" : "☆"}</button>
+            <button class="icon-mini danger" type="button" data-delete-entry="${esc(entry.id)}">×</button>
+          </div>
+        </div>
+      `).join("");
+
+      document.querySelectorAll("[data-open-entry]").forEach((item) => {
+        item.onclick = () => openJournalEntry(item.dataset.openEntry);
+      });
+
+      document.querySelectorAll("[data-favorite-entry]").forEach((item) => {
+        item.onclick = (e) => {
+          e.stopPropagation();
+          toggleFavorite(item.dataset.favoriteEntry);
+        };
+      });
+
+      document.querySelectorAll("[data-delete-entry]").forEach((item) => {
+        item.onclick = (e) => {
+          e.stopPropagation();
+          deleteEntry(item.dataset.deleteEntry);
+        };
+      });
+    }
+
+    function openJournalEntry(id) {
+      const entry = readJournal().find((e) => e.id === id);
+      if (!entry || !dreamEl) return;
+
+      switchTab("decode");
+
+      dreamEl.value = entry.dreamText || "";
+      if (emotionEl) emotionEl.value = entry.metadata?.emotion || "";
+      if (endingEl) endingEl.value = entry.metadata?.ending || "";
+      if (placeEl) placeEl.value = entry.metadata?.place || "";
+      if (peopleEl) peopleEl.value = entry.metadata?.people || "";
+
+      selectedGuidedSymbols = entry.metadata?.selectedSymbols || [];
+
+      renderGuidedSymbols();
+      updateCharCount();
+
+      renderResultCards({
+        mainMeaning: entry.interpretation?.mainMeaning || entry.summary || "",
+        spiritualWarning: entry.interpretation?.spiritualWarning || "",
+        physicalEffects: entry.interpretation?.physicalEffects || "",
+        whatToDo: entry.interpretation?.whatToDo || "",
+        matchedSymbols: entry.matchedSymbols || [],
+        patternSummary: entry.interpretation?.patternSummary || buildPatternSummary(entry.matchedSymbols || [], entry.metadata?.emotion)
+      }, entry.dreamText || "", entry.id);
+    }
+
+    function toggleFavorite(id, stayOnDecode) {
+      const entries = readJournal();
+      const found = entries.find((e) => e.id === id);
+
+      if (found) {
+        found.favorite = !found.favorite;
+        writeJournal(entries);
+      }
+
+      renderJournal();
+
+      if (stayOnDecode && found) {
+        alert(found.favorite ? "Added to favorites." : "Removed from favorites.");
+      }
+    }
+
+    function deleteEntry(id) {
+      if (!confirm("Delete this saved dream from your local journal?")) return;
+
+      const entries = readJournal().filter((e) => e.id !== id);
+      writeJournal(entries);
       renderJournal();
       refreshAccount();
-      alert("Journal imported.");
-    } catch (e) {
-      alert("Could not import this journal file.");
     }
-  };
 
-  reader.readAsText(file);
-}
+    function renderSymbols() {
+      const symbolGrid = $("symbolGrid");
+      if (!symbolGrid) return;
 
-async function runInterpretation() {
-  const dream = buildDreamPayload();
-  const rawDream = dreamEl.value.trim();
-  const email = normalizeEmail(emailEl.value);
+      symbolGrid.innerHTML = SYMBOLS.map((s) => `
+        <button class="symbol-card" type="button" data-symbol="${esc(s.key)}">
+          <span class="big">${esc(s.icon)}</span>
+          <strong>${esc(s.name)}</strong>
+          <span>${esc(s.meaning)}</span>
+        </button>
+      `).join("");
 
-  if (!rawDream) {
-    alert("Enter your dream first.");
-    dreamEl.focus();
-    return;
-  }
+      document.querySelectorAll(".symbol-card").forEach((card) => {
+        card.onclick = () => {
+          appendDreamText(card.dataset.symbol);
+          switchTab("decode");
+          if (dreamEl) dreamEl.focus();
+        };
+      });
+    }
 
-  if (email && !validEmail(email)) {
-    switchTab("account");
-    alert("Enter a valid email or clear the email field.");
-    emailEl.focus();
-    return;
-  }
+    function renderGuidedSymbols() {
+      const guidedSymbolChips = $("guidedSymbolChips");
+      if (!guidedSymbolChips) return;
 
-  if (email) {
-    saveEmail(email);
-  }
+      guidedSymbolChips.innerHTML = SYMBOLS.slice(0, 9).map((s) => `
+        <button
+          class="tiny-chip ${selectedGuidedSymbols.includes(s.name) ? "selected" : ""}"
+          type="button"
+          data-guided-symbol="${esc(s.name)}"
+        >
+          ${esc(s.name)}
+        </button>
+      `).join("");
 
-  btn.disabled = true;
-  btn.innerHTML = `<span class="loader-ring"></span> Decoding Dream...`;
-  result.classList.remove("show");
-  result.innerHTML = "";
+      document.querySelectorAll("[data-guided-symbol]").forEach((btnEl) => {
+        btnEl.onclick = () => {
+          const symbol = btnEl.dataset.guidedSymbol;
 
-  try {
-    const res = await fetch(API + "/interpret", {
-      method: "POST",
-      mode: "cors",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify({
-        text: dream,
-        email: email
-      })
+          if (selectedGuidedSymbols.includes(symbol)) {
+            selectedGuidedSymbols = selectedGuidedSymbols.filter((s) => s !== symbol);
+          } else {
+            selectedGuidedSymbols.push(symbol);
+          }
+
+          renderGuidedSymbols();
+          updateCharCount();
+        };
+      });
+    }
+
+    function refreshAccount() {
+      const email = loadEmail();
+      const count = readJournal().length;
+      const premiumUrl = upgradeUrl(email);
+
+      if (emailEl && emailEl.value !== email) {
+        emailEl.value = email;
+      }
+
+      if (memberLine) {
+        memberLine.textContent = email
+          ? "Email saved • " + count + " dream(s)"
+          : "Local journal mode • " + count + " dream(s)";
+      }
+
+      if (subscriptionAccount) {
+        subscriptionAccount.href = premiumUrl;
+      }
+
+      if (accountDreamPackEmail) {
+        accountDreamPackEmail.value = email;
+      }
+
+      if (accountDreamPackReturn) {
+        accountDreamPackReturn.value = getReturnUrl();
+      }
+
+      if (rewardUpgrade) {
+        rewardUpgrade.href = premiumUrl;
+      }
+    }
+
+    function exportJournal() {
+      const entries = readJournal();
+      const blob = new Blob([JSON.stringify(entries, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "jamaican-dream-journal.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      URL.revokeObjectURL(url);
+    }
+
+    function importJournalFile(file) {
+      if (!file) return;
+
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          if (!Array.isArray(parsed)) {
+            alert("Invalid journal file.");
+            return;
+          }
+
+          const existing = readJournal();
+          const byId = new Map();
+
+          [...parsed, ...existing].forEach((entry) => {
+            if (entry && entry.id) {
+              byId.set(entry.id, entry);
+            }
+          });
+
+          writeJournal(Array.from(byId.values()));
+          renderJournal();
+          refreshAccount();
+          alert("Journal imported.");
+        } catch (e) {
+          alert("Could not import this journal file.");
+        }
+      };
+
+      reader.readAsText(file);
+    }
+
+    async function runInterpretation() {
+      if (!dreamEl || !btn) return;
+
+      const dream = buildDreamPayload();
+      const rawDream = dreamEl.value.trim();
+      const email = normalizeEmail(emailEl ? emailEl.value : "");
+
+      if (!rawDream) {
+        alert("Enter your dream first.");
+        dreamEl.focus();
+        return;
+      }
+
+      if (email && !validEmail(email)) {
+        switchTab("account");
+        alert("Enter a valid email or clear the email field.");
+        if (emailEl) emailEl.focus();
+        return;
+      }
+
+      if (email) {
+        saveEmail(email);
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = `<span class="loader-ring"></span> Decoding Dream...`;
+
+      if (result) {
+        result.classList.remove("show");
+        result.innerHTML = "";
+      }
+
+      try {
+        const res = await fetch(API + "/interpret", {
+          method: "POST",
+          mode: "cors",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({
+            text: dream,
+            email: email
+          })
+        });
+
+        const data = await readResponse(res);
+
+        if (res.status === 402) {
+          window.location.href = upgradeUrl(email);
+          return;
+        }
+
+        if (!res.ok) {
+          renderError(
+            "Interpreter Error",
+            data.error || data.message || data.details || "Something went wrong calling the interpreter API.",
+            false
+          );
+          return;
+        }
+
+        if (data.is_paid) {
+          showAccessStatus("<strong>Access:</strong> Subscription active.");
+        } else if (data.dream_pack?.active) {
+          showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining.");
+        } else if (typeof data.free_uses_left === "number") {
+          showAccessStatus("<strong>Access:</strong> Free mode • " + esc(String(data.free_uses_left)) + " free use(s) left.");
+        }
+
+        const mapped = mapInterpretation(data, dream);
+        const entryId = "dream_" + Date.now();
+
+        const entry = {
+          id: entryId,
+          createdAt: new Date().toISOString(),
+          dreamText: rawDream,
+          fullPrompt: dream,
+          summary: mapped.mainMeaning,
+          interpretation: mapped,
+          matchedSymbols: mapped.matchedSymbols,
+          favorite: false,
+          metadata: {
+            emotion: emotionEl ? emotionEl.value : "",
+            ending: endingEl ? endingEl.value : "",
+            place: placeEl ? placeEl.value.trim() : "",
+            people: peopleEl ? peopleEl.value.trim() : "",
+            selectedSymbols: selectedGuidedSymbols.slice()
+          },
+          source: "api",
+          accessType: data.is_paid ? "subscription" : data.dream_pack?.active ? "pack" : "free"
+        };
+
+        addJournalEntry(entry);
+        renderResultCards(mapped, rawDream, entryId);
+      } catch (error) {
+        renderError(
+          "Network Error",
+          "Could not reach the interpretation service. Please try again.",
+          false
+        );
+        console.error(error);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = "Decode Dream";
+        refreshAds();
+      }
+    }
+
+    on(menuBtn, "click", () => {
+      if (menuPanel) menuPanel.classList.add("open");
     });
 
-    const data = await readResponse(res);
+    on(closeMenu, "click", () => {
+      if (menuPanel) menuPanel.classList.remove("open");
+    });
 
-    if (res.status === 402) {
-      window.location.href = upgradeUrl(email);
-      return;
-    }
+    document.querySelectorAll("[data-tab]").forEach((button) => {
+      button.onclick = () => switchTab(button.dataset.tab);
+    });
 
-    if (!res.ok) {
-      renderError(
-        "Interpreter Error",
-        data.error || data.message || data.details || "Something went wrong calling the interpreter API.",
-        false
+    document.querySelectorAll("[data-tab-link]").forEach((link) => {
+      link.onclick = (e) => {
+        e.preventDefault();
+        switchTab(link.dataset.tabLink);
+      };
+    });
+
+    on($("sparkBtn"), "click", () => {
+      switchTab("decode");
+      if (dreamEl) dreamEl.focus();
+    });
+
+    on($("guidedBtn"), "click", () => {
+      if (guidedPanel) guidedPanel.classList.toggle("open");
+    });
+
+    on($("symbolBtn"), "click", () => {
+      switchTab("symbols");
+    });
+
+    on($("templateBtn"), "click", () => {
+      if (!dreamEl) return;
+
+      dreamEl.value = "I was in [place] with [person]. I felt [emotion]. Then [main event]. At the end, [ending].";
+      updateCharCount();
+      dreamEl.focus();
+    });
+
+    on($("clearBtn"), "click", () => {
+      if (dreamEl) dreamEl.value = "";
+      if (emotionEl) emotionEl.value = "";
+      if (endingEl) endingEl.value = "";
+      if (placeEl) placeEl.value = "";
+      if (peopleEl) peopleEl.value = "";
+
+      selectedGuidedSymbols = [];
+      renderGuidedSymbols();
+      updateCharCount();
+
+      if (result) {
+        result.classList.remove("show");
+        result.innerHTML = "";
+      }
+
+      if (dreamEl) dreamEl.focus();
+    });
+
+    on($("newDreamBtn"), "click", () => {
+      switchTab("decode");
+      if (dreamEl) dreamEl.focus();
+    });
+
+    on(emailEl, "input", () => saveEmail(emailEl.value));
+    on(emailEl, "blur", () => saveEmail(emailEl.value));
+    on(dreamEl, "input", updateCharCount);
+    on(journalSearch, "input", renderJournal);
+
+    on($("clearJournalSearch"), "click", () => {
+      if (journalSearch) journalSearch.value = "";
+      renderJournal();
+    });
+
+    document.querySelectorAll("[data-journal-filter]").forEach((button) => {
+      button.onclick = () => {
+        journalFilter = button.dataset.journalFilter;
+        document.querySelectorAll("[data-journal-filter]").forEach((b) => b.classList.remove("active"));
+        button.classList.add("active");
+        renderJournal();
+      };
+    });
+
+    on($("exportBtn"), "click", exportJournal);
+
+    on($("importBtn"), "click", () => {
+      const importFile = $("importFile");
+      if (importFile) importFile.click();
+    });
+
+    on($("importFile"), "change", (e) => {
+      importJournalFile(e.target.files[0]);
+      e.target.value = "";
+    });
+
+    on($("clearJournalBtn"), "click", () => {
+      if (confirm("Clear all dream journal entries saved in this browser?")) {
+        writeJournal([]);
+        renderJournal();
+        refreshAccount();
+      }
+    });
+
+    on($("supportBtn"), "click", () => {
+      const email = normalizeEmail(emailEl ? emailEl.value : "");
+      const subject = encodeURIComponent("Jamaican Dream Interpreter Support");
+      const body = encodeURIComponent(
+        "Hello,\n\nI need help with the Jamaican Dream Interpreter.\n\nMy account email: " +
+          (email || "[enter email here]") +
+          "\n\nIssue:\n"
       );
-      return;
+
+      window.location.href = "mailto:" + SUPPORT_EMAIL + "?subject=" + subject + "&body=" + body;
+    });
+
+    if (accountDreamPackForm) {
+      accountDreamPackForm.addEventListener("submit", function (e) {
+        const email = normalizeEmail(emailEl ? emailEl.value : "");
+
+        if (!email) {
+          e.preventDefault();
+          switchTab("account");
+          alert("Enter your email before checkout.");
+          if (emailEl) emailEl.focus();
+          return;
+        }
+
+        if (!validEmail(email)) {
+          e.preventDefault();
+          switchTab("account");
+          alert("Enter a valid email before checkout.");
+          if (emailEl) emailEl.focus();
+          return;
+        }
+
+        saveEmail(email);
+
+        if (accountDreamPackEmail) accountDreamPackEmail.value = email;
+        if (accountDreamPackReturn) accountDreamPackReturn.value = getReturnUrl();
+
+        if (accountDreamPackBtn) {
+          accountDreamPackBtn.disabled = true;
+          accountDreamPackBtn.innerHTML = `<span class="loader-ring"></span> Redirecting...`;
+        }
+      });
     }
 
-    if (data.is_paid) {
-      showAccessStatus("<strong>Access:</strong> Subscription active.");
-    } else if (data.dream_pack?.active) {
-      showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining.");
-    } else if (typeof data.free_uses_left === "number") {
-      showAccessStatus("<strong>Access:</strong> Free mode • " + esc(String(data.free_uses_left)) + " free use(s) left.");
+    on(btn, "click", async () => {
+      if (!dreamEl) return;
+
+      const rawDream = dreamEl.value.trim();
+
+      if (!rawDream) {
+        alert("Enter your dream first.");
+        dreamEl.focus();
+        return;
+      }
+
+      if (shouldShowRewardAd()) {
+        openRewardModal();
+        return;
+      }
+
+      await runInterpretation();
+    });
+
+    on(rewardContinue, "click", async () => {
+      if (!rewardReady || !pendingRewardDecode) return;
+
+      closeRewardModal();
+      pendingRewardDecode = false;
+
+      await runInterpretation();
+    });
+
+    on(rewardModal, "click", (e) => {
+      if (e.target === rewardModal) {
+        closeRewardModal();
+        pendingRewardDecode = false;
+      }
+    });
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/static/service-worker.js").catch(() => {});
+      });
     }
 
-    const mapped = mapInterpretation(data, dream);
-    const entryId = "dream_" + Date.now();
+    const savedEmail = loadEmail();
 
-    const entry = {
-      id: entryId,
-      createdAt: new Date().toISOString(),
-      dreamText: rawDream,
-      fullPrompt: dream,
-      summary: mapped.mainMeaning,
-      interpretation: mapped,
-      matchedSymbols: mapped.matchedSymbols,
-      favorite: false,
-      metadata: {
-        emotion: emotionEl.value,
-        ending: endingEl.value,
-        place: placeEl.value.trim(),
-        people: peopleEl.value.trim(),
-        selectedSymbols: selectedGuidedSymbols.slice()
-      },
-      source: "api",
-      accessType: data.is_paid ? "subscription" : data.dream_pack?.active ? "pack" : "free"
-    };
+    if (savedEmail && emailEl) {
+      emailEl.value = savedEmail;
+      showAccessStatus("<strong>Email saved:</strong> " + esc(savedEmail));
+    } else {
+      hideAccessStatus();
+    }
 
-    addJournalEntry(entry);
-    renderResultCards(mapped, rawDream, entryId);
-  } catch (error) {
-    renderError(
-      "Network Error",
-      "Could not reach the interpretation service. Please try again.",
-      false
-    );
-    console.error(error);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = "Decode Dream";
-    refreshAds();
-  }
-}
-
-menuBtn.onclick = () => menuPanel.classList.add("open");
-closeMenu.onclick = () => menuPanel.classList.remove("open");
-
-document.querySelectorAll("[data-tab]").forEach((button) => {
-  button.onclick = () => switchTab(button.dataset.tab);
-});
-
-document.querySelectorAll("[data-tab-link]").forEach((link) => {
-  link.onclick = (e) => {
-    e.preventDefault();
-    switchTab(link.dataset.tabLink);
-  };
-});
-
-document.getElementById("sparkBtn").onclick = () => {
-  switchTab("decode");
-  dreamEl.focus();
-};
-
-document.getElementById("guidedBtn").onclick = () => {
-  guidedPanel.classList.toggle("open");
-};
-
-document.getElementById("symbolBtn").onclick = () => {
-  switchTab("symbols");
-};
-
-document.getElementById("templateBtn").onclick = () => {
-  dreamEl.value = "I was in [place] with [person]. I felt [emotion]. Then [main event]. At the end, [ending].";
-  updateCharCount();
-  dreamEl.focus();
-};
-
-document.getElementById("clearBtn").onclick = () => {
-  dreamEl.value = "";
-  emotionEl.value = "";
-  endingEl.value = "";
-  placeEl.value = "";
-  peopleEl.value = "";
-  selectedGuidedSymbols = [];
-  renderGuidedSymbols();
-  updateCharCount();
-  result.classList.remove("show");
-  result.innerHTML = "";
-  dreamEl.focus();
-};
-
-document.getElementById("newDreamBtn").onclick = () => {
-  switchTab("decode");
-  dreamEl.focus();
-};
-
-emailEl.addEventListener("input", () => saveEmail(emailEl.value));
-emailEl.addEventListener("blur", () => saveEmail(emailEl.value));
-dreamEl.addEventListener("input", updateCharCount);
-journalSearch.addEventListener("input", renderJournal);
-
-document.getElementById("clearJournalSearch").onclick = () => {
-  journalSearch.value = "";
-  renderJournal();
-};
-
-document.querySelectorAll("[data-journal-filter]").forEach((button) => {
-  button.onclick = () => {
-    journalFilter = button.dataset.journalFilter;
-    document.querySelectorAll("[data-journal-filter]").forEach((b) => b.classList.remove("active"));
-    button.classList.add("active");
-    renderJournal();
-  };
-});
-
-document.getElementById("exportBtn").onclick = exportJournal;
-document.getElementById("importBtn").onclick = () => {
-  document.getElementById("importFile").click();
-};
-
-document.getElementById("importFile").addEventListener("change", (e) => {
-  importJournalFile(e.target.files[0]);
-  e.target.value = "";
-});
-
-document.getElementById("clearJournalBtn").onclick = () => {
-  if (confirm("Clear all dream journal entries saved in this browser?")) {
-    writeJournal([]);
+    updateCharCount();
+    renderGuidedSymbols();
+    renderSymbols();
     renderJournal();
     refreshAccount();
-  }
-};
-
-document.getElementById("supportBtn").onclick = () => {
-  const email = normalizeEmail(emailEl.value);
-  const subject = encodeURIComponent("Jamaican Dream Interpreter Support");
-  const body = encodeURIComponent(
-    "Hello,\n\nI need help with the Jamaican Dream Interpreter.\n\nMy account email: " +
-      (email || "[enter email here]") +
-      "\n\nIssue:\n"
-  );
-
-  window.location.href = "mailto:" + SUPPORT_EMAIL + "?subject=" + subject + "&body=" + body;
-};
-
-if (accountDreamPackForm) {
-  accountDreamPackForm.addEventListener("submit", function (e) {
-    const email = normalizeEmail(emailEl.value);
-
-    if (!email) {
-      e.preventDefault();
-      switchTab("account");
-      alert("Enter your email before checkout.");
-      emailEl.focus();
-      return;
-    }
-
-    if (!validEmail(email)) {
-      e.preventDefault();
-      switchTab("account");
-      alert("Enter a valid email before checkout.");
-      emailEl.focus();
-      return;
-    }
-
-    saveEmail(email);
-    accountDreamPackEmail.value = email;
-    accountDreamPackReturn.value = getReturnUrl();
-    accountDreamPackBtn.disabled = true;
-    accountDreamPackBtn.innerHTML = `<span class="loader-ring"></span> Redirecting...`;
-  });
-}
-
-btn.onclick = async () => {
-  const rawDream = dreamEl.value.trim();
-
-  if (!rawDream) {
-    alert("Enter your dream first.");
-    dreamEl.focus();
-    return;
-  }
-
-  if (shouldShowRewardAd()) {
-    openRewardModal();
-    return;
-  }
-
-  await runInterpretation();
-};
-
-rewardContinue.onclick = async () => {
-  if (!rewardReady || !pendingRewardDecode) return;
-
-  closeRewardModal();
-  pendingRewardDecode = false;
-
-  await runInterpretation();
-};
-
-rewardModal.addEventListener("click", (e) => {
-  if (e.target === rewardModal) {
-    closeRewardModal();
-    pendingRewardDecode = false;
-  }
-});
-
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/static/service-worker.js").catch(() => {});
-  });
-}
-
-const savedEmail = loadEmail();
-
-if (savedEmail) {
-  emailEl.value = savedEmail;
-  showAccessStatus("<strong>Email saved:</strong> " + esc(savedEmail));
-} else {
-  hideAccessStatus();
-}
-
-updateCharCount();
-renderGuidedSymbols();
-renderSymbols();
-renderJournal();
-refreshAccount();
-refreshAds();
-</script>
+    refreshAds();
+  </script>
+</body>
+</html>

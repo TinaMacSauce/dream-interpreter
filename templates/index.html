@@ -10,8 +10,8 @@ const API =
 const EMAIL_KEY = "jdi_email";
 const LEGACY_EMAIL_KEY = "jts_email";
 const JOURNAL_KEY = "jdi_journal";
+
 const SUPPORT_EMAIL = "tinamaccontent@gmail.com";
-const REWARDED_AD_ID = "ca-app-pub-2148520143702642/6436071510";
 
 const emailEl = document.getElementById("email");
 const dreamEl = document.getElementById("dream");
@@ -42,15 +42,12 @@ const rewardModal = document.getElementById("rewardModal");
 const rewardContinue = document.getElementById("rewardContinue");
 const rewardCount = document.getElementById("rewardCount");
 const rewardUpgrade = document.getElementById("rewardUpgrade");
-const rewardAdSpace = document.getElementById("rewardAdSpace");
 
 let journalFilter = "all";
 let selectedGuidedSymbols = [];
 let rewardReady = false;
 let rewardTimer = null;
 let pendingRewardDecode = false;
-let nativeRewardInProgress = false;
-let rewardListeners = [];
 
 const SYMBOLS = [
   { name: "Dog", icon: "🐕", meaning: "Chasing, pressure, loyalty, warning", key: "dog", category: "animal" },
@@ -167,17 +164,14 @@ function userHasPaidAccess() {
 
 function refreshAds() {
   const decodeAd = document.getElementById("decodeAd");
+
   if (!decodeAd) return;
+
   decodeAd.classList.toggle("hidden", userHasPaidAccess());
 }
 
 function shouldShowRewardAd() {
   return !userHasPaidAccess();
-}
-
-function setRewardSpace(message) {
-  if (!rewardAdSpace) return;
-  rewardAdSpace.innerHTML = esc(message);
 }
 
 function openRewardModal() {
@@ -191,12 +185,28 @@ function openRewardModal() {
 
   rewardContinue.disabled = true;
   rewardContinue.textContent = "Continue Decode";
-  rewardCount.textContent = "Loading sponsored message...";
+
+  let seconds = 5;
+  rewardCount.textContent = "Continue available in " + seconds + " seconds";
   rewardUpgrade.href = upgradeUrl(emailEl.value);
-  setRewardSpace("Rewarded video will open now.");
 
   rewardModal.classList.add("show");
   rewardModal.setAttribute("aria-hidden", "false");
+
+  rewardTimer = setInterval(function () {
+    seconds -= 1;
+
+    if (seconds > 0) {
+      rewardCount.textContent = "Continue available in " + seconds + " seconds";
+      return;
+    }
+
+    clearInterval(rewardTimer);
+    rewardTimer = null;
+    rewardReady = true;
+    rewardCount.textContent = "Sponsored message complete";
+    rewardContinue.disabled = false;
+  }, 1000);
 }
 
 function closeRewardModal() {
@@ -207,76 +217,6 @@ function closeRewardModal() {
     clearInterval(rewardTimer);
     rewardTimer = null;
   }
-}
-
-async function clearRewardListeners() {
-  const oldListeners = rewardListeners.slice();
-  rewardListeners = [];
-  await Promise.all(
-    oldListeners.map(async (listener) => {
-      try {
-        await listener.remove();
-      } catch (e) {}
-    })
-  );
-}
-
-async function showNativeRewardedAd() {
-  if (nativeRewardInProgress) return false;
-
-  const admob = window.Capacitor?.Plugins?.AdMob;
-  if (!admob) {
-    rewardCount.textContent = "Ad system not available in browser preview.";
-    setRewardSpace("Open this page inside the Android app to test rewarded ads.");
-    return false;
-  }
-
-  nativeRewardInProgress = true;
-  rewardReady = false;
-
-  await clearRewardListeners();
-
-  return new Promise(async (resolve) => {
-    let earned = false;
-    let finished = false;
-
-    try {
-      const rewardListener = await admob.addListener("onRewardedVideoAdReward", () => {
-        earned = true;
-        rewardReady = true;
-        rewardCount.textContent = "Reward earned.";
-      });
-
-      const dismissListener = await admob.addListener("onRewardedVideoAdDismissed", async () => {
-        if (finished) return;
-        finished = true;
-        nativeRewardInProgress = false;
-        await clearRewardListeners();
-        resolve(earned);
-      });
-
-      rewardListeners.push(rewardListener, dismissListener);
-
-      rewardCount.textContent = "Loading sponsored message...";
-      setRewardSpace("Preparing rewarded ad...");
-
-      await admob.prepareRewardVideoAd({
-        adId: REWARDED_AD_ID,
-        isTesting: false
-      });
-
-      rewardCount.textContent = "Sponsored message playing...";
-      setRewardSpace("Rewarded ad is playing full screen.");
-      await admob.showRewardVideoAd();
-    } catch (error) {
-      nativeRewardInProgress = false;
-      await clearRewardListeners();
-      console.warn("Rewarded ad failed:", error);
-      rewardCount.textContent = "Ad could not load right now.";
-      setRewardSpace("Please try again in a moment.");
-      resolve(false);
-    }
-  });
 }
 
 function switchTab(tab) {
@@ -1035,53 +975,25 @@ btn.onclick = async () => {
     return;
   }
 
-  if (!shouldShowRewardAd()) {
-    await runInterpretation();
+  if (shouldShowRewardAd()) {
+    openRewardModal();
     return;
   }
 
-  openRewardModal();
-
-  const rewarded = await showNativeRewardedAd();
-
-  if (rewarded) {
-    closeRewardModal();
-    pendingRewardDecode = false;
-    await runInterpretation();
-    return;
-  }
-
-  rewardReady = false;
-  rewardCount.textContent = "Ad not completed. Tap below to try again.";
-  setRewardSpace("Reward not earned yet.");
-  rewardContinue.disabled = false;
-  rewardContinue.textContent = "Try Again";
+  await runInterpretation();
 };
 
 rewardContinue.onclick = async () => {
-  if (!pendingRewardDecode) return;
+  if (!rewardReady || !pendingRewardDecode) return;
 
-  rewardContinue.disabled = true;
-  rewardContinue.textContent = "Loading...";
+  closeRewardModal();
+  pendingRewardDecode = false;
 
-  const rewarded = await showNativeRewardedAd();
-
-  if (rewarded) {
-    closeRewardModal();
-    pendingRewardDecode = false;
-    await runInterpretation();
-    return;
-  }
-
-  rewardReady = false;
-  rewardCount.textContent = "Ad not completed. Tap below to try again.";
-  setRewardSpace("Reward not earned yet.");
-  rewardContinue.disabled = false;
-  rewardContinue.textContent = "Try Again";
+  await runInterpretation();
 };
 
 rewardModal.addEventListener("click", (e) => {
-  if (e.target === rewardModal && !nativeRewardInProgress) {
+  if (e.target === rewardModal) {
     closeRewardModal();
     pendingRewardDecode = false;
   }

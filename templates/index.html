@@ -96,26 +96,25 @@ button{
 
 .app{
   width:100%;
-  max-width:430px;
+  max-width:none;
   min-height:100svh;
-  margin:0 auto;
+  margin:0;
   padding:max(13px, env(safe-area-inset-top)) 18px 148px;
   position:relative;
   isolation:isolate;
+  overflow:hidden;
 }
 
 .app::before{
   content:"";
-  position:absolute;
-  top:0;
-  left:0;
-  right:0;
-  height:230px;
+  position:fixed;
+  inset:0;
+  min-height:100svh;
   background:
-    radial-gradient(circle at 50% 4%, rgba(63,191,117,.055), transparent 42%),
-    linear-gradient(180deg, rgba(2,3,3,.04), rgba(2,3,3,.62)),
-    url("/static/palm-hero.png") top center / cover no-repeat;
-  opacity:.38;
+    radial-gradient(circle at 50% 0%, rgba(212,175,55,.14), transparent 34%),
+    linear-gradient(180deg, rgba(2,3,3,.20), rgba(2,3,3,.82) 54%, rgba(2,2,2,.96)),
+    url("/static/palm-hero.png") center top / cover no-repeat;
+  opacity:.52;
   pointer-events:none;
   z-index:0;
 }
@@ -123,6 +122,51 @@ button{
 .app > *{
   position:relative;
   z-index:1;
+}
+
+.app > .topbar,
+.app > .screen{
+  width:100%;
+  max-width:430px;
+  margin-left:auto;
+  margin-right:auto;
+}
+
+@media(min-width:768px){
+  .app{
+    padding-left:32px;
+    padding-right:32px;
+  }
+
+  .app > .topbar,
+  .app > .screen{
+    max-width:620px;
+  }
+
+  .decode-card{
+    padding:22px;
+  }
+
+  textarea{
+    min-height:175px;
+  }
+
+  .app::before{
+    background-size:cover;
+    background-position:center top;
+    opacity:.62;
+  }
+}
+
+@media(min-width:1100px){
+  .app > .topbar,
+  .app > .screen{
+    max-width:680px;
+  }
+
+  .app::before{
+    background-position:center top;
+  }
 }
 
 /* MENU */

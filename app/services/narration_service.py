@@ -12,6 +12,24 @@ def _safe_text(value: Any) -> str:
     return "" if value is None else str(value).strip()
 
 
+def _display_text(value: Any) -> str:
+    """
+    Converts internal machine keys into clean user-facing text.
+
+    Example:
+    teeth_falling_out -> teeth falling out
+    old-school -> old school
+    """
+    text = _safe_text(value)
+    if not text:
+        return ""
+
+    text = text.replace("_", " ").replace("-", " ")
+    text = " ".join(text.split()).strip()
+
+    return text
+
+
 def _sentence(text: str) -> str:
     text = " ".join((text or "").split()).strip()
     if not text:
@@ -39,7 +57,7 @@ def _semantic_key(text: str) -> str:
     return " ".join(out.split())
 
 
-def _normalize_list(items: Any, max_items: int = 3) -> List[str]:
+def _normalize_list(items: Any, max_items: int = 3, display: bool = True) -> List[str]:
     out: List[str] = []
     seen = set()
 
@@ -49,7 +67,9 @@ def _normalize_list(items: Any, max_items: int = 3) -> List[str]:
     for item in items or []:
         if isinstance(item, dict):
             item = item.get("name") or item.get("symbol") or item.get("value") or ""
-        item = _clean(item)
+
+        item = _display_text(item) if display else _clean(item)
+
         if not item:
             continue
 
@@ -117,6 +137,8 @@ def _phrase_to_natural_clause(text: str) -> str:
     for old, new in replacements:
         out = out.replace(old, new)
 
+    out = out.replace("_", " ").replace("-", " ")
+
     return " ".join(out.split()).strip()
 
 
@@ -153,15 +175,6 @@ def _get_event_summary(doctrine_facts: Dict[str, Any]) -> str:
 
 
 def _event_value(event_context: Dict[str, Any], section: str, field: str = "") -> str:
-    """
-    Safe event value getter.
-
-    Handles:
-    primary_action = {"name": "..."}
-    primary_subject = "dog"
-    primary_place = {"name": "..."}
-    primary_ending = {"name": "escaped"}
-    """
     if not isinstance(event_context, dict):
         return ""
 
@@ -192,17 +205,23 @@ def _build_event_lead_sentence(
     lead_message = _safe_text(lead_message)
 
     if lead_message and _is_attack_or_impersonation_text(lead_message):
-        return _sentence(lead_message)
+        return _sentence(_phrase_to_natural_clause(lead_message))
 
     if lead_message and _is_emotion_reversal_text(lead_message):
-        return _sentence(lead_message)
+        return _sentence(_phrase_to_natural_clause(lead_message))
 
-    action_name = _event_value(event_context, "primary_action", "name")
-    action_meaning = _event_value(event_context, "primary_action", "meaning")
-    subject = _event_value(event_context, "primary_subject", "name")
-    place_meaning = _event_value(event_context, "primary_place", "meaning")
-    ending_name = _event_value(event_context, "primary_ending", "name")
-    ending_meaning = _event_value(event_context, "primary_ending", "meaning")
+    action_name = _display_text(_event_value(event_context, "primary_action", "name"))
+    action_meaning = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_action", "meaning")
+    )
+    subject = _display_text(_event_value(event_context, "primary_subject", "name"))
+    place_meaning = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_place", "meaning")
+    )
+    ending_name = _display_text(_event_value(event_context, "primary_ending", "name"))
+    ending_meaning = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_ending", "meaning")
+    )
 
     if action_name:
         if subject and place_meaning:
@@ -221,7 +240,9 @@ def _build_event_lead_sentence(
             )
 
         if action_meaning:
-            return _sentence(f"This dream centers on {action_name}, which points to {action_meaning}")
+            return _sentence(
+                f"This dream centers on {action_name}, which points to {action_meaning}"
+            )
 
         return _sentence(f"This dream centers on {action_name}")
 
@@ -244,14 +265,14 @@ def _build_event_lead_sentence(
         if " points to " in lead_n:
             right = lead_message.split(" points to ", 1)[1].strip()
             if right:
-                return _sentence(f"This dream points to {right}")
+                return _sentence(f"This dream points to {_phrase_to_natural_clause(right)}")
 
         if " suggests " in lead_n:
             right = lead_message.split(" suggests ", 1)[1].strip()
             if right:
-                return _sentence(f"This dream points to {right}")
+                return _sentence(f"This dream points to {_phrase_to_natural_clause(right)}")
 
-        return _sentence(f"This dream points to {lead_message}")
+        return _sentence(f"This dream points to {_phrase_to_natural_clause(lead_message)}")
 
     if ending_name and ending_meaning:
         return _sentence(f"The ending of this dream points to {ending_meaning}")
@@ -260,30 +281,37 @@ def _build_event_lead_sentence(
 
 
 def _build_action_sentence(event_context: Dict[str, Any], behavior_meaning: str) -> str:
-    action_name = _event_value(event_context, "primary_action", "name")
-    action_meaning = _event_value(event_context, "primary_action", "meaning")
+    action_name = _display_text(_event_value(event_context, "primary_action", "name"))
+    action_meaning = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_action", "meaning")
+    )
 
-    meaning = action_meaning or behavior_meaning
+    meaning = action_meaning or _phrase_to_natural_clause(behavior_meaning)
+
     if not action_name and not meaning:
         return ""
 
     if action_name and meaning:
-        return _sentence(f"The action is the strongest part: {action_name} points to {_phrase_to_natural_clause(meaning)}")
+        return _sentence(
+            f"The action is the strongest part: {action_name} points to {meaning}"
+        )
 
     if action_name:
         return _sentence(f"The action is the strongest part: {action_name}")
 
-    return _sentence(f"The action in the dream points to {_phrase_to_natural_clause(meaning)}")
+    return _sentence(f"The action in the dream points to {meaning}")
 
 
 def _build_subject_sentence(event_context: Dict[str, Any], top_symbols: List[str]) -> str:
-    subject = _event_value(event_context, "primary_subject", "name")
+    subject = _display_text(_event_value(event_context, "primary_subject", "name"))
     subjects = event_context.get("subjects", []) if isinstance(event_context, dict) else []
     subjects = subjects or top_symbols or []
     subjects = _normalize_list(subjects, max_items=max(1, Config.NARRATION_MAX_SYMBOLS))
 
     if subject:
-        return _sentence(f"The main subject is {subject}, so it adds detail to what the action is touching")
+        return _sentence(
+            f"The main subject is {subject}, so it adds detail to what the action is touching"
+        )
 
     if len(subjects) == 1:
         return _sentence(f"The main subject in the dream is {subjects[0]}")
@@ -295,25 +323,31 @@ def _build_subject_sentence(event_context: Dict[str, Any], top_symbols: List[str
 
 
 def _build_place_sentence(event_context: Dict[str, Any], location_meaning: str) -> str:
-    place_name = _event_value(event_context, "primary_place", "name")
-    place_meaning = _event_value(event_context, "primary_place", "meaning")
-    place_physical = _event_value(event_context, "primary_place", "physical_area")
+    place_name = _display_text(_event_value(event_context, "primary_place", "name"))
+    place_meaning = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_place", "meaning")
+    )
+    place_physical = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_place", "physical_area")
+    )
 
-    meaning = place_meaning or location_meaning
+    meaning = place_meaning or _phrase_to_natural_clause(location_meaning)
 
     if not place_name and not meaning:
         return ""
 
     if place_name and meaning:
-        text = f"The place matters: {place_name} points to {_phrase_to_natural_clause(meaning)}"
+        text = f"The place matters: {place_name} points to {meaning}"
         if place_physical:
             text += f", especially around {place_physical}"
         return _sentence(text)
 
     if place_name:
-        return _sentence(f"The place matters: {place_name} gives context to where this issue is showing up")
+        return _sentence(
+            f"The place matters: {place_name} gives context to where this issue is showing up"
+        )
 
-    return _sentence(f"The setting connects this dream to {_phrase_to_natural_clause(meaning)}")
+    return _sentence(f"The setting connects this dream to {meaning}")
 
 
 def _build_state_relationship_sentence(
@@ -321,26 +355,40 @@ def _build_state_relationship_sentence(
     state_meaning: str,
     relationship_meaning: str,
 ) -> str:
-    state_name = _event_value(event_context, "primary_state", "name")
-    state_event_meaning = _event_value(event_context, "primary_state", "meaning")
-    relationship_name = _event_value(event_context, "primary_relationship", "name")
-    relationship_event_meaning = _event_value(event_context, "primary_relationship", "meaning")
+    state_name = _display_text(_event_value(event_context, "primary_state", "name"))
+    state_event_meaning = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_state", "meaning")
+    )
+    relationship_name = _display_text(
+        _event_value(event_context, "primary_relationship", "name")
+    )
+    relationship_event_meaning = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_relationship", "meaning")
+    )
 
     clauses: List[str] = []
 
-    final_state_meaning = state_event_meaning or state_meaning
-    if final_state_meaning and not _should_skip_placeholder(final_state_meaning, ["condition attached to the message"]):
+    final_state_meaning = state_event_meaning or _phrase_to_natural_clause(state_meaning)
+    if final_state_meaning and not _should_skip_placeholder(
+        final_state_meaning, ["condition attached to the message"]
+    ):
         if state_name:
-            clauses.append(f"{state_name} points to {_phrase_to_natural_clause(final_state_meaning)}")
+            clauses.append(f"{state_name} points to {final_state_meaning}")
         else:
-            clauses.append(f"the condition points to {_phrase_to_natural_clause(final_state_meaning)}")
+            clauses.append(f"the condition points to {final_state_meaning}")
 
-    final_relationship_meaning = relationship_event_meaning or relationship_meaning
-    if final_relationship_meaning and not _should_skip_placeholder(final_relationship_meaning, ["people dimension of the dream"]):
+    final_relationship_meaning = relationship_event_meaning or _phrase_to_natural_clause(
+        relationship_meaning
+    )
+    if final_relationship_meaning and not _should_skip_placeholder(
+        final_relationship_meaning, ["people dimension of the dream"]
+    ):
         if relationship_name:
-            clauses.append(f"{relationship_name} points to {_phrase_to_natural_clause(final_relationship_meaning)}")
+            clauses.append(f"{relationship_name} points to {final_relationship_meaning}")
         else:
-            clauses.append(f"the people involved point to {_phrase_to_natural_clause(final_relationship_meaning)}")
+            clauses.append(
+                f"the people involved point to {final_relationship_meaning}"
+            )
 
     clauses = compress_phrase_list(clauses)
     if not clauses:
@@ -349,10 +397,18 @@ def _build_state_relationship_sentence(
     return _sentence(human_join(clauses))
 
 
-def _build_ending_sentence(event_context: Dict[str, Any], seal_type: str, seal_message: str) -> str:
-    ending_name = _event_value(event_context, "primary_ending", "name")
-    ending_meaning = _event_value(event_context, "primary_ending", "meaning")
-    ending_action = _event_value(event_context, "primary_ending", "action")
+def _build_ending_sentence(
+    event_context: Dict[str, Any],
+    seal_type: str,
+    seal_message: str,
+) -> str:
+    ending_name = _display_text(_event_value(event_context, "primary_ending", "name"))
+    ending_meaning = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_ending", "meaning")
+    )
+    ending_action = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_ending", "action")
+    )
 
     if ending_name and ending_meaning:
         text = f"The ending is important: {ending_name} points to {ending_meaning}"
@@ -361,25 +417,29 @@ def _build_ending_sentence(event_context: Dict[str, Any], seal_type: str, seal_m
         return _sentence(text)
 
     if ending_name:
-        return _sentence(f"The ending is important because it shows the outcome: {ending_name}")
+        return _sentence(
+            f"The ending is important because it shows the outcome: {ending_name}"
+        )
 
-    seal_type = _safe_text(seal_type)
-    seal_message = _safe_text(seal_message)
+    seal_type_clean = _display_text(seal_type)
+    seal_message_clean = _phrase_to_natural_clause(seal_message)
 
-    if not seal_type and not seal_message:
+    if not seal_type_clean and not seal_message_clean:
         return ""
 
-    seal_type_n = normalize_text(seal_type)
-    seal_message_n = _semantic_key(seal_message)
+    seal_type_n = normalize_text(seal_type_clean)
+    seal_message_n = _semantic_key(seal_message_clean)
 
     if seal_type_n == "symbol confirmed":
         return _sentence("The ending confirms a major symbol from the dream")
 
-    if seal_type:
-        generic = _sentence(f"The ending seals this as {seal_type.lower()}")
+    if seal_type_clean:
+        generic = _sentence(
+            f"The ending gives this dream a {seal_type_clean.lower()} meaning"
+        )
         generic_n = _semantic_key(generic)
 
-        if seal_message:
+        if seal_message_clean:
             if generic_n == seal_message_n:
                 return generic
             if generic_n in seal_message_n or seal_message_n in generic_n:
@@ -387,21 +447,30 @@ def _build_ending_sentence(event_context: Dict[str, Any], seal_type: str, seal_m
 
         return generic
 
-    return _sentence(seal_message)
+    return _sentence(seal_message_clean)
 
 
 def _build_guidance_sentence(
     event_context: Dict[str, Any],
     interpretation: Dict[str, str],
 ) -> str:
-    action_guidance = _event_value(event_context, "primary_action", "action")
-    place_guidance = _event_value(event_context, "primary_place", "action")
-    ending_guidance = _event_value(event_context, "primary_ending", "action")
-    doctrine_guidance = _safe_text((interpretation or {}).get("what_to_do"))
+    action_guidance = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_action", "action")
+    )
+    place_guidance = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_place", "action")
+    )
+    ending_guidance = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_ending", "action")
+    )
+    doctrine_guidance = _phrase_to_natural_clause(
+        _safe_text((interpretation or {}).get("what_to_do"))
+    )
 
     guidance_items = _normalize_list(
         [ending_guidance, action_guidance, place_guidance, doctrine_guidance],
         max_items=2,
+        display=False,
     )
 
     if not guidance_items:
@@ -414,14 +483,18 @@ def _build_guidance_sentence(
 
 
 def _build_risk_sentence(risk: str) -> str:
-    risk = _clean(risk)
+    risk = _display_text(risk)
     if not risk:
         return ""
-    return _sentence(f"The level of concern attached to this dream appears to be {risk.lower()}")
+    return _sentence(
+        f"The level of concern attached to this dream appears to be {risk.lower()}"
+    )
 
 
 def _fallback_from_interpretation(interpretation: Dict[str, str]) -> str:
-    spiritual = _safe_text((interpretation or {}).get("spiritual_meaning"))
+    spiritual = _phrase_to_natural_clause(
+        _safe_text((interpretation or {}).get("spiritual_meaning"))
+    )
     if not spiritual:
         return ""
     return _sentence(spiritual)
@@ -439,7 +512,10 @@ def build_doctrine_bound_summary(
     event_context = _get_event_context(doctrine_facts)
 
     lead_message = _safe_text(doctrine_facts.get("lead_message"))
-    top_symbols = _normalize_list(doctrine_facts.get("top_symbols", []), max_items=max_symbols)
+    top_symbols = _normalize_list(
+        doctrine_facts.get("top_symbols", []),
+        max_items=max_symbols,
+    )
     behavior_meaning = _safe_text(doctrine_facts.get("behavior_meaning"))
     state_meaning = _safe_text(doctrine_facts.get("state_meaning"))
     location_meaning = _safe_text(doctrine_facts.get("location_meaning"))
@@ -451,11 +527,20 @@ def build_doctrine_bound_summary(
     parts: List[str] = []
 
     for item in [
-        _build_event_lead_sentence(lead_message, event_context, behavior_meaning, relationship_meaning),
+        _build_event_lead_sentence(
+            lead_message,
+            event_context,
+            behavior_meaning,
+            relationship_meaning,
+        ),
         _build_action_sentence(event_context, behavior_meaning),
         _build_subject_sentence(event_context, top_symbols),
         _build_place_sentence(event_context, location_meaning),
-        _build_state_relationship_sentence(event_context, state_meaning, relationship_meaning),
+        _build_state_relationship_sentence(
+            event_context,
+            state_meaning,
+            relationship_meaning,
+        ),
         _build_ending_sentence(event_context, seal_type, seal_message),
         _build_guidance_sentence(event_context, interpretation),
         _build_risk_sentence(risk),

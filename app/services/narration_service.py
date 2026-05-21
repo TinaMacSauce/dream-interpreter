@@ -142,6 +142,33 @@ def _phrase_to_natural_clause(text: str) -> str:
     return " ".join(out.split()).strip()
 
 
+def _is_full_sentence_fragment(text: str) -> bool:
+    text_n = normalize_text(text)
+    return text_n.startswith(
+        (
+            "the ending",
+            "the action",
+            "the place",
+            "the setting",
+            "the condition",
+            "the people",
+            "the main subject",
+            "this dream",
+        )
+    )
+
+
+def _lead_to_sentence(right: str) -> str:
+    right_clean = _phrase_to_natural_clause(right)
+    if not right_clean:
+        return ""
+
+    if _is_full_sentence_fragment(right_clean):
+        return _sentence(right_clean)
+
+    return _sentence(f"This dream points to {right_clean}")
+
+
 def _should_skip_placeholder(value: str, placeholders: List[str]) -> bool:
     value_n = normalize_text(value)
     return any(normalize_text(p) in value_n for p in placeholders)
@@ -264,13 +291,14 @@ def _build_event_lead_sentence(
 
         if " points to " in lead_n:
             right = lead_message.split(" points to ", 1)[1].strip()
-            if right:
-                return _sentence(f"This dream points to {_phrase_to_natural_clause(right)}")
+            return _lead_to_sentence(right)
 
         if " suggests " in lead_n:
             right = lead_message.split(" suggests ", 1)[1].strip()
-            if right:
-                return _sentence(f"This dream points to {_phrase_to_natural_clause(right)}")
+            return _lead_to_sentence(right)
+
+        if _is_full_sentence_fragment(lead_message):
+            return _sentence(_phrase_to_natural_clause(lead_message))
 
         return _sentence(f"This dream points to {_phrase_to_natural_clause(lead_message)}")
 

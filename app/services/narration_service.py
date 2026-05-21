@@ -13,13 +13,6 @@ def _safe_text(value: Any) -> str:
 
 
 def _display_text(value: Any) -> str:
-    """
-    Converts internal machine keys into clean user-facing text.
-
-    Example:
-    teeth_falling_out -> teeth falling out
-    old-school -> old school
-    """
     text = _safe_text(value)
     if not text:
         return ""
@@ -27,7 +20,13 @@ def _display_text(value: Any) -> str:
     text = text.replace("_", " ").replace("-", " ")
     text = " ".join(text.split()).strip()
 
-    return text
+    replacements = {
+        "old place": "old place",
+        "old school": "old school",
+        "old house": "old house",
+    }
+
+    return replacements.get(text.lower(), text)
 
 
 def _sentence(text: str) -> str:
@@ -41,15 +40,18 @@ def _sentence(text: str) -> str:
 
 
 def _semantic_key(text: str) -> str:
-    text_n = normalize_text(text)
+    text_n = normalize_text(_display_text(text))
     replacements = {
         "suggests": "points to",
         "indicates": "points to",
         "reveals": "points to",
         "shows": "points to",
+        "confirms": "points to",
         "the behavior shows": "the action points to",
         "the setting connects this to": "the place points to",
         "active spiritual pursuit": "active spiritual pressure",
+        "old place": "old place",
+        "old_place": "old place",
     }
     out = text_n
     for old, new in replacements.items():
@@ -90,7 +92,7 @@ def _dedupe_sentences(parts: List[str]) -> List[str]:
     out: List[str] = []
 
     for part in parts:
-        part = _clean(part)
+        part = _display_text(_clean(part))
         if not part:
             continue
 
@@ -99,6 +101,7 @@ def _dedupe_sentences(parts: List[str]) -> List[str]:
             continue
 
         duplicate = False
+
         for existing in out:
             existing_key = _semantic_key(existing)
 
@@ -106,13 +109,26 @@ def _dedupe_sentences(parts: List[str]) -> List[str]:
                 duplicate = True
                 break
 
-            if key in existing_key:
+            if key in existing_key or existing_key in key:
                 duplicate = True
                 break
 
-            if existing_key in key and len(existing_key.split()) >= 4:
-                duplicate = True
-                break
+            if "ending" in key and "ending" in existing_key:
+                if "meaning" in key and "meaning" in existing_key:
+                    duplicate = True
+                    break
+
+            if "place" in key and "place" in existing_key:
+                if any(word in key for word in ["backwardness", "stagnation", "regression", "old cycles"]):
+                    if any(word in existing_key for word in ["backwardness", "stagnation", "regression", "old cycles"]):
+                        duplicate = True
+                        break
+
+            if "action" in key and "action" in existing_key:
+                if any(word in key for word in ["chased", "escaping", "sadness", "crying"]):
+                    if any(word in existing_key for word in ["chased", "escaping", "sadness", "crying"]):
+                        duplicate = True
+                        break
 
         if not duplicate:
             out.append(part)
@@ -137,7 +153,7 @@ def _phrase_to_natural_clause(text: str) -> str:
     for old, new in replacements:
         out = out.replace(old, new)
 
-    out = out.replace("_", " ").replace("-", " ")
+    out = _display_text(out)
 
     return " ".join(out.split()).strip()
 
@@ -456,26 +472,19 @@ def _build_ending_sentence(
         return ""
 
     seal_type_n = normalize_text(seal_type_clean)
-    seal_message_n = _semantic_key(seal_message_clean)
 
     if seal_type_n == "symbol confirmed":
         return _sentence("The ending confirms a major symbol from the dream")
 
+    if seal_message_clean:
+        return _sentence(seal_message_clean)
+
     if seal_type_clean:
-        generic = _sentence(
+        return _sentence(
             f"The ending gives this dream a {seal_type_clean.lower()} meaning"
         )
-        generic_n = _semantic_key(generic)
 
-        if seal_message_clean:
-            if generic_n == seal_message_n:
-                return generic
-            if generic_n in seal_message_n or seal_message_n in generic_n:
-                return generic
-
-        return generic
-
-    return _sentence(seal_message_clean)
+    return ""
 
 
 def _build_guidance_sentence(

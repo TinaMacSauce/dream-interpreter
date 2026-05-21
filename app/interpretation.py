@@ -1,3 +1,4 @@
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.fields import (
@@ -8,6 +9,7 @@ from app.fields import (
     get_behavior_action_modifier,
     get_behavior_meaning_modifier,
     get_behavior_physical_modifier,
+    get_effects_cell,
     get_location_action_modifier,
     get_location_life_area_meaning,
     get_location_physical_area_meaning,
@@ -16,7 +18,6 @@ from app.fields import (
     get_relationship_meaning_modifier,
     get_relationship_physical_modifier,
     get_spiritual_meaning_cell,
-    get_effects_cell,
     get_state_action_modifier,
     get_state_meaning_modifier,
     get_state_physical_modifier,
@@ -36,6 +37,77 @@ from app.utils import (
 )
 
 
+WHITESPACE_RE = re.compile(r"\s+")
+
+BANNED_STARTS = (
+    "logic layer",
+    "behavior detected",
+    "state detected",
+    "location detected",
+    "relationship detected",
+)
+
+FULL_SENTENCE_PREFIXES = (
+    "this dream",
+    "the ending",
+    "the action",
+    "the place",
+    "the setting",
+    "the condition",
+    "the people",
+    "the main subject",
+)
+
+ACTION_NAME_MAP = {
+    "chasing": "being chased",
+    "chased": "being chased",
+    "being chased": "being chased",
+    "attacking": "being attacked",
+    "being attacked": "being attacked",
+    "biting": "being bitten",
+    "being bitten": "being bitten",
+}
+
+PHRASE_REPLACEMENTS = {
+    "state is from a previous season": "a previous season or old pattern is involved",
+    "old points to state is from a previous season": "this connects to a previous season or old pattern",
+    "old mindset,stagnant pattern": "old mindset or stagnant pattern",
+    "old mindset, stagnant pattern": "old mindset or stagnant pattern",
+    "dog, school represents": "the dog and school point to",
+    "dog, school points to": "the dog and school point to",
+    "chasing points to active spiritual pursuit": "being chased points to enemy pursuit or spiritual pursuit",
+    "being chased points to active spiritual pursuit": "being chased points to enemy pursuit or spiritual pursuit",
+    "the ending seals this as layered": "the ending gives this dream a layered meaning",
+}
+
+SEMANTIC_REPLACEMENTS = {
+    "suggests": "points",
+    "reveals": "points",
+    "indicates": "points",
+    "shows": "points",
+    "confirms": "points",
+    "the actions show": "action points",
+    "the behavior shows": "action points",
+    "the setting connects": "place connects",
+    "the ending confirms": "ending confirms",
+    "the ending seals": "ending gives",
+    "the ending gives": "ending gives",
+    "active spiritual pursuit": "spiritual pursuit",
+    "enemy pursuit": "spiritual pursuit",
+    "being chased": "chasing",
+}
+
+
+def _display_text(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+
+    text = text.replace("_", " ").replace("-", " ")
+    text = WHITESPACE_RE.sub(" ", text).strip()
+    return text
+
+
 def _hit_row(hit: Any) -> Dict[str, Any]:
     if isinstance(hit, dict):
         row = hit.get("row")
@@ -49,23 +121,14 @@ def _safe_score(hit: Any, key: str) -> int:
     try:
         if isinstance(hit, dict):
             return int(hit.get(key, 0) or 0)
-    except Exception:
+    except (TypeError, ValueError):
         pass
     return 0
 
 
 def _pretty_action_name(name: str) -> str:
-    n = normalize_text(name)
-    mapping = {
-        "chasing": "being chased",
-        "chased": "being chased",
-        "being chased": "being chased",
-        "attacking": "being attacked",
-        "being attacked": "being attacked",
-        "biting": "being bitten",
-        "being bitten": "being bitten",
-    }
-    return mapping.get(n, name)
+    normalized = normalize_text(name)
+    return ACTION_NAME_MAP.get(normalized, _display_text(name))
 
 
 def _hit_name(hit: Any) -> str:
@@ -75,51 +138,41 @@ def _hit_name(hit: Any) -> str:
     if not isinstance(hit, dict):
         return ""
 
-    name = hit.get("name", "")
-    if name:
-        return _pretty_action_name(strip_trailing_punct(name))
+    explicit_name = hit.get("name", "")
+    if explicit_name:
+        return _pretty_action_name(strip_trailing_punct(explicit_name))
 
     row = _hit_row(hit)
-    return _pretty_action_name(
-        strip_trailing_punct(
-            row.get("behavior_name")
-            or row.get("location_name")
-            or row.get("state_name")
-            or row.get("relationship_name")
-            or row.get("ending_name")
-            or row.get("symbol")
-            or row.get("input")
-            or ""
-        )
-    )
+    for field in (
+        "behavior_name",
+        "location_name",
+        "state_name",
+        "relationship_name",
+        "ending_name",
+        "symbol",
+        "input",
+    ):
+        value = row.get(field)
+        if value:
+            return _pretty_action_name(strip_trailing_punct(value))
+
+    return ""
 
 
 def _is_placeholder(text: str) -> bool:
-    t = normalize_text(text)
-    placeholders = [
+    normalized = normalize_text(text)
+    placeholders = (
         "the active pattern in the dream",
         "the condition attached to the message",
         "the area of life being touched",
         "the people dimension of the dream",
         "the main subject",
-    ]
-    return any(p in t for p in placeholders)
+    )
+    return any(item in normalized for item in placeholders)
 
 
 def _is_full_sentence_fragment(text: str) -> bool:
-    t = normalize_text(text)
-    return t.startswith(
-        (
-            "this dream",
-            "the ending",
-            "the action",
-            "the place",
-            "the setting",
-            "the condition",
-            "the people",
-            "the main subject",
-        )
-    )
+    return normalize_text(text).startswith(FULL_SENTENCE_PREFIXES)
 
 
 def _clean_output_phrase(text: str) -> str:
@@ -127,19 +180,9 @@ def _clean_output_phrase(text: str) -> str:
     if not text:
         return ""
 
-    replacements = {
-        "state is from a previous season": "a previous season or old pattern is involved",
-        "old points to state is from a previous season": "this connects to a previous season or old pattern",
-        "old mindset,stagnant pattern": "old mindset or stagnant pattern",
-        "old mindset, stagnant pattern": "old mindset or stagnant pattern",
-        "dog, school represents": "the dog and school point to",
-        "dog, school points to": "the dog and school point to",
-        "chasing points to active spiritual pursuit": "being chased points to enemy pursuit or spiritual pursuit",
-        "being chased points to active spiritual pursuit": "being chased points to enemy pursuit or spiritual pursuit",
-        "the ending seals this as layered": "the ending gives this dream a layered meaning",
-    }
+    text = _display_text(text)
 
-    for old, new in replacements.items():
+    for old, new in PHRASE_REPLACEMENTS.items():
         text = text.replace(old, new)
 
     text = clean_sentence(text)
@@ -151,18 +194,10 @@ def clean_debug_like_phrase(text: str) -> str:
     if not text:
         return ""
 
-    lower = text.lower()
-    banned_starts = [
-        "logic layer",
-        "behavior detected",
-        "state detected",
-        "location detected",
-        "relationship detected",
-    ]
+    lowered = text.lower()
 
-    for banned in banned_starts:
-        if lower.startswith(banned):
-            return ""
+    if lowered.startswith(BANNED_STARTS):
+        return ""
 
     if _is_placeholder(text):
         return ""
@@ -171,64 +206,69 @@ def clean_debug_like_phrase(text: str) -> str:
 
 
 def _semantic_key(text: str) -> str:
-    text_n = normalize_text(text)
-    replacements = {
-        "suggests": "points",
-        "reveals": "points",
-        "indicates": "points",
-        "shows": "points",
-        "the actions show": "action points",
-        "the behavior shows": "action points",
-        "the setting connects": "place connects",
-        "the ending confirms": "ending confirms",
-        "the ending seals": "ending gives",
-        "active spiritual pursuit": "spiritual pursuit",
-        "enemy pursuit": "spiritual pursuit",
-        "being chased": "chasing",
-    }
+    output = normalize_text(_display_text(text))
 
-    out = text_n
-    for old, new in replacements.items():
-        out = out.replace(old, new)
+    for old, new in SEMANTIC_REPLACEMENTS.items():
+        output = output.replace(old, new)
 
-    return " ".join(out.split())
+    return WHITESPACE_RE.sub(" ", output).strip()
+
+
+def _has_same_place_theme(a: str, b: str) -> bool:
+    place_terms = ("backwardness", "stagnation", "regression", "old cycles")
+    return (
+        "place" in a
+        and "place" in b
+        and any(term in a for term in place_terms)
+        and any(term in b for term in place_terms)
+    )
 
 
 def _is_duplicate_or_subsumed(candidate: str, existing_parts: List[str]) -> bool:
-    cand_n = _semantic_key(candidate)
-    if not cand_n:
+    candidate_key = _semantic_key(candidate)
+    if not candidate_key:
         return True
 
     for existing in existing_parts:
-        ex_n = _semantic_key(existing)
-        if not ex_n:
+        existing_key = _semantic_key(existing)
+        if not existing_key:
             continue
-        if cand_n == ex_n:
+
+        if candidate_key == existing_key:
             return True
-        if cand_n in ex_n:
+
+        if candidate_key in existing_key:
             return True
-        if ex_n in cand_n and len(ex_n.split()) >= 4:
+
+        if existing_key in candidate_key and len(existing_key.split()) >= 4:
+            return True
+
+        if _has_same_place_theme(candidate_key, existing_key):
+            return True
+
+        if "ending" in candidate_key and "ending" in existing_key:
             return True
 
     return False
 
 
 def _strong_unique_parts(parts: List[str], max_items: Optional[int] = None) -> List[str]:
-    out: List[str] = []
+    output: List[str] = []
 
     for part in parts:
         part = clean_debug_like_phrase(part)
         if not part:
             continue
-        if _is_duplicate_or_subsumed(part, out):
+
+        if _is_duplicate_or_subsumed(part, output):
             continue
 
-        out.append(part)
+        output.append(part)
 
-        if max_items is not None and len(out) >= max_items:
+        if max_items is not None and len(output) >= max_items:
             break
 
-    return out
+    return output
 
 
 def merge_natural_paragraphs(parts: List[str]) -> str:
@@ -238,9 +278,12 @@ def merge_natural_paragraphs(parts: List[str]) -> str:
         part = clean_debug_like_phrase(part)
         if not part:
             continue
+
         part = sentence(part)
+
         if _is_duplicate_or_subsumed(part, cleaned):
             continue
+
         cleaned.append(part)
 
     return "\n\n".join(cleaned).strip()
@@ -250,44 +293,35 @@ def unique_text_parts(parts: List[str], max_items: Optional[int] = None) -> List
     return _strong_unique_parts(parts, max_items=max_items)
 
 
-def _primary_behavior(behaviors: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not behaviors:
+def _get_primary_hit(hits: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not hits:
         return None
+
     return sorted(
-        behaviors,
-        key=lambda x: (_safe_score(x, "score"), _safe_score(x, "priority"), _safe_score(x, "token_len")),
+        hits,
+        key=lambda item: (
+            _safe_score(item, "score"),
+            _safe_score(item, "priority"),
+            _safe_score(item, "token_len"),
+        ),
         reverse=True,
     )[0]
+
+
+def _primary_behavior(behaviors: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    return _get_primary_hit(behaviors)
 
 
 def _primary_location(locations: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not locations:
-        return None
-    return sorted(
-        locations,
-        key=lambda x: (_safe_score(x, "score"), _safe_score(x, "priority"), _safe_score(x, "token_len")),
-        reverse=True,
-    )[0]
+    return _get_primary_hit(locations)
 
 
 def _primary_state(states: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not states:
-        return None
-    return sorted(
-        states,
-        key=lambda x: (_safe_score(x, "score"), _safe_score(x, "priority"), _safe_score(x, "token_len")),
-        reverse=True,
-    )[0]
+    return _get_primary_hit(states)
 
 
 def _primary_relationship(relationships: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not relationships:
-        return None
-    return sorted(
-        relationships,
-        key=lambda x: (_safe_score(x, "score"), _safe_score(x, "priority"), _safe_score(x, "token_len")),
-        reverse=True,
-    )[0]
+    return _get_primary_hit(relationships)
 
 
 def compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: int = 2) -> str:
@@ -298,6 +332,7 @@ def compact_rule_meaning_clause(hits: List[Dict[str, Any]], getter, max_items: i
             part = _clean_output_phrase(getter(_hit_row(hit)))
         except Exception:
             part = ""
+
         if part and not _is_placeholder(part):
             parts.append(part)
 
@@ -329,6 +364,7 @@ def _top_symbol_names(base_matches, narrative_max_symbols: int) -> List[str]:
         for row, _score, _hit in base_matches or []
         if get_base_symbol_input(row)
     ]
+
     return _strong_unique_parts(symbols, max_items=max(narrative_max_symbols, 3))
 
 
@@ -342,7 +378,12 @@ def compact_spiritual_meaning(
         return _clean_output_phrase(override_hit.get("spiritual", ""))
 
     symbol_clause = build_base_symbol_clause(base_matches, narrative_max_symbols)
-    return symbol_clause or _clean_output_phrase(seal.get("message", "")) or "the main symbolic message in the dream"
+
+    return (
+        symbol_clause
+        or _clean_output_phrase(seal.get("message", ""))
+        or "the main symbolic message in the dream"
+    )
 
 
 def build_primary_focus(
@@ -370,6 +411,7 @@ def build_primary_focus(
 
     subject_clause = build_base_symbol_clause(base_matches, narrative_max_symbols)
 
+    place_name = _hit_name(primary_place) if primary_place else ""
     place_meaning = (
         _clean_output_phrase(get_location_life_area_meaning(_hit_row(primary_place)))
         if primary_place
@@ -382,6 +424,7 @@ def build_primary_focus(
         else ""
     )
 
+    relationship_name = _hit_name(primary_relationship) if primary_relationship else ""
     relationship_meaning = (
         _clean_output_phrase(get_relationship_meaning_modifier(_hit_row(primary_relationship)))
         if primary_relationship
@@ -389,7 +432,7 @@ def build_primary_focus(
     )
 
     if override_hit and _clean_output_phrase(override_hit.get("spiritual", "")):
-        lead = _clean_output_phrase(override_hit.get("spiritual", ""))
+        lead = override_hit.get("spiritual", "")
         mode = "override"
     elif action_name and action_meaning:
         lead = f"{action_name} points to {action_meaning}"
@@ -401,7 +444,7 @@ def build_primary_focus(
         lead = subject_clause
         mode = "symbol"
     else:
-        lead = _clean_output_phrase(seal.get("message", "")) or "the main spiritual message in the dream"
+        lead = seal.get("message", "") or "the main spiritual message in the dream"
         mode = "seal"
 
     return {
@@ -411,9 +454,9 @@ def build_primary_focus(
         "behavior_name": action_name,
         "state": state_meaning,
         "location": place_meaning,
-        "location_name": _hit_name(primary_place) if primary_place else "",
+        "location_name": place_name,
         "relationship": relationship_meaning,
-        "relationship_name": _hit_name(primary_relationship) if primary_relationship else "",
+        "relationship_name": relationship_name,
         "subject": subject_clause,
     }
 
@@ -445,7 +488,6 @@ def build_event_scenario(
 
     subject_clause = build_base_symbol_clause(base_matches, narrative_max_symbols)
 
-    place_name = _hit_name(primary_place) if primary_place else ""
     place_meaning = (
         _clean_output_phrase(get_location_life_area_meaning(_hit_row(primary_place)))
         if primary_place
@@ -464,8 +506,8 @@ def build_event_scenario(
         else compact_rule_meaning_clause(relationships, get_relationship_meaning_modifier, max_items=1)
     )
 
-    behavior_names = {normalize_text(_hit_name(x)) for x in behaviors or []}
-    location_names = {normalize_text(_hit_name(x)) for x in locations or []}
+    behavior_names = {normalize_text(_hit_name(item)) for item in behaviors or []}
+    location_names = {normalize_text(_hit_name(item)) for item in locations or []}
 
     if _dream_escaped(dream):
         seal_type = "Deliverance"
@@ -473,9 +515,12 @@ def build_event_scenario(
         seal_type = "Warfare"
     elif {"escaping", "crossing", "finding"} & behavior_names:
         seal_type = "Breakthrough"
-    elif {"old_place", "old place", "old school", "old house", "old neighborhood", "old job"} & location_names:
+    elif {"old place", "old school", "old house", "old neighborhood", "old job"} & location_names:
         seal_type = "Backwardness"
-    elif place_meaning and any(x in normalize_text(place_meaning) for x in ["backwardness", "stagnation", "regression"]):
+    elif place_meaning and any(
+        term in normalize_text(place_meaning)
+        for term in ("backwardness", "stagnation", "regression")
+    ):
         seal_type = "Backwardness"
     elif relationship_meaning:
         seal_type = "Relational"
@@ -494,10 +539,7 @@ def build_event_scenario(
         support_parts.append(f"The main subject adds detail: {subject_clause}")
 
     if place_meaning:
-        if place_name:
-            support_parts.append(f"The place, {place_name}, connects this to {place_meaning}")
-        else:
-            support_parts.append(f"The place connects this to {place_meaning}")
+        support_parts.append(f"The place connects this to {place_meaning}")
 
     if state_meaning and not _is_placeholder(state_meaning):
         support_parts.append(f"The condition points to {state_meaning}")
@@ -506,7 +548,7 @@ def build_event_scenario(
         support_parts.append(f"The people involved point to {relationship_meaning}")
 
     lead = human_join(_strong_unique_parts(lead_parts, max_items=1))
-    support = " ".join(_strong_unique_parts(support_parts, max_items=4))
+    support = " ".join(_strong_unique_parts(support_parts, max_items=3))
 
     if not lead and subject_clause:
         lead = subject_clause
@@ -516,7 +558,7 @@ def build_event_scenario(
         "support": _clean_output_phrase(support),
         "seal_type": _clean_output_phrase(seal_type),
         "action_name": action_name,
-        "place_name": place_name,
+        "place_name": _hit_name(primary_place) if primary_place else "",
     }
 
 
@@ -557,7 +599,11 @@ def build_core_message(
     seal_message = _clean_output_phrase(seal.get("message", ""))
 
     parts: List[str] = []
-    lead = _clean_output_phrase(focus.get("lead", "")) or _clean_output_phrase(event_scenario.get("lead", ""))
+
+    lead = _clean_output_phrase(
+        focus.get("lead", "")
+        or event_scenario.get("lead", "")
+    )
 
     if lead:
         if _is_full_sentence_fragment(lead):
@@ -575,24 +621,34 @@ def build_core_message(
 
     if seal_type:
         seal_n = normalize_text(seal_type)
+
         if seal_n in {"symbol confirmed", "confirmed"}:
             parts.append(sentence("The ending confirms a major symbol from the dream"))
-        elif seal_n == "backwardness":
-            parts.append(sentence("The place gives this dream a backwardness, stagnation, or regression theme"))
+
         elif seal_n == "deliverance":
             parts.append(sentence("The ending points to escape, protection, or deliverance"))
-        else:
+
+        elif seal_n not in {"backwardness", "complex", "layered"}:
             parts.append(sentence(f"The ending gives this dream a {seal_type.lower()} meaning"))
 
     if dream_has_escape_cue(dream) and not any(
-        x in normalize_text(" ".join(parts))
-        for x in ["release", "escape", "escaped", "came out", "regain control", "way out", "deliverance", "protection"]
+        item in normalize_text(" ".join(parts))
+        for item in (
+            "release",
+            "escape",
+            "escaped",
+            "came out",
+            "regain control",
+            "way out",
+            "deliverance",
+            "protection",
+        )
     ):
         parts.append(sentence("There is a way of escape, so the situation is serious but not final"))
 
     if seal_message:
         seal_message_n = normalize_text(seal_message)
-        if all(seal_message_n not in normalize_text(p) for p in parts):
+        if all(seal_message_n not in normalize_text(part) for part in parts):
             parts.append(sentence(seal_message))
 
     return merge_natural_paragraphs(parts), focus, event_scenario
@@ -606,17 +662,17 @@ def build_layered_support_paragraph(
 ) -> str:
     behavior_parts = compress_phrase_list(
         [
-            _clean_output_phrase(get_behavior_meaning_modifier(_hit_row(x)))
-            for x in behaviors or []
-            if get_behavior_meaning_modifier(_hit_row(x))
+            _clean_output_phrase(get_behavior_meaning_modifier(_hit_row(item)))
+            for item in behaviors or []
+            if get_behavior_meaning_modifier(_hit_row(item))
         ]
     )[:1]
 
     location_parts = compress_phrase_list(
         [
-            _clean_output_phrase(get_location_life_area_meaning(_hit_row(x)))
-            for x in locations or []
-            if get_location_life_area_meaning(_hit_row(x))
+            _clean_output_phrase(get_location_life_area_meaning(_hit_row(item)))
+            for item in locations or []
+            if get_location_life_area_meaning(_hit_row(item))
         ]
     )[:1]
 
@@ -632,35 +688,46 @@ def build_layered_support_paragraph(
 
 
 def _collapse_effects(effect_parts: List[str], max_items: int = 3) -> List[str]:
-    cleaned = compress_phrase_list([normalize_effect_phrase(_clean_output_phrase(x)) for x in effect_parts if x])
-    cleaned.sort(key=lambda x: (-len(normalize_text(x).split()), -len(x)))
+    cleaned = compress_phrase_list(
+        [
+            normalize_effect_phrase(_clean_output_phrase(item))
+            for item in effect_parts
+            if item
+        ]
+    )
 
-    out: List[str] = []
+    cleaned.sort(key=lambda item: (-len(normalize_text(item).split()), -len(item)))
+
+    output: List[str] = []
+
     for item in cleaned:
         if _is_placeholder(item):
             continue
 
-        item_n = _semantic_key(item)
+        item_key = _semantic_key(item)
         skip = False
 
-        for existing in out:
-            existing_n = _semantic_key(existing)
-            if item_n == existing_n or item_n in existing_n or existing_n in item_n:
+        for existing in output:
+            existing_key = _semantic_key(existing)
+
+            if item_key == existing_key or item_key in existing_key or existing_key in item_key:
                 skip = True
                 break
-            if "relationship matters" in item_n and "relationship" not in existing_n:
+
+            if "relationship matters" in item_key and "relationship" not in existing_key:
                 skip = True
                 break
 
         if skip:
             continue
 
-        out.append(item)
-        if len(out) >= max_items:
+        output.append(item)
+
+        if len(output) >= max_items:
             break
 
-    out.sort(key=lambda x: (len(normalize_text(x).split()), len(x)))
-    return out
+    output.sort(key=lambda item: (len(normalize_text(item).split()), len(item)))
+    return output
 
 
 def build_real_world_impact_paragraph(
@@ -674,16 +741,24 @@ def build_real_world_impact_paragraph(
 ) -> str:
     effect_parts: List[str] = []
 
-    effect_parts.extend([get_behavior_physical_modifier(_hit_row(x)) for x in behaviors or []])
+    effect_parts.extend(
+        [get_behavior_physical_modifier(_hit_row(item)) for item in behaviors or []]
+    )
 
     for row, _score, _hit in (base_matches or [])[:narrative_max_symbols]:
         effect_parts.append(get_base_symbol_effects(row))
 
-    effect_parts.extend([get_location_physical_area_meaning(_hit_row(x)) for x in locations or []])
-    effect_parts.extend([get_state_physical_modifier(_hit_row(x)) for x in states or []])
+    effect_parts.extend(
+        [get_location_physical_area_meaning(_hit_row(item)) for item in locations or []]
+    )
+    effect_parts.extend(
+        [get_state_physical_modifier(_hit_row(item)) for item in states or []]
+    )
 
     if relationships:
-        effect_parts.extend([get_relationship_physical_modifier(_hit_row(x)) for x in relationships or []])
+        effect_parts.extend(
+            [get_relationship_physical_modifier(_hit_row(item)) for item in relationships or []]
+        )
 
     if override_hit:
         effect_parts.insert(0, (override_hit or {}).get("physical", ""))
@@ -697,37 +772,49 @@ def build_real_world_impact_paragraph(
 
 
 def _collapse_actions(action_parts: List[str], max_items: int = 2) -> List[str]:
-    cleaned = compress_phrase_list([normalize_action_phrase(_clean_output_phrase(x)) for x in action_parts if x])
-    cleaned.sort(key=lambda x: (-len(normalize_text(x).split()), -len(x)))
+    cleaned = compress_phrase_list(
+        [
+            normalize_action_phrase(_clean_output_phrase(item))
+            for item in action_parts
+            if item
+        ]
+    )
 
-    out: List[str] = []
+    cleaned.sort(key=lambda item: (-len(normalize_text(item).split()), -len(item)))
+
+    output: List[str] = []
+
     for item in cleaned:
         if _is_placeholder(item):
             continue
 
-        item_n = _semantic_key(item)
+        item_key = _semantic_key(item)
         skip = False
 
-        for existing in out:
-            existing_n = _semantic_key(existing)
-            if item_n == existing_n or item_n in existing_n or existing_n in item_n:
+        for existing in output:
+            existing_key = _semantic_key(existing)
+
+            if item_key == existing_key or item_key in existing_key or existing_key in item_key:
                 skip = True
                 break
-            if "pray" in item_n and "pray" in existing_n:
+
+            if "pray" in item_key and "pray" in existing_key:
                 skip = True
                 break
-            if "stay covered" in item_n and "stay covered" in existing_n:
+
+            if "stay covered" in item_key and "stay covered" in existing_key:
                 skip = True
                 break
 
         if skip:
             continue
 
-        out.append(item)
-        if len(out) >= max_items:
+        output.append(item)
+
+        if len(output) >= max_items:
             break
 
-    return out
+    return output
 
 
 def build_action_guidance_paragraph(
@@ -741,16 +828,24 @@ def build_action_guidance_paragraph(
 ) -> str:
     action_parts: List[str] = []
 
-    action_parts.extend([get_behavior_action_modifier(_hit_row(x)) for x in behaviors or []])
+    action_parts.extend(
+        [get_behavior_action_modifier(_hit_row(item)) for item in behaviors or []]
+    )
 
     for row, _score, _hit in (base_matches or [])[:narrative_max_symbols]:
         action_parts.append(get_base_symbol_action(row))
 
-    action_parts.extend([get_location_action_modifier(_hit_row(x)) for x in locations or []])
-    action_parts.extend([get_state_action_modifier(_hit_row(x)) for x in states or []])
+    action_parts.extend(
+        [get_location_action_modifier(_hit_row(item)) for item in locations or []]
+    )
+    action_parts.extend(
+        [get_state_action_modifier(_hit_row(item)) for item in states or []]
+    )
 
     if relationships:
-        action_parts.extend([get_relationship_action_modifier(_hit_row(x)) for x in relationships or []])
+        action_parts.extend(
+            [get_relationship_action_modifier(_hit_row(item)) for item in relationships or []]
+        )
 
     if override_hit:
         action_parts.insert(0, (override_hit or {}).get("action", ""))
@@ -803,38 +898,45 @@ def choose_template_type(
         spiritual = normalize_text(override_hit.get("spiritual", ""))
         combined = f"{name} {spiritual}"
 
-        if any(x in combined for x in ["death", "grave", "teeth falling out", "death omen"]):
-            return "death_omen"
-        if any(x in combined for x in ["monitor", "watch", "spy"]):
-            return "monitoring"
-        if any(x in combined for x in ["escape", "deliver", "freedom", "victory"]):
-            return "deliverance"
-        if any(x in combined for x in ["clean", "wash", "purif", "release"]):
-            return "cleansing"
-        if any(x in combined for x in ["promotion", "elevation", "lifted", "favor"]):
-            return "promotion"
-        if any(x in combined for x in ["warning", "danger", "attack", "disgrace"]):
-            return "warning"
+        template_keywords = (
+            ("death_omen", ("death", "grave", "teeth falling out", "death omen")),
+            ("monitoring", ("monitor", "watch", "spy")),
+            ("deliverance", ("escape", "deliver", "freedom", "victory")),
+            ("cleansing", ("clean", "wash", "purif", "release")),
+            ("promotion", ("promotion", "elevation", "lifted", "favor")),
+            ("warning", ("warning", "danger", "attack", "disgrace")),
+        )
 
-    behavior_names = {normalize_text(_hit_name(x)) for x in behaviors or []}
-    location_names = {normalize_text(_hit_name(x)) for x in locations or []}
-    relationship_names = {normalize_text(_hit_name(x)) for x in relationships or []}
-    interp_text = normalize_text(" ".join(interpretation.values()))
+        for template_type, keywords in template_keywords:
+            if any(keyword in combined for keyword in keywords):
+                return template_type
+
+    behavior_names = {normalize_text(_hit_name(item)) for item in behaviors or []}
+    location_names = {normalize_text(_hit_name(item)) for item in locations or []}
+    relationship_names = {normalize_text(_hit_name(item)) for item in relationships or []}
+
+    interpretation_text = normalize_text(" ".join(interpretation.values()))
     seal_type = normalize_text(seal.get("type", ""))
 
     if "death omen" in seal_type:
         return "death_omen"
+
     if {"being attacked", "being chased", "chased", "chasing", "fighting"} & behavior_names:
         return "warfare"
+
     if {"escaping", "crossing", "finding"} & behavior_names:
         return "breakthrough"
-    if {"old_place", "old place", "old school", "old house", "old neighborhood", "old job"} & location_names:
+
+    if {"old place", "old school", "old house", "old neighborhood", "old job"} & location_names:
         return "warning"
+
     if relationship_names:
         return "relational"
-    if any(x in interp_text for x in ["monitoring spirit", "being watched", "spiritual spy"]):
+
+    if any(term in interpretation_text for term in ("monitoring spirit", "being watched", "spiritual spy")):
         return "monitoring"
-    if any(x in interp_text for x in ["cleansing", "washed", "release"]):
+
+    if any(term in interpretation_text for term in ("cleansing", "washed", "release")):
         return "cleansing"
 
     return "default"
@@ -866,7 +968,12 @@ def build_doctrine_interpretation(
         narrative_max_symbols,
     )
 
-    support_message = build_layered_support_paragraph(behaviors, states, locations, relationships)
+    support_message = build_layered_support_paragraph(
+        behaviors,
+        states,
+        locations,
+        relationships,
+    )
 
     physical_message = build_real_world_impact_paragraph(
         base_matches,
@@ -895,7 +1002,12 @@ def build_doctrine_interpretation(
     }
 
     summary_message = build_final_summary_paragraph(interpretation, seal)
-    effective_seal_type = event_scenario.get("seal_type") or seal.get("type", "a layered message")
+
+    effective_seal_type = (
+        event_scenario.get("seal_type")
+        or seal.get("type")
+        or "a layered message"
+    )
 
     template_type = choose_template_type(
         override_hit,
@@ -919,20 +1031,55 @@ def build_doctrine_interpretation(
         "Dreams expose what needs attention so you can respond with wisdom, prayer, and obedience.",
     )
 
-    compact_symbol = ", ".join([x for x in top_symbols[:2] if x]).strip()
+    compact_symbol = ", ".join([symbol for symbol in top_symbols[:2] if symbol]).strip()
+
     compact_meaning = (
         focus.get("lead")
         or event_scenario.get("lead")
-        or compact_spiritual_meaning(base_matches, override_hit, seal, narrative_max_symbols)
+        or compact_spiritual_meaning(
+            base_matches,
+            override_hit,
+            seal,
+            narrative_max_symbols,
+        )
         or "the main spiritual message here"
     )
+
     compact_behavior = (
         focus.get("behavior")
-        or compact_rule_meaning_clause(behaviors, get_behavior_meaning_modifier, max_items=1)
+        or compact_rule_meaning_clause(
+            behaviors,
+            get_behavior_meaning_modifier,
+            max_items=1,
+        )
     )
-    compact_state = focus.get("state") or compact_rule_meaning_clause(states, get_state_meaning_modifier, max_items=1)
-    compact_location = focus.get("location") or compact_rule_meaning_clause(locations, get_location_life_area_meaning, max_items=1)
-    compact_relationship = focus.get("relationship") or compact_rule_meaning_clause(relationships, get_relationship_meaning_modifier, max_items=1)
+
+    compact_state = (
+        focus.get("state")
+        or compact_rule_meaning_clause(
+            states,
+            get_state_meaning_modifier,
+            max_items=1,
+        )
+    )
+
+    compact_location = (
+        focus.get("location")
+        or compact_rule_meaning_clause(
+            locations,
+            get_location_life_area_meaning,
+            max_items=1,
+        )
+    )
+
+    compact_relationship = (
+        focus.get("relationship")
+        or compact_rule_meaning_clause(
+            relationships,
+            get_relationship_meaning_modifier,
+            max_items=1,
+        )
+    )
 
     human_main_parts: List[str] = []
 
@@ -956,10 +1103,15 @@ def build_doctrine_interpretation(
 
     if effective_seal_type:
         seal_phrase = str(effective_seal_type).lower()
-        if normalize_text(seal_phrase) == "deliverance":
+        seal_n = normalize_text(seal_phrase)
+
+        if seal_n == "deliverance":
             human_main_parts.append("The ending points to escape, protection, or deliverance")
-        else:
-            human_main_parts.append(f"The ending gives this dream a {seal_phrase} meaning")
+
+        elif seal_n not in {"backwardness", "complex", "layered"}:
+            human_main_parts.append(
+                f"The ending gives this dream a {seal_phrase} meaning"
+            )
 
     rendered_main = merge_natural_paragraphs(human_main_parts)
 
@@ -1021,6 +1173,7 @@ def build_legacy_interpretation(matches, narrative_max_symbols: int) -> Dict[str
 
         if base_effects:
             physical_parts.append(normalize_effect_phrase(base_effects))
+
         if base_action:
             action_parts.append(normalize_action_phrase(base_action))
 
@@ -1043,6 +1196,7 @@ def build_legacy_interpretation(matches, narrative_max_symbols: int) -> Dict[str
     if action_parts:
         primary = action_parts[0]
         remainder = compress_phrase_list(action_parts[1:])
+
         if remainder:
             action_text = sentence(f"{primary}, and {human_join(remainder)}")
         else:

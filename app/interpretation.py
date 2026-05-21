@@ -106,6 +106,22 @@ def _is_placeholder(text: str) -> bool:
     return any(p in t for p in placeholders)
 
 
+def _is_full_sentence_fragment(text: str) -> bool:
+    t = normalize_text(text)
+    return t.startswith(
+        (
+            "this dream",
+            "the ending",
+            "the action",
+            "the place",
+            "the setting",
+            "the condition",
+            "the people",
+            "the main subject",
+        )
+    )
+
+
 def _clean_output_phrase(text: str) -> str:
     text = strip_trailing_punct(text)
     if not text:
@@ -120,6 +136,7 @@ def _clean_output_phrase(text: str) -> str:
         "dog, school points to": "the dog and school point to",
         "chasing points to active spiritual pursuit": "being chased points to enemy pursuit or spiritual pursuit",
         "being chased points to active spiritual pursuit": "being chased points to enemy pursuit or spiritual pursuit",
+        "the ending seals this as layered": "the ending gives this dream a layered meaning",
     }
 
     for old, new in replacements.items():
@@ -164,7 +181,7 @@ def _semantic_key(text: str) -> str:
         "the behavior shows": "action points",
         "the setting connects": "place connects",
         "the ending confirms": "ending confirms",
-        "the ending seals": "ending seals",
+        "the ending seals": "ending gives",
         "active spiritual pursuit": "spiritual pursuit",
         "enemy pursuit": "spiritual pursuit",
         "being chased": "chasing",
@@ -543,7 +560,7 @@ def build_core_message(
     lead = _clean_output_phrase(focus.get("lead", "")) or _clean_output_phrase(event_scenario.get("lead", ""))
 
     if lead:
-        if normalize_text(lead).startswith("this dream"):
+        if _is_full_sentence_fragment(lead):
             parts.append(sentence(lead))
         else:
             parts.append(sentence(f"This dream points to {lead}"))
@@ -565,7 +582,7 @@ def build_core_message(
         elif seal_n == "deliverance":
             parts.append(sentence("The ending points to escape, protection, or deliverance"))
         else:
-            parts.append(sentence(f"The ending confirms this as {seal_type.lower()}"))
+            parts.append(sentence(f"The ending gives this dream a {seal_type.lower()} meaning"))
 
     if dream_has_escape_cue(dream) and not any(
         x in normalize_text(" ".join(parts))
@@ -942,7 +959,7 @@ def build_doctrine_interpretation(
         if normalize_text(seal_phrase) == "deliverance":
             human_main_parts.append("The ending points to escape, protection, or deliverance")
         else:
-            human_main_parts.append(f"The ending seals this as {seal_phrase}")
+            human_main_parts.append(f"The ending gives this dream a {seal_phrase} meaning")
 
     rendered_main = merge_natural_paragraphs(human_main_parts)
 

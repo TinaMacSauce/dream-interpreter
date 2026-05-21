@@ -17,7 +17,21 @@ from app.access import (
 )
 from app.billing import has_active_access
 from app.config import Config
-from app.fields import get_symbol_cell
+from app.fields import (
+    get_behavior_action_modifier,
+    get_behavior_meaning_modifier,
+    get_behavior_physical_modifier,
+    get_location_action_modifier,
+    get_location_life_area_meaning,
+    get_location_physical_area_meaning,
+    get_relationship_action_modifier,
+    get_relationship_meaning_modifier,
+    get_relationship_physical_modifier,
+    get_state_action_modifier,
+    get_state_meaning_modifier,
+    get_state_physical_modifier,
+    get_symbol_cell,
+)
 from app.interpretation import (
     build_doctrine_interpretation,
     build_legacy_interpretation,
@@ -117,6 +131,15 @@ def _phrase_exists(text: str, phrase: str) -> bool:
 # RULE HELPERS
 # =========================================================
 
+def _hit_row(item: Any) -> Dict[str, Any]:
+    if isinstance(item, dict):
+        row = item.get("row")
+        if isinstance(row, dict):
+            return row
+        return item
+    return {}
+
+
 def _row_name(item: Any) -> str:
     if not item:
         return ""
@@ -127,7 +150,7 @@ def _row_name(item: Any) -> str:
     if not isinstance(item, dict):
         return str(item).strip()
 
-    row = item.get("row") if isinstance(item.get("row"), dict) else item
+    row = _hit_row(item)
 
     return (
         _clean(item.get("name"))
@@ -161,7 +184,7 @@ def _normalize_hits(items: List[Any], kind: str) -> List[Dict[str, Any]]:
 
     for item in items or []:
         if isinstance(item, dict):
-            row = item.get("row") if isinstance(item.get("row"), dict) else item
+            row = _hit_row(item)
 
             normalized.append(
                 {
@@ -212,6 +235,72 @@ def _safe_names(items: List[Dict[str, Any]]) -> List[str]:
             output.append(name)
 
     return output
+
+
+# =========================================================
+# FIELD FALLBACK HELPERS
+# =========================================================
+
+def _row_get(row: Dict[str, Any], *keys: str) -> str:
+    if not isinstance(row, dict):
+        return ""
+
+    for key in keys:
+        if key in row and _clean(row.get(key)):
+            return _clean(row.get(key))
+
+    lowered = {str(k).strip().lower(): v for k, v in row.items()}
+
+    for key in keys:
+        key_l = key.strip().lower()
+        if key_l in lowered and _clean(lowered.get(key_l)):
+            return _clean(lowered.get(key_l))
+
+    return ""
+
+
+def _ending_meaning(row: Dict[str, Any]) -> str:
+    return _row_get(
+        row,
+        "outcome_meaning",
+        "outcome meaning",
+        "meaning_modifier",
+        "meaning modifier",
+        "spiritual_meaning",
+        "spiritual meaning",
+        "meaning",
+        "effect",
+        "effects",
+    )
+
+
+def _ending_physical(row: Dict[str, Any]) -> str:
+    return _row_get(
+        row,
+        "physical_modifier",
+        "physical modifier",
+        "physical_effect",
+        "physical effect",
+        "physical effects",
+        "effects_in_physical_realm",
+        "effects in the physical realm",
+        "effect",
+        "effects",
+    )
+
+
+def _ending_action(row: Dict[str, Any]) -> str:
+    return _row_get(
+        row,
+        "action_modifier",
+        "action modifier",
+        "what_to_do",
+        "what to do",
+        "base_action",
+        "base action",
+        "action",
+        "actions",
+    )
 
 
 # =========================================================
@@ -313,6 +402,71 @@ def _base_symbol_name(match: Any) -> str:
         return ""
 
 
+def _event_piece(
+    hit: Optional[Dict[str, Any]],
+    *,
+    kind: str,
+) -> Dict[str, str]:
+    row = _hit_row(hit)
+
+    name = _row_name(hit)
+
+    if not hit and not row:
+        return {
+            "name": "",
+            "meaning": "",
+            "physical_area": "",
+            "action": "",
+        }
+
+    if kind == "behavior":
+        return {
+            "name": name,
+            "meaning": _clean(get_behavior_meaning_modifier(row)),
+            "physical_area": _clean(get_behavior_physical_modifier(row)),
+            "action": _clean(get_behavior_action_modifier(row)),
+        }
+
+    if kind == "location":
+        return {
+            "name": name,
+            "meaning": _clean(get_location_life_area_meaning(row)),
+            "physical_area": _clean(get_location_physical_area_meaning(row)),
+            "action": _clean(get_location_action_modifier(row)),
+        }
+
+    if kind == "state":
+        return {
+            "name": name,
+            "meaning": _clean(get_state_meaning_modifier(row)),
+            "physical_area": _clean(get_state_physical_modifier(row)),
+            "action": _clean(get_state_action_modifier(row)),
+        }
+
+    if kind == "relationship":
+        return {
+            "name": name,
+            "meaning": _clean(get_relationship_meaning_modifier(row)),
+            "physical_area": _clean(get_relationship_physical_modifier(row)),
+            "action": _clean(get_relationship_action_modifier(row)),
+        }
+
+    if kind == "ending":
+        return {
+            "name": name,
+            "meaning": _clean(_ending_meaning(row)),
+            "physical_area": _clean(_ending_physical(row)),
+            "action": _clean(_ending_action(row)),
+        }
+
+    return {
+        "name": name,
+        "meaning": "",
+        "physical_area": "",
+        "action": "",
+    }
+
+
 def _build_event_context(
     base_matches,
     behaviors,
@@ -338,12 +492,12 @@ def _build_event_context(
 
     return {
         "priority_order": ["action", "subject", "place", "ending"],
-        "primary_action": {"name": _row_name(primary_action)},
+        "primary_action": _event_piece(primary_action, kind="behavior"),
         "primary_subject": primary_subject,
-        "primary_place": {"name": _row_name(primary_place)},
-        "primary_state": {"name": _row_name(primary_state)},
-        "primary_relationship": {"name": _row_name(primary_relationship)},
-        "primary_ending": {"name": _row_name(primary_ending)},
+        "primary_place": _event_piece(primary_place, kind="location"),
+        "primary_state": _event_piece(primary_state, kind="state"),
+        "primary_relationship": _event_piece(primary_relationship, kind="relationship"),
+        "primary_ending": _event_piece(primary_ending, kind="ending"),
         "subjects": subjects,
     }
 
@@ -592,6 +746,8 @@ def run_interpretation():
                     "primary_action": event_context["primary_action"],
                     "primary_subject": event_context["primary_subject"],
                     "primary_place": event_context["primary_place"],
+                    "primary_state": event_context["primary_state"],
+                    "primary_relationship": event_context["primary_relationship"],
                     "primary_ending": event_context["primary_ending"],
                     "behaviors": _safe_names(behaviors),
                     "states": _safe_names(states),

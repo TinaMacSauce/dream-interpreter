@@ -20,22 +20,24 @@ def _display_text(value: Any) -> str:
     text = text.replace("_", " ").replace("-", " ")
     text = " ".join(text.split()).strip()
 
-    replacements = {
-        "old place": "old place",
-        "old school": "old school",
-        "old house": "old house",
-    }
+    text = text.replace("old_place", "old place")
+    text = text.replace("Old_place", "Old place")
+    text = text.replace("OLD_PLACE", "OLD PLACE")
 
-    return replacements.get(text.lower(), text)
+    return text
 
 
 def _sentence(text: str) -> str:
     text = " ".join((text or "").split()).strip()
     if not text:
         return ""
+
+    text = _display_text(text)
     text = text[:1].upper() + text[1:]
+
     if text[-1] not in ".!?":
         text += "."
+
     return text
 
 
@@ -50,12 +52,14 @@ def _semantic_key(text: str) -> str:
         "the behavior shows": "the action points to",
         "the setting connects this to": "the place points to",
         "active spiritual pursuit": "active spiritual pressure",
-        "old place": "old place",
         "old_place": "old place",
+        "old place": "old place",
     }
+
     out = text_n
     for old, new in replacements.items():
         out = out.replace(old, new)
+
     return " ".join(out.split())
 
 
@@ -114,9 +118,8 @@ def _dedupe_sentences(parts: List[str]) -> List[str]:
                 break
 
             if "ending" in key and "ending" in existing_key:
-                if "meaning" in key and "meaning" in existing_key:
-                    duplicate = True
-                    break
+                duplicate = True
+                break
 
             if "place" in key and "place" in existing_key:
                 if any(word in key for word in ["backwardness", "stagnation", "regression", "old cycles"]):
@@ -480,9 +483,7 @@ def _build_ending_sentence(
         return _sentence(seal_message_clean)
 
     if seal_type_clean:
-        return _sentence(
-            f"The ending gives this dream a {seal_type_clean.lower()} meaning"
-        )
+        return ""
 
     return ""
 
@@ -523,6 +524,7 @@ def _build_risk_sentence(risk: str) -> str:
     risk = _display_text(risk)
     if not risk:
         return ""
+
     return _sentence(
         f"The level of concern attached to this dream appears to be {risk.lower()}"
     )
@@ -532,8 +534,10 @@ def _fallback_from_interpretation(interpretation: Dict[str, str]) -> str:
     spiritual = _phrase_to_natural_clause(
         _safe_text((interpretation or {}).get("spiritual_meaning"))
     )
+
     if not spiritual:
         return ""
+
     return _sentence(spiritual)
 
 

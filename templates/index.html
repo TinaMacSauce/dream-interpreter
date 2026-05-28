@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Jamaican Dream Interpreter</title>
-  
+<title>Jamaican Dream Interpreter | Jamaican True Stories</title>
+<meta name="description" content="Decode your dreams through a Caribbean cultural and spiritual lens. Save interpretations, track symbols, and reflect privately." />
+
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2148520143702642"
      crossorigin="anonymous"></script>
 
@@ -15,25 +16,38 @@
 <meta name="apple-mobile-web-app-title" content="Dream Interpreter" />
 <link rel="apple-touch-icon" href="/static/icon-192.png" />
 
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
 <style>
 :root{
   --bg:#020303;
   --panel:#08090c;
   --card:#0d0e12;
+
   --gold:#d4af37;
   --gold2:#f8dd7d;
+  --gold3:#fff0b8;
   --cream:#fff4dc;
+
+  --emerald:#3fbf75;
+  --emerald2:#6fe7a8;
+  --emerald-deep:#135e37;
+  --emeraldSoft:rgba(63,191,117,.06);
+  --emeraldLine:rgba(111,231,168,.16);
+
   --text:#f8efd9;
-  --muted:rgba(248,239,217,.58);
-  --line:rgba(212,175,55,.24);
-  --line2:rgba(212,175,55,.48);
+  --muted:rgba(248,239,217,.56);
+  --muted2:rgba(248,239,217,.38);
+  --line:rgba(212,175,55,.2);
+  --line2:rgba(212,175,55,.42);
   --danger:#ffb4a8;
   --success:#9ae6b4;
-  --emerald:#3fbf75;
-  --emeraldSoft:rgba(63,191,117,.045);
-  --emeraldLine:rgba(111,231,168,.10);
+
+  --r-lg:24px;
+  --r-md:18px;
+  --r-sm:14px;
 }
 
 *{
@@ -49,13 +63,12 @@ html{
 body{
   margin:0;
   font-family:Inter,system-ui,sans-serif;
-  font-size:14px;
+  font-size:15px;
   background:
-    radial-gradient(circle at 50% -5%, rgba(212,175,55,.17), transparent 31%),
-    radial-gradient(circle at 16% 8%, rgba(63,191,117,.045), transparent 24%),
-    radial-gradient(circle at 88% 12%, rgba(63,191,117,.035), transparent 26%),
-    radial-gradient(circle at 12% 9%, rgba(212,175,55,.078), transparent 25%),
-    radial-gradient(circle at 92% 14%, rgba(246,216,120,.052), transparent 26%),
+    radial-gradient(circle at 50% -5%, rgba(212,175,55,.16), transparent 32%),
+    radial-gradient(circle at 14% 6%, rgba(63,191,117,.08), transparent 26%),
+    radial-gradient(circle at 88% 10%, rgba(63,191,117,.06), transparent 28%),
+    radial-gradient(circle at 92% 14%, rgba(246,216,120,.05), transparent 26%),
     linear-gradient(180deg,#020303,#040806 52%,#020202);
   color:var(--text);
   overflow-x:hidden;
@@ -66,10 +79,10 @@ body::before{
   position:fixed;
   inset:0;
   background:
-    linear-gradient(rgba(255,255,255,.014) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.01) 1px, transparent 1px);
-  background-size:42px 42px;
-  opacity:.11;
+    linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.009) 1px, transparent 1px);
+  background-size:46px 46px;
+  opacity:.1;
   pointer-events:none;
   z-index:-3;
 }
@@ -78,28 +91,19 @@ body::after{
   content:"";
   position:fixed;
   inset:0;
-  background:radial-gradient(circle at center, transparent 34%, rgba(0,0,0,.62) 100%);
+  background:radial-gradient(circle at center, transparent 36%, rgba(0,0,0,.6) 100%);
   pointer-events:none;
   z-index:-2;
 }
 
-button,
-input,
-textarea,
-select{
-  font:inherit;
-}
-
-button{
-  cursor:pointer;
-}
+button,input,textarea,select{ font:inherit; }
+button{ cursor:pointer; }
 
 .app{
   width:100%;
-  max-width:none;
   min-height:100svh;
   margin:0;
-  padding:max(13px, env(safe-area-inset-top)) 18px 148px;
+  padding:max(15px, env(safe-area-inset-top)) 20px 156px;
   position:relative;
   isolation:isolate;
   overflow:hidden;
@@ -111,1243 +115,821 @@ button{
   inset:0;
   min-height:100svh;
   background:
-    radial-gradient(circle at 50% 0%, rgba(212,175,55,.14), transparent 34%),
-    linear-gradient(180deg, rgba(2,3,3,.20), rgba(2,3,3,.82) 54%, rgba(2,2,2,.96)),
+    radial-gradient(circle at 50% 0%, rgba(212,175,55,.13), transparent 35%),
+    radial-gradient(circle at 50% 0%, rgba(63,191,117,.05), transparent 30%),
+    linear-gradient(180deg, rgba(2,3,3,.22), rgba(2,3,3,.82) 54%, rgba(2,2,2,.96)),
     url("/static/palm-hero.png") center top / cover no-repeat;
-  opacity:.52;
+  opacity:.5;
   pointer-events:none;
   z-index:0;
 }
 
-.app > *{
-  position:relative;
-  z-index:1;
-}
+.app > *{ position:relative; z-index:1; }
 
 .app > .topbar,
 .app > .screen{
   width:100%;
-  max-width:430px;
+  max-width:440px;
   margin-left:auto;
   margin-right:auto;
 }
 
 @media(min-width:768px){
-  .app{
-    padding-left:32px;
-    padding-right:32px;
-  }
-
+  .app{ padding-left:32px; padding-right:32px; }
   .app > .topbar,
-  .app > .screen{
-    max-width:620px;
-  }
-
-  .decode-card{
-    padding:22px;
-  }
-
-  textarea{
-    min-height:175px;
-  }
-
-  .app::before{
-    background-size:cover;
-    background-position:center top;
-    opacity:.62;
-  }
+  .app > .screen{ max-width:640px; }
+  .decode-card{ padding:26px; }
+  textarea{ min-height:180px; }
+  .app::before{ opacity:.6; }
 }
 
 @media(min-width:1100px){
   .app > .topbar,
-  .app > .screen{
-    max-width:680px;
-  }
-
-  .app::before{
-    background-position:center top;
-  }
+  .app > .screen{ max-width:700px; }
 }
 
-/* MENU */
+/* ============ MENU DRAWER ============ */
+.menu-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.6);
+  backdrop-filter:blur(3px);
+  opacity:0;
+  visibility:hidden;
+  transition:opacity .3s ease, visibility .3s ease;
+  z-index:99;
+}
+.menu-overlay.show{ opacity:1; visibility:visible; }
 
 .menu-panel{
   position:fixed;
   top:0;
-  left:-292px;
-  width:270px;
+  left:0;
+  width:284px;
   height:100vh;
   background:
-    radial-gradient(circle at top, rgba(212,175,55,.12), transparent 35%),
-    radial-gradient(circle at 40% 0%, rgba(63,191,117,.04), transparent 38%),
+    radial-gradient(circle at top, rgba(212,175,55,.12), transparent 36%),
+    radial-gradient(circle at 30% 12%, rgba(63,191,117,.07), transparent 40%),
     #07080a;
   border-right:1px solid var(--line2);
   z-index:100;
-  padding:24px 20px;
-  transition:.25s ease;
-  box-shadow:24px 0 70px rgba(0,0,0,.76);
+  padding:26px 22px;
+  transform:translateX(-104%);
+  transition:transform .32s cubic-bezier(.4,0,.2,1);
+  box-shadow:30px 0 80px rgba(0,0,0,.78);
 }
+.menu-panel.open{ transform:translateX(0); }
 
-.menu-panel.open{
-  left:0;
+.menu-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:24px;
 }
-
-.menu-panel button{
+.menu-head .menu-mark{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:var(--gold2);
+  font-family:Cinzel,serif;
+  font-size:.82rem;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.menu-head .menu-mark svg{ width:26px; height:26px; }
+.menu-panel .close-x{
   background:none;
   border:0;
   color:var(--gold2);
-  font-size:32px;
-  margin-bottom:18px;
+  font-size:30px;
+  line-height:1;
+  width:34px;
+  height:34px;
 }
 
-.menu-panel a{
-  display:block;
+.menu-link{
+  display:flex;
+  align-items:center;
+  gap:13px;
   color:var(--cream);
   text-decoration:none;
-  padding:14px 0;
-  border-bottom:1px solid rgba(212,175,55,.16);
-  font-weight:800;
+  padding:15px 12px;
+  border-radius:14px;
+  margin-bottom:4px;
+  font-weight:700;
+  font-size:.92rem;
+  transition:background .2s ease;
+}
+.menu-link:hover,.menu-link:active{ background:rgba(212,175,55,.08); }
+.menu-link svg{
+  width:20px; height:20px;
+  stroke:var(--gold2); fill:none; stroke-width:2;
+  stroke-linecap:round; stroke-linejoin:round;
 }
 
-/* TOP BAR */
-
+/* ============ TOP BAR ============ */
 .topbar{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:10px;
-  margin-bottom:14px;
+  gap:12px;
+  margin-bottom:20px;
 }
 
 .icon-btn{
-  width:46px;
-  height:46px;
-  min-width:46px;
+  width:48px; height:48px; min-width:48px;
   border-radius:50%;
-  border:1.4px solid rgba(248,221,125,.55);
+  border:1.4px solid rgba(248,221,125,.42);
   background:
-    radial-gradient(circle at center, rgba(212,175,55,.125), rgba(63,191,117,.035) 42%, rgba(5,6,8,.9) 62%);
+    radial-gradient(circle at center, rgba(212,175,55,.12), rgba(63,191,117,.04) 44%, rgba(5,6,8,.9) 64%);
   color:var(--gold2);
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  display:flex; align-items:center; justify-content:center;
   backdrop-filter:blur(18px);
   box-shadow:
-    0 0 16px rgba(212,175,55,.16),
-    0 12px 28px rgba(0,0,0,.48),
+    0 0 18px rgba(212,175,55,.14),
+    0 12px 28px rgba(0,0,0,.46),
     inset 0 1px 0 rgba(255,255,255,.08);
   text-decoration:none;
+  transition:transform .18s ease, box-shadow .18s ease;
 }
-
+.icon-btn:active{ transform:scale(.94); }
 .icon-btn svg{
-  width:22px;
-  height:22px;
-  stroke-width:2.7;
-  stroke:currentColor;
-  fill:none;
-  stroke-linecap:round;
-  stroke-linejoin:round;
+  width:22px; height:22px;
+  stroke-width:2.4; stroke:currentColor; fill:none;
+  stroke-linecap:round; stroke-linejoin:round;
 }
 
 .brand{
   flex:1;
-  text-align:center;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:7px;
 }
-
+.brand-mark{
+  display:flex; align-items:center; gap:9px;
+}
+.brand-logo{
+  width:38px;
+  height:38px;
+  object-fit:contain;
+  display:block;
+  filter:drop-shadow(0 0 12px rgba(212,175,55,.22));
+}
 .brand h1{
   margin:0;
   font-family:Cinzel,Georgia,serif;
-  font-size:1.04rem;
-  line-height:1.08;
+  font-size:1.02rem;
+  line-height:1.06;
   color:var(--gold2);
   text-transform:uppercase;
-  letter-spacing:.15em;
-  text-shadow:0 0 18px rgba(212,175,55,.22);
+  letter-spacing:.14em;
+  text-shadow:0 0 20px rgba(212,175,55,.24);
+  text-align:center;
 }
-
 .brand p{
-  margin:4px auto 0;
-  font-size:.54rem;
-  color:rgba(255,244,220,.72);
+  margin:0;
+  font-size:.55rem;
+  color:rgba(255,244,220,.66);
   text-transform:uppercase;
-  letter-spacing:.16em;
+  letter-spacing:.22em;
   white-space:nowrap;
 }
-
-.brand::after{
-  content:"";
-  display:block;
-  width:86px;
-  height:1px;
-  margin:8px auto 0;
-  background:linear-gradient(90deg, transparent, rgba(248,221,125,.78), transparent);
-  opacity:.75;
+.brand .brand-rule{
+  width:92px; height:1px;
+  background:linear-gradient(90deg, transparent, rgba(63,191,117,.4), rgba(248,221,125,.85), rgba(63,191,117,.4), transparent);
+  opacity:.8;
 }
 
-/* SCREENS */
-
-.screen{
-  display:none;
-  animation:screenIn .22s ease both;
-}
-
+/* ============ SCREENS ============ */
+.screen{ display:none; }
 .screen.active{
   display:block;
+  animation:screenIn .34s cubic-bezier(.4,0,.2,1) both;
 }
-
 @keyframes screenIn{
-  from{opacity:.45;transform:translateY(7px);}
+  from{opacity:0;transform:translateY(10px);}
   to{opacity:1;transform:translateY(0);}
 }
 
-.page-title{
-  text-align:center;
-  margin:6px 0 16px;
-}
-
+.page-title{ text-align:center; margin:8px 0 22px; }
 .page-title h2{
   margin:0;
   font-family:Cinzel,Georgia,serif;
   color:var(--gold2);
-  font-size:1.03rem;
-  line-height:1.15;
+  font-size:1.18rem;
+  line-height:1.18;
+  letter-spacing:.02em;
 }
-
+.page-title .title-ornament{
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  margin:10px 0;
+}
+.page-title .title-ornament .o-line{
+  width:34px; height:1px;
+  background:linear-gradient(90deg,transparent,var(--gold2));
+}
+.page-title .title-ornament .o-line.r{
+  background:linear-gradient(90deg,var(--gold2),transparent);
+}
+.page-title .title-ornament .o-dot{
+  width:5px; height:5px; transform:rotate(45deg);
+  background:var(--emerald2);
+  box-shadow:0 0 8px rgba(111,231,168,.7);
+}
 .page-title p{
-  margin:8px auto 0;
-  max-width:275px;
+  margin:0 auto;
+  max-width:300px;
   color:var(--muted);
-  font-size:.8rem;
-  line-height:1.42;
+  font-size:.84rem;
+  line-height:1.5;
 }
 
-/* CARDS */
-
+/* ============ CARDS ============ */
 .card{
-  border-radius:22px;
+  border-radius:var(--r-lg);
   border:1px solid var(--line);
   background:
-    radial-gradient(circle at top center, rgba(212,175,55,.064), transparent 38%),
-    radial-gradient(circle at 12% 0%, rgba(63,191,117,.035), transparent 34%),
+    radial-gradient(circle at top center, rgba(212,175,55,.06), transparent 40%),
+    radial-gradient(circle at 10% 0%, rgba(63,191,117,.05), transparent 36%),
     linear-gradient(180deg, rgba(17,18,23,.96), rgba(6,7,10,.985));
   box-shadow:
-    0 20px 54px rgba(0,0,0,.5),
+    0 22px 56px rgba(0,0,0,.5),
     inset 0 1px 0 rgba(255,255,255,.045);
   position:relative;
   overflow:hidden;
 }
-
 .card::before{
   content:"";
   position:absolute;
-  left:18px;
-  right:18px;
-  top:0;
-  height:1px;
-  background:linear-gradient(90deg, transparent, rgba(63,191,117,.10), rgba(246,216,120,.55), rgba(63,191,117,.10), transparent);
-  opacity:.62;
-  z-index:0;
-  pointer-events:none;
+  left:20px; right:20px; top:0; height:1px;
+  background:linear-gradient(90deg, transparent, rgba(63,191,117,.18), rgba(246,216,120,.6), rgba(63,191,117,.18), transparent);
+  opacity:.7; z-index:0; pointer-events:none;
 }
-
 .card::after{
   content:"";
-  position:absolute;
-  inset:0;
+  position:absolute; inset:0;
   background:url("/static/palm-texture.png") center / cover no-repeat;
-  opacity:.075;
-  pointer-events:none;
-  z-index:0;
+  opacity:.06; pointer-events:none; z-index:0;
 }
+.card > *{ position:relative; z-index:1; }
 
-.card > *{
-  position:relative;
-  z-index:1;
-}
+.decode-card{ padding:22px; margin-bottom:16px; }
+.decode-card h2{ margin:0 0 8px; color:var(--gold2); font-size:1.04rem; }
+.decode-card .sub{ margin:0 0 18px; color:rgba(255,244,220,.66); font-size:.85rem; line-height:1.5; }
 
-.decode-card{
-  padding:16px;
-  margin-bottom:14px;
-}
-
-.decode-card h2{
-  margin:0 0 7px;
-  color:var(--gold2);
-  font-size:.96rem;
-}
-
-.decode-card .sub{
-  margin:0 0 14px;
-  color:rgba(255,244,220,.7);
-  font-size:.79rem;
-  line-height:1.42;
-}
-
-/* FORMS */
-
-textarea,
-input,
-select{
+/* ============ FORMS ============ */
+textarea,input,select{
   width:100%;
-  border-radius:17px;
-  border:1px solid rgba(212,175,55,.25);
-  background:
-    radial-gradient(circle at top left, rgba(255,255,255,.04), transparent 38%),
-    linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.012));
-  color:#fff;
-  outline:none;
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
-}
-
-textarea{
-  min-height:145px;
-  resize:vertical;
-  padding:14px;
-  line-height:1.55;
-  font-size:.88rem;
-}
-
-input,
-select{
-  padding:13px 14px;
-  font-size:.88rem;
-}
-
-select option{
-  color:#111;
-}
-
-textarea::placeholder,
-input::placeholder{
-  color:rgba(248,239,217,.36);
-}
-
-.count-row{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  margin-top:6px;
-  color:rgba(248,239,217,.4);
-  font-size:.68rem;
-}
-
-.status-line{
-  margin:0 0 12px;
-  padding:10px 12px;
-  border-radius:15px;
-  border:1px solid rgba(212,175,55,.17);
-  background:rgba(0,0,0,.24);
-  color:var(--muted);
-  font-size:.76rem;
-  line-height:1.45;
-  display:none;
-}
-
-.status-line strong{
-  color:var(--gold2);
-}
-
-/* ACTIONS */
-
-.chips{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:9px;
-  margin-top:14px;
-}
-
-.chip{
-  min-height:42px;
-  border-radius:15px;
+  border-radius:var(--r-md);
   border:1px solid rgba(212,175,55,.22);
   background:
-    linear-gradient(180deg, rgba(255,255,255,.038), rgba(255,255,255,.014));
-  color:var(--text);
-  padding:8px 10px;
-  font-size:.72rem;
-  font-weight:850;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:7px;
+    radial-gradient(circle at top left, rgba(255,255,255,.04), transparent 40%),
+    linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.01));
+  color:#fff;
+  outline:none;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+  transition:border-color .2s ease, box-shadow .2s ease;
 }
+textarea:focus,input:focus,select:focus{
+  border-color:rgba(111,231,168,.5);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03), 0 0 0 3px rgba(63,191,117,.12);
+}
+textarea{ min-height:155px; resize:vertical; padding:16px; line-height:1.6; font-size:.92rem; }
+input,select{ padding:14px 15px; font-size:.9rem; }
+select option{ color:#111; }
+textarea::placeholder,input::placeholder{ color:rgba(248,239,217,.34); }
 
-.chip span:first-child{
-  color:var(--gold2);
+.count-row{
+  display:flex; justify-content:space-between; gap:10px;
+  margin-top:8px; color:var(--muted2); font-size:.7rem;
 }
+#qualityHint.good{ color:var(--emerald2); }
+
+.status-line{
+  margin:0 0 14px;
+  padding:12px 14px;
+  border-radius:var(--r-sm);
+  border:1px solid rgba(111,231,168,.22);
+  background:linear-gradient(180deg, rgba(63,191,117,.07), rgba(0,0,0,.2));
+  color:var(--muted);
+  font-size:.78rem; line-height:1.5;
+  display:none;
+}
+.status-line strong{ color:var(--emerald2); }
+
+/* ============ CHIPS ============ */
+.chips{
+  display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px;
+}
+.chip{
+  min-height:48px;
+  border-radius:var(--r-sm);
+  border:1px solid rgba(212,175,55,.18);
+  background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012));
+  color:var(--text);
+  padding:10px 13px;
+  font-size:.76rem; font-weight:800;
+  display:flex; align-items:center; gap:10px;
+  transition:border-color .2s ease, transform .15s ease, background .2s ease;
+}
+.chip:active{ transform:scale(.97); }
+.chip:hover{ border-color:rgba(111,231,168,.4); background:rgba(63,191,117,.05); }
+.chip .chip-ico{
+  width:30px; height:30px; min-width:30px;
+  border-radius:9px;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--gold2);
+  background:radial-gradient(circle, rgba(212,175,55,.16), rgba(255,255,255,.02));
+  border:1px solid rgba(212,175,55,.22);
+}
+.chip .chip-ico svg{ width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+.chip .chip-label{ flex:1; text-align:left; }
+.chip .chip-arrow{ color:var(--muted2); font-size:1rem; }
 
 .primary{
-  width:100%;
-  margin-top:15px;
-  padding:15px 16px;
-  border:0;
-  border-radius:18px;
-  background:
-    linear-gradient(180deg,#ffe99d 0%, #dfb443 54%, #a96f1c 100%);
+  width:100%; margin-top:18px;
+  padding:17px 16px;
+  border:0; border-radius:var(--r-md);
+  background:linear-gradient(180deg,#ffe99d 0%, #dfb443 54%, #a96f1c 100%);
   color:#150d02;
-  font-size:.9rem;
-  font-weight:900;
+  font-size:.94rem; font-weight:900;
+  letter-spacing:.02em;
+  position:relative; overflow:hidden;
   box-shadow:
-    0 14px 32px rgba(0,0,0,.58),
-    0 0 24px rgba(212,175,55,.14),
+    0 16px 34px rgba(0,0,0,.56),
+    0 0 26px rgba(212,175,55,.16),
     inset 0 1px 0 rgba(255,255,255,.42);
+  transition:transform .16s ease, filter .2s ease;
 }
+.primary::after{
+  content:"";
+  position:absolute; top:0; left:-120%;
+  width:55%; height:100%;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+  transform:skewX(-18deg);
+  animation:sheen 5s infinite;
+}
+@keyframes sheen{ 0%{left:-120%;} 45%{left:170%;} 100%{left:170%;} }
+.primary:active{ transform:scale(.985); }
+.primary:disabled{ filter:saturate(.7) brightness(.92); }
 
 .secondary{
-  width:100%;
-  margin-top:10px;
-  padding:13px 14px;
-  border-radius:17px;
-  border:1px solid rgba(212,175,55,.28);
-  background:rgba(255,255,255,.035);
-  color:var(--gold2);
-  font-size:.82rem;
-  font-weight:900;
+  width:100%; margin-top:11px;
+  padding:14px 15px;
+  border-radius:var(--r-md);
+  border:1px solid rgba(111,231,168,.3);
+  background:rgba(63,191,117,.05);
+  color:var(--emerald2);
+  font-size:.84rem; font-weight:900;
 }
 
-.helper{
-  margin:13px 0 0;
-  text-align:center;
-  color:var(--muted);
-  font-size:.73rem;
-  line-height:1.48;
-}
+.helper{ margin:15px 0 0; text-align:center; color:var(--muted); font-size:.75rem; line-height:1.55; }
 
-/* ADS */
-
+/* ============ ADS (native style, no dashed slot) ============ */
 .ad-card{
-  display:block;
-  margin:14px 0 0;
-  padding:12px;
-  border-radius:20px;
-  border:1px solid rgba(212,175,55,.16);
-  background:
-    radial-gradient(circle at top, rgba(212,175,55,.055), transparent 42%),
-    rgba(255,255,255,.025);
-  box-shadow:0 14px 34px rgba(0,0,0,.32);
-}
-
-.ad-card.hidden{
-  display:none;
-}
-
-.ad-label{
-  margin:0 0 8px;
-  color:rgba(248,239,217,.42);
-  font-size:.58rem;
-  font-weight:900;
-  letter-spacing:.14em;
-  text-transform:uppercase;
-  text-align:center;
-}
-
-.ad-placeholder{
-  min-height:84px;
-  border-radius:16px;
-  border:1px dashed rgba(212,175,55,.22);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  color:rgba(248,239,217,.36);
-  font-size:.72rem;
-  text-align:center;
-  padding:12px;
-}
-
-/* REWARDED AD MODAL */
-
-.reward-modal{
-  position:fixed;
-  inset:0;
-  z-index:300;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  padding:18px;
-  background:rgba(0,0,0,.78);
-  backdrop-filter:blur(18px);
-}
-
-.reward-modal.show{
-  display:flex;
-}
-
-.reward-box{
-  width:100%;
-  max-width:392px;
-  border-radius:24px;
-  border:1px solid rgba(212,175,55,.34);
-  background:
-    radial-gradient(circle at top center, rgba(212,175,55,.14), transparent 40%),
-    linear-gradient(180deg, rgba(18,19,24,.98), rgba(4,5,7,.99));
-  box-shadow:
-    0 28px 80px rgba(0,0,0,.72),
-    inset 0 1px 0 rgba(255,255,255,.06);
-  padding:18px;
-  text-align:center;
-  position:relative;
+  display:block; margin:16px 0 0;
+  padding:0; border-radius:var(--r-md);
+  border:1px solid rgba(255,255,255,.06);
+  background:rgba(255,255,255,.015);
   overflow:hidden;
 }
+.ad-card.hidden{ display:none; }
+.ad-label{
+  margin:0; padding:7px 14px 0;
+  color:var(--muted2); font-size:.56rem; font-weight:800;
+  letter-spacing:.16em; text-transform:uppercase;
+}
+.ad-slot{
+  min-height:90px; margin:8px;
+  border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--muted2); font-size:.74rem; text-align:center; padding:14px;
+  background:linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.008));
+}
 
+/* ============ REWARD MODAL ============ */
+.reward-modal{
+  position:fixed; inset:0; z-index:300;
+  display:none; align-items:center; justify-content:center;
+  padding:20px;
+  background:rgba(0,0,0,.8);
+  backdrop-filter:blur(20px);
+}
+.reward-modal.show{ display:flex; animation:fadeIn .3s ease; }
+@keyframes fadeIn{ from{opacity:0;} to{opacity:1;} }
+.reward-box{
+  width:100%; max-width:400px;
+  border-radius:var(--r-lg);
+  border:1px solid rgba(212,175,55,.32);
+  background:
+    radial-gradient(circle at top center, rgba(212,175,55,.13), transparent 42%),
+    radial-gradient(circle at 50% 0%, rgba(63,191,117,.06), transparent 36%),
+    linear-gradient(180deg, rgba(18,19,24,.98), rgba(4,5,7,.99));
+  box-shadow:0 30px 84px rgba(0,0,0,.74), inset 0 1px 0 rgba(255,255,255,.06);
+  padding:22px; text-align:center; position:relative; overflow:hidden;
+  animation:popIn .38s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes popIn{ from{opacity:0;transform:scale(.9) translateY(14px);} to{opacity:1;transform:scale(1) translateY(0);} }
 .reward-box::before{
-  content:"";
-  position:absolute;
-  left:18px;
-  right:18px;
-  top:0;
-  height:1px;
+  content:""; position:absolute; left:20px; right:20px; top:0; height:1px;
   background:linear-gradient(90deg, transparent, rgba(248,221,125,.72), transparent);
 }
-
-.reward-kicker{
-  margin:0 0 8px;
-  color:var(--gold2);
-  font-size:.62rem;
-  font-weight:900;
-  letter-spacing:.16em;
-  text-transform:uppercase;
-}
-
-.reward-title{
-  margin:0;
-  font-family:Cinzel,Georgia,serif;
-  color:var(--cream);
-  font-size:1.24rem;
-  line-height:1.12;
-}
-
-.reward-copy{
-  margin:10px auto 14px;
-  color:var(--muted);
-  font-size:.8rem;
-  line-height:1.48;
-  max-width:310px;
-}
-
+.reward-kicker{ margin:0 0 9px; color:var(--emerald2); font-size:.62rem; font-weight:900; letter-spacing:.18em; text-transform:uppercase; }
+.reward-title{ margin:0; font-family:Cinzel,Georgia,serif; color:var(--cream); font-size:1.3rem; line-height:1.12; }
+.reward-copy{ margin:11px auto 16px; color:var(--muted); font-size:.82rem; line-height:1.5; max-width:316px; }
 .reward-ad-space{
-  min-height:142px;
-  border-radius:20px;
-  border:1px dashed rgba(212,175,55,.3);
-  background:
-    radial-gradient(circle at center, rgba(212,175,55,.07), transparent 48%),
-    rgba(0,0,0,.28);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:16px;
-  color:rgba(248,239,217,.48);
-  font-size:.8rem;
-  line-height:1.4;
+  min-height:150px; border-radius:var(--r-md);
+  border:1px solid rgba(212,175,55,.18);
+  background:radial-gradient(circle at center, rgba(212,175,55,.06), transparent 50%), rgba(0,0,0,.26);
+  display:flex; align-items:center; justify-content:center; padding:16px;
+  color:var(--muted); font-size:.8rem; line-height:1.4;
 }
-
-.reward-count{
-  margin:12px 0 0;
-  color:var(--gold2);
-  font-size:.76rem;
-  font-weight:900;
+.reward-count{ margin:14px 0 0; color:var(--gold2); font-size:.78rem; font-weight:900; }
+.reward-actions{ display:grid; gap:10px; margin-top:15px; }
+.reward-actions button,.reward-actions a{
+  width:100%; border-radius:var(--r-md); padding:14px 15px;
+  font-weight:900; text-decoration:none;
+  display:flex; align-items:center; justify-content:center;
 }
+.reward-continue{ border:0; background:linear-gradient(180deg,#ffe99d 0%, #dfb443 54%, #a96f1c 100%); color:#150d02; }
+.reward-continue:disabled{ opacity:.5; cursor:not-allowed; }
+.reward-upgrade{ border:1px solid rgba(111,231,168,.3); background:rgba(63,191,117,.05); color:var(--emerald2); }
+.reward-note{ margin:12px 0 0; color:var(--muted2); font-size:.66rem; line-height:1.4; }
 
-.reward-actions{
-  display:grid;
-  gap:9px;
-  margin-top:14px;
+/* ============ GUIDED ============ */
+.guided-panel{
+  display:none; margin-top:14px; padding:16px;
+  border-radius:var(--r-md);
+  border:1px solid rgba(111,231,168,.16);
+  background:linear-gradient(180deg, rgba(63,191,117,.05), rgba(0,0,0,.2));
+  animation:screenIn .3s ease;
 }
-
-.reward-actions button,
-.reward-actions a{
-  width:100%;
-  border-radius:17px;
-  padding:13px 14px;
-  font-weight:900;
-  text-decoration:none;
-  display:flex;
-  align-items:center;
-  justify-content:center;
+.guided-panel.open{ display:block; }
+.guided-grid{ display:grid; gap:12px; }
+.guided-row{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.field label{ display:block; margin:0 0 8px; color:var(--gold2); font-size:.7rem; font-weight:900; letter-spacing:.04em; }
+.symbol-chip-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; }
+.tiny-chip{
+  border-radius:999px;
+  border:1px solid rgba(212,175,55,.22);
+  background:rgba(255,255,255,.035);
+  color:var(--text);
+  padding:9px 13px; font-size:.7rem; font-weight:800;
+  transition:transform .14s ease;
 }
+.tiny-chip:active{ transform:scale(.95); }
+.tiny-chip.selected{ color:#160d02; background:linear-gradient(180deg,#ffe99b,#d9a83a); border-color:transparent; }
 
-.reward-continue{
-  border:0;
-  background:
-    linear-gradient(180deg,#ffe99d 0%, #dfb443 54%, #a96f1c 100%);
-  color:#150d02;
-}
+/* ============ RESULTS ============ */
+.result{ display:none; margin-top:16px; padding-bottom:30px; }
+.result.show{ display:block; }
 
-.reward-continue:disabled{
-  opacity:.52;
-  cursor:not-allowed;
-}
-
-.reward-upgrade{
+.result-head{ display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin:0 0 14px; }
+.result-head h3{ margin:0; font-family:Cinzel,serif; color:var(--gold2); font-size:1rem; }
+.result-head p{ margin:5px 0 0; color:var(--muted); font-size:.68rem; }
+.result-actions{ display:flex; gap:8px; }
+.small-btn{
+  border-radius:999px;
   border:1px solid rgba(212,175,55,.28);
   background:rgba(255,255,255,.035);
   color:var(--gold2);
+  padding:8px 12px; font-weight:850; font-size:.7rem;
+  transition:transform .14s ease;
+}
+.small-btn:active{ transform:scale(.94); }
+
+.dream-quote{
+  position:relative;
+  margin:0 0 18px; padding:14px 16px 14px 18px;
+  border-radius:var(--r-sm);
+  border-left:2px solid var(--emerald2);
+  background:rgba(63,191,117,.045);
+  font-family:'Cormorant Garamond',serif;
+  font-style:italic; font-size:1.02rem; line-height:1.5;
+  color:rgba(248,239,217,.84);
 }
 
-.reward-note{
-  margin:11px 0 0;
-  color:rgba(248,239,217,.38);
-  font-size:.66rem;
-  line-height:1.4;
-}
-
-/* GUIDED DETAILS */
-
-.guided-panel{
-  display:none;
-  margin-top:12px;
-  padding:13px;
-  border-radius:19px;
-  border:1px solid rgba(212,175,55,.18);
-  background:rgba(0,0,0,.22);
-}
-
-.guided-panel.open{
-  display:block;
-}
-
-.guided-grid{
-  display:grid;
-  gap:10px;
-}
-
-.guided-row{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:9px;
-}
-
-.field label{
-  display:block;
-  margin:0 0 7px;
-  color:var(--gold2);
-  font-size:.68rem;
-  font-weight:900;
-}
-
-.symbol-chip-row{
-  display:flex;
-  flex-wrap:wrap;
-  gap:7px;
-  margin-top:8px;
-}
-
-.tiny-chip{
-  border-radius:999px;
-  border:1px solid rgba(212,175,55,.24);
-  background:rgba(255,255,255,.035);
-  color:var(--text);
-  padding:8px 10px;
-  font-size:.68rem;
-  font-weight:800;
-}
-
-.tiny-chip.selected{
-  color:#160d02;
-  background:linear-gradient(180deg,#ffe99b,#d9a83a);
-}
-
-/* RESULTS */
-
-.result{
-  display:none;
-  margin-top:14px;
-  padding-bottom:28px;
-}
-
-.result.show{
-  display:block;
-}
-
-.result-head{
-  display:flex;
-  justify-content:space-between;
-  gap:12px;
-  align-items:flex-start;
-  margin:0 0 11px;
-}
-
-.result-head h3{
-  margin:0;
-  color:var(--gold2);
-  font-size:.9rem;
-}
-
-.result-head p{
-  margin:4px 0 0;
-  color:var(--muted);
-  font-size:.67rem;
-}
-
-.result-actions{
-  display:flex;
-  gap:7px;
-}
-
-.small-btn{
-  border-radius:999px;
-  border:1px solid rgba(212,175,55,.3);
-  background:rgba(255,255,255,.035);
-  color:var(--gold2);
-  padding:7px 10px;
-  font-weight:850;
-  font-size:.68rem;
-}
-
-.result-card{
-  opacity:0;
-  transform:translateY(11px);
-  border-radius:18px;
-  margin-top:9px;
-  padding:13px;
+/* HERO result card (Main Meaning) */
+.result-hero{
+  opacity:0; transform:translateY(12px);
+  border-radius:var(--r-md); margin-top:12px; padding:20px;
   background:
-    radial-gradient(circle at left, rgba(212,175,55,.085), transparent 28%),
-    linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.016));
-  border:1px solid rgba(212,175,55,.17);
-  box-shadow:0 14px 32px rgba(0,0,0,.34);
-  animation:cardReveal .42s forwards;
+    radial-gradient(circle at top left, rgba(212,175,55,.14), transparent 36%),
+    linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.018));
+  border:1px solid rgba(246,216,120,.3);
+  box-shadow:0 18px 40px rgba(0,0,0,.4), 0 0 30px rgba(212,175,55,.08);
+  animation:cardReveal .5s forwards;
 }
-
-.result-card.error{
-  border-color:rgba(255,180,168,.34);
-  background:linear-gradient(180deg, rgba(255,92,92,.08), rgba(255,255,255,.015));
+.result-hero .hero-kicker{
+  display:flex; align-items:center; gap:9px;
+  color:var(--gold2); font-size:.66rem; font-weight:900;
+  letter-spacing:.16em; text-transform:uppercase; margin-bottom:10px;
 }
-
-.result-card-row{
-  display:grid;
-  grid-template-columns:38px 1fr;
-  gap:11px;
-  align-items:flex-start;
-}
-
-.result-icon{
-  width:38px;
-  height:38px;
-  border-radius:15px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  color:var(--gold2);
-  border:1px solid rgba(212,175,55,.3);
-  background:radial-gradient(circle, rgba(212,175,55,.17), rgba(255,255,255,.02));
-  box-shadow:0 0 20px rgba(212,175,55,.12);
-}
-
-.result-icon svg{
-  width:21px;
-  height:21px;
-  stroke:currentColor;
-  fill:none;
-  stroke-width:2.2;
-  stroke-linecap:round;
-  stroke-linejoin:round;
-}
-
-.label{
-  margin-bottom:5px;
-  color:var(--gold2);
-  font-size:.7rem;
-  font-weight:900;
-}
-
-.result-text{
-  line-height:1.52;
-  color:rgba(248,239,217,.88);
-  font-size:.76rem;
+.result-hero .hero-kicker svg{ width:18px; height:18px; stroke:currentColor; fill:none; stroke-width:2.2; }
+.result-hero .hero-text{
+  font-family:'Cormorant Garamond',serif;
+  font-size:1.22rem; line-height:1.5; color:var(--cream);
   white-space:pre-wrap;
 }
 
-.symbol-matches{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:8px;
-  margin-top:9px;
+/* secondary result cards */
+.result-card{
+  opacity:0; transform:translateY(11px);
+  border-radius:var(--r-md); margin-top:11px; padding:15px;
+  background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.014));
+  border:1px solid rgba(212,175,55,.15);
+  box-shadow:0 14px 32px rgba(0,0,0,.3);
+  animation:cardReveal .42s forwards;
 }
+.result-card.accent-emerald{ border-color:rgba(111,231,168,.26); background:linear-gradient(180deg, rgba(63,191,117,.06), rgba(255,255,255,.012)); }
+.result-card.error{ border-color:rgba(255,180,168,.34); background:linear-gradient(180deg, rgba(255,92,92,.08), rgba(255,255,255,.015)); }
+.result-card.delay-1{ animation-delay:.06s; }
+.result-card.delay-2{ animation-delay:.12s; }
+.result-card.delay-3{ animation-delay:.18s; }
+.result-card.delay-4{ animation-delay:.24s; }
 
+.result-card-row{ display:grid; grid-template-columns:42px 1fr; gap:13px; align-items:flex-start; }
+.result-icon{
+  width:42px; height:42px; border-radius:13px;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--gold2);
+  border:1px solid rgba(212,175,55,.28);
+  background:radial-gradient(circle, rgba(212,175,55,.16), rgba(255,255,255,.02));
+  box-shadow:0 0 20px rgba(212,175,55,.1);
+}
+.result-icon.emerald{ color:var(--emerald2); border-color:rgba(111,231,168,.3); background:radial-gradient(circle, rgba(63,191,117,.16), rgba(255,255,255,.02)); box-shadow:0 0 20px rgba(63,191,117,.12); }
+.result-icon svg{ width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; }
+.label{ margin-bottom:6px; color:var(--gold2); font-size:.72rem; font-weight:900; letter-spacing:.04em; text-transform:uppercase; }
+.result-card.accent-emerald .label{ color:var(--emerald2); }
+.result-text{ line-height:1.6; color:rgba(248,239,217,.86); font-size:.82rem; white-space:pre-wrap; }
+
+.symbol-matches{ display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:11px; }
 .match-pill{
-  border-radius:14px;
+  border-radius:var(--r-sm);
+  border:1px solid rgba(212,175,55,.2);
+  background:rgba(255,255,255,.035);
+  padding:11px;
+  display:grid; grid-template-columns:26px 1fr; gap:9px; align-items:start;
+}
+.match-pill .m-ico{ color:var(--emerald2); width:26px; height:26px; display:flex; align-items:center; justify-content:center; }
+.match-pill .m-ico svg{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.match-pill strong{ display:block; color:var(--gold2); font-size:.76rem; margin-bottom:4px; }
+.match-pill span{ display:block; color:var(--muted); font-size:.67rem; line-height:1.36; }
+
+/* ============ JOURNAL ============ */
+.journal-tools{ display:flex; gap:9px; margin-bottom:14px; }
+.search{ flex:1; }
+.filter-btn{
+  width:50px; min-width:50px; border-radius:var(--r-md);
   border:1px solid rgba(212,175,55,.22);
   background:rgba(255,255,255,.035);
-  padding:10px;
+  color:var(--gold2); font-weight:900; font-size:1.1rem;
 }
-
-.match-pill strong{
-  display:block;
-  color:var(--gold2);
-  font-size:.74rem;
-  margin-bottom:4px;
-}
-
-.match-pill span{
-  display:block;
-  color:var(--muted);
-  font-size:.66rem;
-  line-height:1.32;
-}
-
-/* JOURNAL */
-
-.journal-tools{
-  display:flex;
-  gap:8px;
-  margin-bottom:13px;
-}
-
-.search{
-  flex:1;
-}
-
-.filter-btn{
-  width:46px;
-  min-width:46px;
-  border-radius:16px;
-  border:1px solid rgba(212,175,55,.24);
-  background:rgba(255,255,255,.035);
-  color:var(--gold2);
-  font-weight:900;
-}
-
-.pill-tabs{
-  display:flex;
-  gap:8px;
-  margin-bottom:13px;
-}
-
+.pill-tabs{ display:flex; gap:9px; margin-bottom:15px; }
 .pill-tab{
-  flex:1;
-  padding:9px 8px;
-  border-radius:999px;
-  border:1px solid rgba(212,175,55,.17);
+  flex:1; padding:11px 8px; border-radius:999px;
+  border:1px solid rgba(212,175,55,.16);
   background:rgba(255,255,255,.025);
-  color:var(--muted);
-  font-size:.69rem;
-  font-weight:850;
+  color:var(--muted); font-size:.72rem; font-weight:850;
+  transition:transform .14s ease;
 }
-
-.pill-tab.active{
-  color:#130c03;
-  background:linear-gradient(180deg,#f8dc7b,#c4912e);
-}
-
-.journal-list{
-  display:grid;
-  gap:9px;
-}
-
+.pill-tab:active{ transform:scale(.96); }
+.pill-tab.active{ color:#130c03; background:linear-gradient(180deg,#f8dc7b,#c4912e); border-color:transparent; }
+.journal-list{ display:grid; gap:10px; }
 .empty{
-  padding:24px 16px;
-  text-align:center;
-  color:var(--muted);
-  line-height:1.48;
-  font-size:.8rem;
+  padding:34px 20px; text-align:center;
+  color:var(--muted); line-height:1.55; font-size:.84rem;
 }
+.empty .empty-ico{
+  width:54px; height:54px; margin:0 auto 14px;
+  border-radius:50%;
+  border:1px solid rgba(212,175,55,.24);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--gold2);
+  background:radial-gradient(circle, rgba(212,175,55,.1), transparent 60%);
+}
+.empty .empty-ico svg{ width:26px; height:26px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
 
 .journal-item{
   width:100%;
-  border:1px solid rgba(212,175,55,.17);
-  background:
-    radial-gradient(circle at left, rgba(212,175,55,.08), transparent 28%),
-    rgba(255,255,255,.033);
+  border:1px solid rgba(212,175,55,.15);
+  background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012));
   color:var(--text);
-  border-radius:17px;
-  padding:11px;
-  display:grid;
-  grid-template-columns:38px 1fr 64px;
-  gap:9px;
-  align-items:center;
+  border-radius:var(--r-md); padding:13px;
+  display:grid; grid-template-columns:44px 1fr 66px; gap:11px; align-items:center;
   text-align:left;
+  transition:border-color .2s ease, transform .14s ease;
 }
-
+.journal-item:active{ transform:scale(.99); }
+.journal-item:hover{ border-color:rgba(111,231,168,.3); }
 .journal-icon{
-  width:38px;
-  height:38px;
-  border-radius:14px;
-  color:var(--gold2);
-  border:1px solid rgba(212,175,55,.25);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:rgba(212,175,55,.06);
-  font-size:1rem;
+  width:44px; height:44px; border-radius:13px;
+  color:var(--emerald2);
+  border:1px solid rgba(111,231,168,.24);
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(63,191,117,.06);
 }
-
-.journal-title{
-  font-size:.76rem;
-  font-weight:800;
-  line-height:1.32;
-  margin-bottom:4px;
-}
-
-.journal-date{
-  color:var(--muted);
-  font-size:.63rem;
-}
-
-.entry-actions{
-  display:flex;
-  gap:5px;
-  justify-content:flex-end;
-}
-
+.journal-icon svg{ width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.journal-title{ font-size:.8rem; font-weight:800; line-height:1.34; margin-bottom:5px; }
+.journal-date{ color:var(--muted); font-size:.64rem; }
+.entry-actions{ display:flex; gap:6px; justify-content:flex-end; }
 .icon-mini{
-  width:28px;
-  height:28px;
-  border-radius:50%;
+  width:30px; height:30px; border-radius:50%;
   border:1px solid rgba(212,175,55,.2);
   background:rgba(255,255,255,.035);
   color:var(--gold2);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:.85rem;
+  display:flex; align-items:center; justify-content:center; font-size:.9rem;
+  transition:transform .14s ease;
 }
+.icon-mini:active{ transform:scale(.9); }
+.danger{ color:var(--danger); }
 
-.danger{
-  color:var(--danger);
-}
-
-/* SYMBOLS */
-
-.symbol-grid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:8px;
-  padding-bottom:10px;
-}
-
+/* ============ SYMBOLS ============ */
+.symbol-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding-bottom:12px; }
 .symbol-card{
-  min-height:96px;
-  border-radius:17px;
-  border:1px solid rgba(212,175,55,.18);
+  min-height:112px;
+  border-radius:var(--r-md);
+  border:1px solid rgba(212,175,55,.16);
   background:
-    radial-gradient(circle at top, rgba(212,175,55,.085), transparent 42%),
-    rgba(255,255,255,.033);
+    radial-gradient(circle at top, rgba(212,175,55,.08), transparent 44%),
+    linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012));
   color:var(--text);
-  padding:10px 7px;
-  text-align:center;
-  overflow:hidden;
+  padding:14px 9px; text-align:center; overflow:hidden;
+  transition:border-color .2s ease, transform .15s ease;
 }
-
-.symbol-card .big{
+.symbol-card:active{ transform:scale(.96); }
+.symbol-card:hover{ border-color:rgba(111,231,168,.34); }
+.symbol-card .sym-ico{
+  width:40px; height:40px; margin:0 auto 9px;
+  border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
   color:var(--gold2);
-  font-size:1.35rem;
-  display:block;
-  margin-bottom:7px;
-  line-height:1;
+  border:1px solid rgba(212,175,55,.22);
+  background:radial-gradient(circle, rgba(212,175,55,.14), rgba(255,255,255,.02));
 }
+.symbol-card .sym-ico svg{ width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.symbol-card strong{ display:block; color:var(--cream); font-size:.74rem; margin-bottom:5px; }
+.symbol-card span{ display:block; color:var(--muted); font-size:.6rem; line-height:1.32; }
 
-.symbol-card strong{
-  display:block;
-  color:var(--cream);
-  font-size:.72rem;
-  margin-bottom:4px;
-}
-
-.symbol-card span{
-  display:block;
-  color:var(--muted);
-  font-size:.6rem;
-  line-height:1.28;
-}
-
-/* ACCOUNT */
-
-.account-profile{
-  display:flex;
-  align-items:center;
-  gap:13px;
-  padding:15px;
-  margin-bottom:13px;
-}
-
+/* ============ ACCOUNT ============ */
+.account-profile{ display:flex; align-items:center; gap:14px; padding:18px; margin-bottom:14px; }
 .avatar{
-  width:54px;
-  height:54px;
-  min-width:54px;
-  border-radius:50%;
-  border:1px solid rgba(246,216,120,.46);
+  width:58px; height:58px; min-width:58px; border-radius:50%;
+  border:1px solid rgba(246,216,120,.42);
   background:
-    radial-gradient(circle at 45% 40%, rgba(255,244,220,.58), rgba(212,175,55,.22) 18%, rgba(5,6,8,.95) 54%),
+    radial-gradient(circle at 45% 40%, rgba(255,244,220,.55), rgba(212,175,55,.22) 18%, rgba(5,6,8,.95) 54%),
     #07080a;
-  box-shadow:0 0 28px rgba(212,175,55,.2);
-}
-
-.profile-copy h3{
-  margin:0;
-  color:var(--cream);
-  font-size:.9rem;
-}
-
-.profile-copy p{
-  margin:5px 0 0;
-  color:var(--muted);
-  font-size:.71rem;
-  line-height:1.35;
-}
-
-.form-card{
-  padding:15px;
-  margin-bottom:13px;
-}
-
-.form-card label{
-  display:block;
+  box-shadow:0 0 30px rgba(212,175,55,.2);
+  display:flex; align-items:center; justify-content:center;
   color:var(--gold2);
-  font-weight:850;
-  font-size:.74rem;
-  margin-bottom:8px;
 }
+.avatar svg{ width:26px; height:26px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.profile-copy h3{ margin:0; color:var(--cream); font-size:.96rem; }
+.profile-copy p{ margin:6px 0 0; color:var(--muted); font-size:.74rem; line-height:1.4; }
 
-.settings-list{
-  overflow:hidden;
-  margin-bottom:13px;
-}
+.form-card{ padding:18px; margin-bottom:14px; }
+.form-card label{ display:block; color:var(--gold2); font-weight:850; font-size:.76rem; margin-bottom:9px; }
 
+.settings-list{ overflow:hidden; margin-bottom:14px; }
 .setting-row{
-  width:100%;
-  min-height:46px;
-  border:0;
-  border-bottom:1px solid rgba(212,175,55,.12);
-  background:transparent;
-  color:var(--text);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 14px;
-  font-weight:780;
-  font-size:.8rem;
-  text-align:left;
+  width:100%; min-height:52px; border:0;
+  border-bottom:1px solid rgba(212,175,55,.1);
+  background:transparent; color:var(--text);
+  display:flex; align-items:center; gap:12px;
+  padding:0 16px; font-weight:700; font-size:.84rem; text-align:left;
+  transition:background .18s ease;
 }
-
-a.setting-row{
-  text-decoration:none;
+.setting-row:hover{ background:rgba(212,175,55,.04); }
+a.setting-row{ text-decoration:none; }
+.setting-row:last-child{ border-bottom:0; }
+.setting-row .sr-ico{
+  width:22px; height:22px; color:var(--gold2);
+  display:flex; align-items:center; justify-content:center;
 }
+.setting-row .sr-ico svg{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.setting-row .sr-label{ flex:1; }
+.setting-row .sr-arrow{ color:var(--muted2); }
 
-.setting-row:last-child{
-  border-bottom:0;
-}
-
-.setting-row span{
-  color:var(--gold2);
-}
-
-.premium-card{
-  padding:16px;
-  margin-bottom:10px;
-}
-
-.premium-title{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-bottom:10px;
-}
-
+.premium-card{ padding:20px; margin-bottom:11px; }
+.premium-title{ display:flex; align-items:center; gap:12px; margin-bottom:14px; }
 .premium-icon{
-  width:40px;
-  height:40px;
-  min-width:40px;
-  border-radius:15px;
-  color:var(--gold2);
-  border:1px solid rgba(212,175,55,.28);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:radial-gradient(circle, rgba(212,175,55,.17), rgba(255,255,255,.02));
-  font-weight:900;
-  font-size:.86rem;
-}
-
-.premium-title h3{
-  margin:0;
-  color:var(--gold2);
-  font-size:.92rem;
-}
-
-.premium-title p{
-  margin:3px 0 0;
-  color:var(--muted);
-  font-size:.7rem;
-  line-height:1.4;
-}
-
-.account-checkout-form{
-  margin:0;
-}
-
-.upgrade-link{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  margin-top:13px;
-  width:100%;
-  padding:13px 15px;
-  border-radius:17px;
-  background:
-    linear-gradient(180deg,#ffe99b 0%, #d9a83a 54%, #a96d1b 100%);
-  border:0;
+  width:46px; height:46px; min-width:46px; border-radius:14px;
   color:#160d02;
-  text-decoration:none;
-  font-weight:900;
-  font-size:.84rem;
+  background:linear-gradient(180deg,#ffe99b,#d9a83a);
+  display:flex; align-items:center; justify-content:center;
+  font-family:Cinzel,serif; font-weight:800; font-size:1rem;
+  box-shadow:0 8px 20px rgba(212,175,55,.25);
 }
+.premium-title h3{ margin:0; color:var(--gold2); font-size:.98rem; }
+.premium-title p{ margin:4px 0 0; color:var(--muted); font-size:.72rem; line-height:1.45; }
+.premium-perks{ display:grid; gap:8px; margin:0 0 16px; }
+.premium-perk{ display:flex; align-items:center; gap:10px; color:rgba(248,239,217,.8); font-size:.78rem; }
+.premium-perk svg{ width:16px; height:16px; stroke:var(--emerald2); fill:none; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
 
+.account-checkout-form{ margin:0; }
+.upgrade-link{
+  display:flex; align-items:center; justify-content:center;
+  margin-top:0; width:100%; padding:15px;
+  border-radius:var(--r-md);
+  background:linear-gradient(180deg,#ffe99b 0%, #d9a83a 54%, #a96d1b 100%);
+  border:0; color:#160d02; text-decoration:none; font-weight:900; font-size:.86rem;
+}
 .subscription-link{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  margin-top:10px;
-  width:100%;
-  padding:12px 15px;
-  border-radius:17px;
-  border:1px solid rgba(212,175,55,.3);
-  background:rgba(255,255,255,.035);
-  color:var(--gold2);
-  text-decoration:none;
-  font-weight:900;
-  font-size:.82rem;
+  display:flex; align-items:center; justify-content:center;
+  margin-top:11px; width:100%; padding:13px 15px;
+  border-radius:var(--r-md);
+  border:1px solid rgba(111,231,168,.3);
+  background:rgba(63,191,117,.05);
+  color:var(--emerald2); text-decoration:none; font-weight:900; font-size:.83rem;
 }
 
-/* LEGAL */
+.legal-links{ margin:16px 0 0; display:flex; justify-content:center; gap:14px; flex-wrap:wrap; }
+.legal-links a{ color:rgba(248,221,125,.82); text-decoration:none; font-size:.74rem; font-weight:800; }
+.legal-links a:hover{ text-decoration:underline; }
 
-.legal-links{
-  margin:14px 0 0;
-  display:flex;
-  justify-content:center;
-  gap:12px;
-  flex-wrap:wrap;
-}
-
-.legal-links a{
-  color:rgba(248,221,125,.88);
-  text-decoration:none;
-  font-size:.72rem;
-  font-weight:850;
-}
-
-.legal-links a:hover{
-  text-decoration:underline;
-}
-
-/* BOTTOM NAV */
-
+/* ============ BOTTOM NAV ============ */
 .bottom-nav{
-  position:fixed;
-  left:50%;
-  bottom:max(10px, env(safe-area-inset-bottom));
+  position:fixed; left:50%; bottom:max(12px, env(safe-area-inset-bottom));
   transform:translateX(-50%);
-  width:calc(100% - 36px);
-  max-width:394px;
-  height:68px;
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:4px;
-  padding:8px;
-  border-radius:22px;
+  width:calc(100% - 36px); max-width:404px; height:72px;
+  display:grid; grid-template-columns:repeat(4,1fr); gap:4px;
+  padding:9px;
+  border-radius:24px;
   background:
-    radial-gradient(circle at 50% 0%, rgba(63,191,117,.045), transparent 50%),
-    rgba(7,8,10,.965);
-  border:1px solid rgba(212,175,55,.27);
+    radial-gradient(circle at 50% 0%, rgba(63,191,117,.06), transparent 50%),
+    rgba(7,8,10,.96);
+  border:1px solid rgba(212,175,55,.24);
   backdrop-filter:blur(26px);
-  box-shadow:0 18px 45px rgba(0,0,0,.72);
+  box-shadow:0 18px 48px rgba(0,0,0,.72);
   z-index:40;
 }
-
 .bottom-nav button{
-  border:0;
-  background:transparent;
-  color:rgba(248,239,217,.5);
-  font-size:.62rem;
-  font-weight:850;
-  border-radius:15px;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  gap:4px;
+  border:0; background:transparent;
+  color:rgba(248,239,217,.46);
+  font-size:.62rem; font-weight:850;
+  border-radius:16px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+  transition:color .2s ease, background .2s ease;
 }
-
-.bottom-nav svg{
-  width:19px;
-  height:19px;
-  stroke:currentColor;
-  fill:none;
-  stroke-width:2.2;
-  stroke-linecap:round;
-  stroke-linejoin:round;
-}
-
-.bottom-nav .active{
-  color:var(--gold2);
-  background:rgba(212,175,55,.1);
-}
+.bottom-nav svg{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:2.1; stroke-linecap:round; stroke-linejoin:round; }
+.bottom-nav .active{ color:var(--gold2); background:linear-gradient(180deg, rgba(212,175,55,.14), rgba(63,191,117,.05)); }
 
 .loader-ring{
-  width:17px;
-  height:17px;
+  width:17px; height:17px;
   border:2px solid rgba(0,0,0,.18);
-  border-top:2px solid #111;
-  border-radius:50%;
-  display:inline-block;
-  margin-right:9px;
-  vertical-align:-3px;
+  border-top:2px solid #111; border-radius:50%;
+  display:inline-block; margin-right:9px; vertical-align:-3px;
   animation:spin 1s linear infinite;
 }
+.hidden-file{ display:none; }
 
-.hidden-file{
-  display:none;
-}
-
-@keyframes spin{
-  to{transform:rotate(360deg);}
-}
-
-@keyframes cardReveal{
-  to{opacity:1;transform:translateY(0);}
-}
+@keyframes spin{ to{transform:rotate(360deg);} }
+@keyframes cardReveal{ to{opacity:1;transform:translateY(0);} }
 
 @media(max-width:380px){
-  .app{
-    padding-left:14px;
-    padding-right:14px;
-    padding-bottom:154px;
-  }
-
-  .brand h1{
-    font-size:.94rem;
-    letter-spacing:.12em;
-  }
-
-  .brand p{
-    font-size:.49rem;
-    letter-spacing:.12em;
-  }
-
-  .icon-btn{
-    width:42px;
-    height:42px;
-    min-width:42px;
-  }
-
-  .chip{
-    font-size:.68rem;
-    padding:8px;
-  }
-
-  .symbol-card{
-    min-height:92px;
-  }
+  .app{ padding-left:15px; padding-right:15px; padding-bottom:160px; }
+  .brand h1{ font-size:.92rem; letter-spacing:.11em; }
+  .brand p{ font-size:.5rem; letter-spacing:.16em; }
+  .icon-btn{ width:44px; height:44px; min-width:44px; }
+  .chip{ font-size:.72rem; padding:9px; }
+  .symbol-card{ min-height:104px; }
 }
 </style>
 </head>
-
 <body>
 
+<div class="menu-overlay" id="menuOverlay"></div>
+
 <div class="menu-panel" id="menuPanel">
-  <button id="closeMenu" type="button" aria-label="Close menu">×</button>
-  <a href="#" data-tab-link="decode">Decode Dream</a>
-  <a href="#" data-tab-link="journal">Journal</a>
-  <a href="#" data-tab-link="symbols">Symbols</a>
-  <a href="#" data-tab-link="account">Account</a>
+  <div class="menu-head">
+    <div class="menu-mark">
+      <svg viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="16" r="14" stroke="#f8dd7d" stroke-width="1"/>
+        <path d="M16 5c5 4 8 7 8 12a8 8 0 0 1-16 0c0-5 3-8 8-12z" stroke="#6fe7a8" stroke-width="1.4" fill="none"/>
+        <path d="M11 17c3 2.6 7 2.6 10 0" stroke="#f8dd7d" stroke-width="1.4"/>
+      </svg>
+      <span>Menu</span>
+    </div>
+    <button class="close-x" id="closeMenu" type="button" aria-label="Close menu">×</button>
+  </div>
+
+  <a class="menu-link" href="#" data-tab-link="decode">
+    <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
+    Decode Dream
+  </a>
+  <a class="menu-link" href="#" data-tab-link="journal">
+    <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 7h6"/><path d="M9 11h6"/><path d="M9 15h4"/></svg>
+    Journal
+  </a>
+  <a class="menu-link" href="#" data-tab-link="symbols">
+    <svg viewBox="0 0 24 24"><path d="M12 3c4 4 6 7 6 11a6 6 0 0 1-12 0c0-4 2-7 6-11z"/><path d="M9 15c2 2 4 2 6 0"/></svg>
+    Symbols
+  </a>
+  <a class="menu-link" href="#" data-tab-link="account">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-5 14.5-5 16 0"/></svg>
+    Account
+  </a>
 </div>
 
 <main class="app">
@@ -1362,7 +944,11 @@ a.setting-row{
     </button>
 
     <div class="brand">
-      <h1>Jamaican<br>Dream Interpreter</h1>
+      <div class="brand-mark">
+        <img class="brand-logo" src="/static/dream-logo.png" alt="Jamaican Dream Interpreter logo" />
+        <h1>Jamaican<br>Dream Interpreter</h1>
+      </div>
+      <span class="brand-rule"></span>
       <p>Rooted in Caribbean Beliefs</p>
     </div>
 
@@ -1377,6 +963,7 @@ a.setting-row{
   <section class="screen active" id="decodeScreen">
     <div class="page-title">
       <h2>Decode Your Dream</h2>
+      <div class="title-ornament"><span class="o-line"></span><span class="o-dot"></span><span class="o-line r"></span></div>
       <p>Decode one dream. Save the meaning. Track the patterns.</p>
     </div>
 
@@ -1394,10 +981,22 @@ a.setting-row{
       </div>
 
       <div class="chips">
-        <button class="chip" type="button" id="guidedBtn"><span>✦</span> Guided Details <span>›</span></button>
-        <button class="chip" type="button" id="symbolBtn"><span>◇</span> Add symbols <span>›</span></button>
-        <button class="chip" type="button" id="templateBtn"><span>⌘</span> Use template <span>›</span></button>
-        <button class="chip" type="button" id="clearBtn"><span>×</span> Clear dream <span>›</span></button>
+        <button class="chip" type="button" id="guidedBtn">
+          <span class="chip-ico"><svg viewBox="0 0 24 24"><path d="M12 3l2 5 5 .5-3.8 3.4 1.1 5L12 19l-4.4 2.4 1.1-5L5 8.5 10 8z"/></svg></span>
+          <span class="chip-label">Guided Details</span><span class="chip-arrow">›</span>
+        </button>
+        <button class="chip" type="button" id="symbolBtn">
+          <span class="chip-ico"><svg viewBox="0 0 24 24"><path d="M12 3l7 4v6c0 5-3 7-7 8-4-1-7-3-7-8V7z"/></svg></span>
+          <span class="chip-label">Add Symbols</span><span class="chip-arrow">›</span>
+        </button>
+        <button class="chip" type="button" id="templateBtn">
+          <span class="chip-ico"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8"/><path d="M8 13h6"/></svg></span>
+          <span class="chip-label">Use Template</span><span class="chip-arrow">›</span>
+        </button>
+        <button class="chip" type="button" id="clearBtn">
+          <span class="chip-ico"><svg viewBox="0 0 24 24"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg></span>
+          <span class="chip-label">Clear Dream</span><span class="chip-arrow">›</span>
+        </button>
       </div>
 
       <div class="guided-panel" id="guidedPanel">
@@ -1416,7 +1015,6 @@ a.setting-row{
                 <option>Anxious</option>
               </select>
             </div>
-
             <div class="field">
               <label for="ending">Ending</label>
               <select id="ending">
@@ -1430,19 +1028,16 @@ a.setting-row{
               </select>
             </div>
           </div>
-
           <div class="guided-row">
             <div class="field">
               <label for="place">Place</label>
               <input id="place" type="text" placeholder="School, house, road..." />
             </div>
-
             <div class="field">
               <label for="people">People</label>
               <input id="people" type="text" placeholder="Mother, stranger..." />
             </div>
           </div>
-
           <div class="field">
             <label>Quick symbols</label>
             <div class="symbol-chip-row" id="guidedSymbolChips"></div>
@@ -1454,12 +1049,10 @@ a.setting-row{
 
       <div class="ad-card" id="decodeAd">
         <div class="ad-label">Sponsored</div>
-        <div class="ad-placeholder">
-          Ad space for free users
-        </div>
+        <div class="ad-slot">Sponsored message may appear here for free access.</div>
       </div>
 
-      <p class="helper">Your dreams are private on this device. Journal entries are saved in this browser.</p>
+      <p class="helper">Your dream is sent securely to generate an interpretation. Saved journal entries stay on this device unless you export or share them. This tool is for cultural and spiritual reflection, not medical, legal, or mental-health advice.</p>
     </section>
 
     <section id="result" class="result"></section>
@@ -1468,6 +1061,7 @@ a.setting-row{
   <section class="screen" id="journalScreen">
     <div class="page-title">
       <h2>My Journal</h2>
+      <div class="title-ornament"><span class="o-line"></span><span class="o-dot"></span><span class="o-line r"></span></div>
       <p>Review saved interpretations, favorites, and repeated symbols.</p>
     </div>
 
@@ -1490,20 +1084,23 @@ a.setting-row{
   <section class="screen" id="symbolsScreen">
     <div class="page-title">
       <h2>Symbol Library</h2>
+      <div class="title-ornament"><span class="o-line"></span><span class="o-dot"></span><span class="o-line r"></span></div>
       <p>Tap a symbol to add it to your current dream.</p>
     </div>
-
     <div class="symbol-grid" id="symbolGrid"></div>
   </section>
 
   <section class="screen" id="accountScreen">
     <div class="page-title">
       <h2>My Account</h2>
+      <div class="title-ornament"><span class="o-line"></span><span class="o-dot"></span><span class="o-line r"></span></div>
       <p>Manage access, email, and local journal data.</p>
     </div>
 
     <section class="card account-profile">
-      <div class="avatar"></div>
+      <div class="avatar">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-5 14.5-5 16 0"/></svg>
+      </div>
       <div class="profile-copy">
         <h3>Dream Explorer</h3>
         <p id="memberLine">Local journal mode</p>
@@ -1513,15 +1110,30 @@ a.setting-row{
     <section class="card form-card">
       <label for="email">Email for access recovery</label>
       <input id="email" type="email" placeholder="you@example.com" autocomplete="email" inputmode="email" />
-      <p class="helper">This email is sent with interpretations and used for checkout recovery.</p>
+      <p class="helper">Your email is used for checkout, access recovery, and support. It does not change your local journal unless you export or share it.</p>
     </section>
 
     <section class="card settings-list">
-      <button class="setting-row" type="button" id="exportBtn">Export Journal <span>›</span></button>
-      <button class="setting-row" type="button" id="importBtn">Import Journal <span>›</span></button>
-      <button class="setting-row" type="button" id="clearJournalBtn">Clear Local Journal <span>›</span></button>
-      <a class="setting-row" href="/privacy">Privacy Policy <span>›</span></a>
-      <button class="setting-row" type="button" id="supportBtn">Help & Support <span>›</span></button>
+      <button class="setting-row" type="button" id="exportBtn">
+        <span class="sr-ico"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 21h14"/></svg></span>
+        <span class="sr-label">Export Journal</span><span class="sr-arrow">›</span>
+      </button>
+      <button class="setting-row" type="button" id="importBtn">
+        <span class="sr-ico"><svg viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M5 21h14"/></svg></span>
+        <span class="sr-label">Import Journal</span><span class="sr-arrow">›</span>
+      </button>
+      <button class="setting-row" type="button" id="clearJournalBtn">
+        <span class="sr-ico"><svg viewBox="0 0 24 24"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/></svg></span>
+        <span class="sr-label">Clear Local Journal</span><span class="sr-arrow">›</span>
+      </button>
+      <a class="setting-row" href="/privacy">
+        <span class="sr-ico"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7z"/></svg></span>
+        <span class="sr-label">Privacy Policy</span><span class="sr-arrow">›</span>
+      </a>
+      <button class="setting-row" type="button" id="supportBtn">
+        <span class="sr-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4 2c0 1.5-2 2-2 3"/><path d="M12 17h.01"/></svg></span>
+        <span class="sr-label">Help &amp; Support</span><span class="sr-arrow">›</span>
+      </button>
     </section>
 
     <input class="hidden-file" type="file" id="importFile" accept="application/json" />
@@ -1531,28 +1143,23 @@ a.setting-row{
         <div class="premium-icon">$1</div>
         <div>
           <h3>$1 Dream Decode</h3>
-          <p>Decode one dream for $1, or choose Premium for ongoing access.</p>
+          <p>Choose a single $1 decode for one dream, or Premium for ongoing access and pattern tracking.</p>
         </div>
       </div>
 
-      <form
-        class="account-checkout-form"
-        action="/create-dream-pack-checkout-session"
-        method="POST"
-        id="accountDreamPackForm"
-        novalidate
-      >
+      <div class="premium-perks">
+        <div class="premium-perk"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> No ads while you decode</div>
+        <div class="premium-perk"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Full spiritual &amp; physical reading</div>
+        <div class="premium-perk"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg> Pattern tracking across your journal</div>
+      </div>
+
+      <form class="account-checkout-form" action="/create-dream-pack-checkout-session" method="POST" id="accountDreamPackForm" novalidate>
         <input type="hidden" name="email" id="accountDreamPackEmail" value="" />
         <input type="hidden" name="return" id="accountDreamPackReturn" value="" />
-
-        <button class="upgrade-link" type="submit" id="accountDreamPackBtn">
-          Start $1 Dream Decode
-        </button>
+        <button class="upgrade-link" type="submit" id="accountDreamPackBtn">Start $1 Dream Decode</button>
       </form>
 
-      <a class="subscription-link" id="subscriptionAccount" href="#">
-        View Premium Subscription
-      </a>
+      <a class="subscription-link" id="subscriptionAccount" href="#">View Premium Subscription</a>
     </section>
 
     <div class="legal-links">
@@ -1567,17 +1174,14 @@ a.setting-row{
     <svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>
     <span>Decode</span>
   </button>
-
   <button type="button" data-tab="journal">
     <svg viewBox="0 0 24 24"><path d="M6 3h12v18H6z"/><path d="M9 7h6"/><path d="M9 11h6"/><path d="M9 15h4"/></svg>
     <span>Journal</span>
   </button>
-
   <button type="button" data-tab="symbols">
     <svg viewBox="0 0 24 24"><path d="M12 3c4 4 6 7 6 11a6 6 0 0 1-12 0c0-4 2-7 6-11z"/><path d="M9 15c2 2 4 2 6 0"/></svg>
     <span>Symbols</span>
   </button>
-
   <button type="button" data-tab="account">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-5 14.5-5 16 0"/></svg>
     <span>Account</span>
@@ -1588,31 +1192,14 @@ a.setting-row{
   <div class="reward-box" role="dialog" aria-modal="true" aria-labelledby="rewardTitle">
     <div class="reward-kicker">Sponsored Access</div>
     <h2 class="reward-title" id="rewardTitle">Watch to Continue</h2>
-    <p class="reward-copy">
-      Free dream decoding is supported by ads. Watch this sponsored message to unlock your interpretation.
-    </p>
-
-    <div class="reward-ad-space" id="rewardAdSpace">
-      Video ad space for free users
-    </div>
-
-    <div class="reward-count" id="rewardCount">
-      Continue available in 5 seconds
-    </div>
-
+    <p class="reward-copy">Free dream decoding is supported by sponsored content. Continue when the message is complete.</p>
+    <div class="reward-ad-space" id="rewardAdSpace">Sponsored message loading...</div>
+    <div class="reward-count" id="rewardCount">Continue available in 5 seconds</div>
     <div class="reward-actions">
-      <button class="reward-continue" type="button" id="rewardContinue" disabled>
-        Continue Decode
-      </button>
-
-      <a class="reward-upgrade" id="rewardUpgrade" href="#">
-        Skip Ads With $1 Dream Decode
-      </a>
+      <button class="reward-continue" type="button" id="rewardContinue" disabled>Continue Decode</button>
+      <a class="reward-upgrade" id="rewardUpgrade" href="#">Skip Ads With $1 Dream Decode</a>
     </div>
-
-    <p class="reward-note">
-      This placeholder can be connected to a real rewarded video ad network later.
-    </p>
+    <p class="reward-note">Free access is supported by sponsored content. Paid access skips this step.</p>
   </div>
 </div>
 
@@ -1630,17 +1217,7 @@ const LEGACY_EMAIL_KEY = "jts_email";
 const JOURNAL_KEY = "jdi_journal";
 const SUPPORT_EMAIL = "tinamaccontent@gmail.com";
 
-function byId(id){
-  return document.getElementById(id);
-}
-
-function safeText(el, value){
-  if(el) el.textContent = value;
-}
-
-function safeHtml(el, value){
-  if(el) el.innerHTML = value;
-}
+function byId(id){ return document.getElementById(id); }
 
 const emailEl = byId("email");
 const dreamEl = byId("dream");
@@ -1664,6 +1241,7 @@ const placeEl = byId("place");
 const peopleEl = byId("people");
 const menuBtn = byId("menuBtn");
 const menuPanel = byId("menuPanel");
+const menuOverlay = byId("menuOverlay");
 const closeMenu = byId("closeMenu");
 const rewardModal = byId("rewardModal");
 const rewardContinue = byId("rewardContinue");
@@ -1675,6 +1253,30 @@ let selectedGuidedSymbols = [];
 let rewardReady = false;
 let rewardTimer = null;
 let pendingRewardDecode = false;
+
+/* ---- custom line-art symbol icons ---- */
+const SYMBOL_SVG = {
+  dog:`<svg viewBox="0 0 24 24"><path d="M5 9l-1.5-4 4 2h5l4-2L15 9"/><path d="M4 9v6c0 2 2 4 4 4h8c2 0 4-2 4-4V9"/><path d="M9 13h.01"/><path d="M15 13h.01"/><path d="M10 17h4"/></svg>`,
+  school:`<svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V9l7-5 7 5v12"/><path d="M9 21v-5h6v5"/><path d="M12 4V2"/></svg>`,
+  water:`<svg viewBox="0 0 24 24"><path d="M3 9c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M3 14c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/><path d="M3 19c2 2 4 2 6 0s4-2 6 0 4 2 6 0"/></svg>`,
+  teeth:`<svg viewBox="0 0 24 24"><path d="M5 5c0-1 1-2 7-2s7 1 7 2c0 4-1 8-2 12-.5 2-2 2-2.5 0L9.5 12"/><path d="M12 5v6"/></svg>`,
+  falling:`<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><path d="M12 8v6"/><path d="M8 11l4 3 4-3"/><path d="M9 21l3-4 3 4"/></svg>`,
+  money:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7v10"/><path d="M9.5 9.5a2.5 2 0 0 1 5 0c0 1.5-5 1-5 3a2.5 2 0 0 0 5 0"/></svg>`,
+  house:`<svg viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>`,
+  snake:`<svg viewBox="0 0 24 24"><path d="M5 19c4 0 4-4 0-4s-4-4 0-4 6-2 6-5"/><path d="M11 6a3 3 0 0 1 6 0c0 4-5 3-5 7"/><path d="M16 6h.01"/></svg>`,
+  car:`<svg viewBox="0 0 24 24"><path d="M3 13l2-5h14l2 5"/><path d="M3 13h18v5H3z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/></svg>`,
+  hair:`<svg viewBox="0 0 24 24"><path d="M7 21V9a5 5 0 0 1 10 0v12"/><path d="M9 21c0-3-1-5-1-8"/><path d="M15 21c0-3 1-5 1-8"/><path d="M12 21V9"/></svg>`,
+  road:`<svg viewBox="0 0 24 24"><path d="M9 3L4 21"/><path d="M15 3l5 18"/><path d="M12 5v2"/><path d="M12 11v2"/><path d="M12 17v2"/></svg>`,
+  baby:`<svg viewBox="0 0 24 24"><circle cx="12" cy="11" r="8"/><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M9 14c1.5 1.5 4.5 1.5 6 0"/></svg>`
+};
+
+function symbolSvg(key){
+  return SYMBOL_SVG[key] || `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg>`;
+}
+function symbolSvgByName(name){
+  const found = SYMBOLS.find(s => s.name.toLowerCase() === String(name).toLowerCase());
+  return found ? symbolSvg(found.key) : `<svg viewBox="0 0 24 24"><path d="M12 3c4 4 6 7 6 11a6 6 0 0 1-12 0c0-4 2-7 6-11z"/></svg>`;
+}
 
 const SYMBOLS = [
   {name:"Dog", icon:"🐕", meaning:"Chasing, pressure, loyalty, warning", key:"dog", category:"animal"},
@@ -1693,73 +1295,35 @@ const SYMBOLS = [
 
 function esc(s){
   return String(s || "")
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#039;");
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#039;");
 }
-
-function normalizeEmail(email){
-  return String(email || "").trim().toLowerCase();
-}
-
-function validEmail(email){
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email));
-}
+function normalizeEmail(email){ return String(email || "").trim().toLowerCase(); }
+function validEmail(email){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(email)); }
 
 function saveEmail(email){
   const clean = normalizeEmail(email);
-
   try{
-    if(clean){
-      localStorage.setItem(EMAIL_KEY, clean);
-      localStorage.setItem(LEGACY_EMAIL_KEY, clean);
-    }else{
-      localStorage.removeItem(EMAIL_KEY);
-    }
+    if(clean){ localStorage.setItem(EMAIL_KEY, clean); localStorage.setItem(LEGACY_EMAIL_KEY, clean); }
+    else{ localStorage.removeItem(EMAIL_KEY); }
   }catch(e){}
-
   refreshAccount();
 }
-
 function loadEmail(){
-  try{
-    return normalizeEmail(
-      localStorage.getItem(EMAIL_KEY) ||
-      localStorage.getItem(LEGACY_EMAIL_KEY) ||
-      ""
-    );
-  }catch(e){
-    return "";
-  }
+  try{ return normalizeEmail(localStorage.getItem(EMAIL_KEY) || localStorage.getItem(LEGACY_EMAIL_KEY) || ""); }
+  catch(e){ return ""; }
 }
-
-function getReturnUrl(){
-  return window.location.href.split("#")[0];
-}
-
+function getReturnUrl(){ return window.location.href.split("#")[0]; }
 function upgradeUrl(email){
   const clean = normalizeEmail(email);
   return API + "/upgrade?email=" + encodeURIComponent(clean) + "&return=" + encodeURIComponent(getReturnUrl());
 }
 
 function readJournal(){
-  try{
-    const raw = localStorage.getItem(JOURNAL_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  }catch(e){
-    return [];
-  }
+  try{ const raw = localStorage.getItem(JOURNAL_KEY); const parsed = raw ? JSON.parse(raw) : []; return Array.isArray(parsed) ? parsed : []; }
+  catch(e){ return []; }
 }
-
-function writeJournal(entries){
-  try{
-    localStorage.setItem(JOURNAL_KEY, JSON.stringify(entries.slice(0, 200)));
-  }catch(e){}
-}
-
+function writeJournal(entries){ try{ localStorage.setItem(JOURNAL_KEY, JSON.stringify(entries.slice(0, 200))); }catch(e){} }
 function addJournalEntry(entry){
   const entries = readJournal();
   entries.unshift(entry);
@@ -1768,173 +1332,85 @@ function addJournalEntry(entry){
   refreshAccount();
 }
 
-function showAccessStatus(html){
-  if(!accessStatus) return;
-  accessStatus.style.display = "block";
-  accessStatus.innerHTML = html;
-  refreshAds();
-}
-
-function hideAccessStatus(){
-  if(!accessStatus) return;
-  accessStatus.style.display = "none";
-  accessStatus.innerHTML = "";
-  refreshAds();
-}
-
+function showAccessStatus(html){ if(!accessStatus) return; accessStatus.style.display = "block"; accessStatus.innerHTML = html; refreshAds(); }
+function hideAccessStatus(){ if(!accessStatus) return; accessStatus.style.display = "none"; accessStatus.innerHTML = ""; refreshAds(); }
 function userHasPaidAccess(){
   const statusText = String(accessStatus?.textContent || "").toLowerCase();
-
-  return (
-    statusText.includes("subscription active") ||
-    statusText.includes("dream pack active")
-  );
+  return statusText.includes("subscription active") || statusText.includes("dream pack active");
 }
-
-function refreshAds(){
-  const decodeAd = byId("decodeAd");
-  if(!decodeAd) return;
-  decodeAd.classList.toggle("hidden", userHasPaidAccess());
-}
-
-function shouldShowRewardAd(){
-  return !userHasPaidAccess();
-}
+function refreshAds(){ const decodeAd = byId("decodeAd"); if(!decodeAd) return; decodeAd.classList.toggle("hidden", userHasPaidAccess()); }
+function shouldShowRewardAd(){ return !userHasPaidAccess(); }
 
 function openRewardModal(){
-  if(!rewardModal || !rewardContinue || !rewardCount){
-    runInterpretation();
-    return;
-  }
-
+  if(!rewardModal || !rewardContinue || !rewardCount){ runInterpretation(); return; }
   rewardReady = false;
   pendingRewardDecode = true;
-
-  if(rewardTimer){
-    clearInterval(rewardTimer);
-    rewardTimer = null;
-  }
-
+  if(rewardTimer){ clearInterval(rewardTimer); rewardTimer = null; }
   rewardContinue.disabled = true;
   rewardContinue.textContent = "Continue Decode";
-
   let seconds = 5;
   rewardCount.textContent = "Continue available in " + seconds + " seconds";
-
-  if(rewardUpgrade){
-    rewardUpgrade.href = upgradeUrl(emailEl ? emailEl.value : "");
-  }
-
+  if(rewardUpgrade){ rewardUpgrade.href = upgradeUrl(emailEl ? emailEl.value : ""); }
   rewardModal.classList.add("show");
   rewardModal.setAttribute("aria-hidden","false");
-
   rewardTimer = setInterval(function(){
     seconds -= 1;
-
-    if(seconds > 0){
-      rewardCount.textContent = "Continue available in " + seconds + " seconds";
-      return;
-    }
-
-    clearInterval(rewardTimer);
-    rewardTimer = null;
+    if(seconds > 0){ rewardCount.textContent = "Continue available in " + seconds + " seconds"; return; }
+    clearInterval(rewardTimer); rewardTimer = null;
     rewardReady = true;
     rewardCount.textContent = "Sponsored message complete";
     rewardContinue.disabled = false;
   },1000);
 }
-
 function closeRewardModal(){
   if(!rewardModal) return;
-
   rewardModal.classList.remove("show");
   rewardModal.setAttribute("aria-hidden","true");
-
-  if(rewardTimer){
-    clearInterval(rewardTimer);
-    rewardTimer = null;
-  }
+  if(rewardTimer){ clearInterval(rewardTimer); rewardTimer = null; }
 }
+
+function openMenu(){ if(menuPanel) menuPanel.classList.add("open"); if(menuOverlay) menuOverlay.classList.add("show"); }
+function closeMenuPanel(){ if(menuPanel) menuPanel.classList.remove("open"); if(menuOverlay) menuOverlay.classList.remove("show"); }
 
 function switchTab(tab){
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-
   const screen = byId(tab + "Screen");
   if(screen) screen.classList.add("active");
-
-  document.querySelectorAll(".bottom-nav button").forEach(b => {
-    b.classList.toggle("active", b.dataset.tab === tab);
-  });
-
-  if(menuPanel) menuPanel.classList.remove("open");
-
+  document.querySelectorAll(".bottom-nav button").forEach(b => { b.classList.toggle("active", b.dataset.tab === tab); });
+  closeMenuPanel();
   if(tab === "journal") renderJournal();
   if(tab === "symbols") renderSymbols();
   if(tab === "account") refreshAccount();
-
   window.scrollTo({top:0, behavior:"smooth"});
 }
 
 function updateCharCount(){
   if(!dreamEl || !charCount || !qualityHint) return;
-
   const len = dreamEl.value.length;
   charCount.textContent = len + "/2000";
-
   const dream = dreamEl.value.toLowerCase();
   const emotionValue = emotionEl ? emotionEl.value : "";
   const endingValue = endingEl ? endingEl.value : "";
-
-  const hasEmotion =
-    emotionValue ||
-    dream.includes("felt") ||
-    dream.includes("afraid") ||
-    dream.includes("happy") ||
-    dream.includes("sad");
-
-  const hasEnding =
-    endingValue ||
-    dream.includes("ended") ||
-    dream.includes("woke") ||
-    dream.includes("escaped");
-
-  if(len < 20){
-    qualityHint.textContent = "Tip: add more dream detail.";
-  }else if(!hasEmotion){
-    qualityHint.textContent = "Tip: add how you felt.";
-  }else if(!hasEnding){
-    qualityHint.textContent = "Tip: add how it ended.";
-  }else{
-    qualityHint.textContent = "Good detail for interpretation.";
-  }
+  const hasEmotion = emotionValue || dream.includes("felt") || dream.includes("afraid") || dream.includes("happy") || dream.includes("sad");
+  const hasEnding = endingValue || dream.includes("ended") || dream.includes("woke") || dream.includes("escaped");
+  qualityHint.classList.remove("good");
+  if(len < 20){ qualityHint.textContent = "Tip: add more dream detail."; }
+  else if(!hasEmotion){ qualityHint.textContent = "Tip: add how you felt."; }
+  else if(!hasEnding){ qualityHint.textContent = "Tip: add how it ended."; }
+  else{ qualityHint.textContent = "Good detail for interpretation."; qualityHint.classList.add("good"); }
 }
 
 function appendDreamText(text){
   if(!dreamEl) return;
-
   const clean = String(text || "").trim();
-
-  dreamEl.value = dreamEl.value.trim()
-    ? dreamEl.value.trim() + "\n" + clean
-    : clean;
-
+  dreamEl.value = dreamEl.value.trim() ? dreamEl.value.trim() + "\n" + clean : clean;
   updateCharCount();
 }
 
 function formatDate(iso){
-  try{
-    return new Date(iso).toLocaleString([], {
-      month:"short",
-      day:"numeric",
-      year:"numeric",
-      hour:"2-digit",
-      minute:"2-digit"
-    });
-  }catch(e){
-    return "";
-  }
+  try{ return new Date(iso).toLocaleString([], { month:"short", day:"numeric", year:"numeric", hour:"2-digit", minute:"2-digit" }); }
+  catch(e){ return ""; }
 }
-
 function shortText(text, max){
   const clean = String(text || "").replace(/\s+/g, " ").trim();
   return clean.length > max ? clean.slice(0, max - 3) + "..." : clean;
@@ -1942,27 +1418,20 @@ function shortText(text, max){
 
 function buildDreamPayload(){
   const parts = [];
-
   const dream = dreamEl ? dreamEl.value.trim() : "";
   if(dream) parts.push("Dream:\n" + dream);
-
   if(emotionEl && emotionEl.value) parts.push("Emotion:\n" + emotionEl.value);
   if(endingEl && endingEl.value) parts.push("Ending:\n" + endingEl.value);
   if(placeEl && placeEl.value.trim()) parts.push("Place:\n" + placeEl.value.trim());
   if(peopleEl && peopleEl.value.trim()) parts.push("People:\n" + peopleEl.value.trim());
   if(selectedGuidedSymbols.length) parts.push("Symbols:\n" + selectedGuidedSymbols.join(", "));
-
   return parts.join("\n\n").trim();
 }
 
 function extractSymbols(data, dreamText){
   const facts = data.doctrine_facts || {};
   const fromApi = Array.isArray(facts.top_symbols) ? facts.top_symbols : [];
-
-  const detected = SYMBOLS
-    .filter(s => dreamText.toLowerCase().includes(s.key))
-    .map(s => s.name);
-
+  const detected = SYMBOLS.filter(s => dreamText.toLowerCase().includes(s.key)).map(s => s.name);
   return [...new Set([...fromApi, ...selectedGuidedSymbols, ...detected])].slice(0, 6);
 }
 
@@ -1970,39 +1439,19 @@ function buildPatternSummary(symbols, emotion){
   const entries = readJournal();
   const counts = {};
   const emotionCounts = {};
-
   entries.forEach(entry => {
-    (entry.matchedSymbols || []).forEach(sym => {
-      const key = String(sym || "").toLowerCase();
-      counts[key] = (counts[key] || 0) + 1;
-    });
-
-    if(entry.metadata?.emotion){
-      const e = String(entry.metadata.emotion).toLowerCase();
-      emotionCounts[e] = (emotionCounts[e] || 0) + 1;
-    }
+    (entry.matchedSymbols || []).forEach(sym => { const key = String(sym || "").toLowerCase(); counts[key] = (counts[key] || 0) + 1; });
+    if(entry.metadata?.emotion){ const e = String(entry.metadata.emotion).toLowerCase(); emotionCounts[e] = (emotionCounts[e] || 0) + 1; }
   });
-
-  const repeated = symbols
-    .map(sym => {
-      const key = String(sym || "").toLowerCase();
-      return {name:sym, count:counts[key] || 0};
-    })
-    .filter(x => x.count > 0)
-    .sort((a,b) => b.count - a.count);
-
+  const repeated = symbols.map(sym => { const key = String(sym || "").toLowerCase(); return {name:sym, count:counts[key] || 0}; })
+    .filter(x => x.count > 0).sort((a,b) => b.count - a.count);
   if(repeated.length){
     return `Pattern noticed: ${repeated[0].name} has appeared ${repeated[0].count + 1} time(s), including this dream. Watch whether this symbol keeps returning with the same emotion or ending.`;
   }
-
   if(emotion && emotionCounts[String(emotion).toLowerCase()]){
     return `Pattern noticed: the emotion "${emotion}" has appeared before in your journal. Compare this dream with earlier dreams that carried the same feeling.`;
   }
-
-  if(entries.length >= 3){
-    return "No repeated symbol stands out yet, but your journal is growing enough to begin tracking dream patterns over time.";
-  }
-
+  if(entries.length >= 3){ return "No repeated symbol stands out yet, but your journal is growing enough to begin tracking dream patterns over time."; }
   return "Pattern tracking will become stronger after you save more dreams.";
 }
 
@@ -2011,7 +1460,6 @@ function mapInterpretation(data, dreamText){
   const readable = data.narration?.readable_summary || data.full_interpretation || "";
   const matchedSymbols = extractSymbols(data, dreamText);
   const patternSummary = buildPatternSummary(matchedSymbols, emotionEl ? emotionEl.value : "");
-
   return {
     mainMeaning: readable || "Your dream has been interpreted.",
     spiritualWarning: interp.spiritual_meaning || "No specific spiritual warning was returned.",
@@ -2024,35 +1472,32 @@ function mapInterpretation(data, dreamText){
 
 function iconSvg(type){
   const icons = {
-    main:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 5v14"/><path d="M5 12h14"/></svg>`,
     warning:`<svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7l8-4z"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg>`,
     body:`<svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>`,
     action:`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l2.5 2.5L16 9"/></svg>`,
-    pattern:`<svg viewBox="0 0 24 24"><path d="M4 18c4-10 8 0 12-10"/><path d="M16 8h4v4"/><path d="M4 6h.01"/><path d="M8 6h.01"/><path d="M12 6h.01"/></svg>`
+    pattern:`<svg viewBox="0 0 24 24"><path d="M4 18c4-10 8 0 12-10"/><path d="M16 8h4v4"/><path d="M4 6h.01"/><path d="M8 6h.01"/><path d="M12 6h.01"/></svg>`,
+    main:`<svg viewBox="0 0 24 24"><path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6z"/></svg>`,
+    symbols:`<svg viewBox="0 0 24 24"><path d="M12 3c4 4 6 7 6 11a6 6 0 0 1-12 0c0-4 2-7 6-11z"/><path d="M9 15c2 2 4 2 6 0"/></svg>`
   };
-
   return icons[type] || icons.main;
 }
 
-function resultCard(label, text, icon){
+function resultCard(label, text, icon, emerald, delay){
   return `
-    <div class="result-card">
+    <div class="result-card ${emerald ? "accent-emerald" : ""} delay-${delay}">
       <div class="result-card-row">
-        <div class="result-icon">${iconSvg(icon)}</div>
+        <div class="result-icon ${emerald ? "emerald" : ""}">${iconSvg(icon)}</div>
         <div>
           <div class="label">${esc(label)}</div>
           <div class="result-text">${esc(text)}</div>
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderResultCards(mapped, dreamText, entryId){
   if(!result) return;
-
   const now = new Date().toISOString();
-
   result.classList.add("show");
   result.innerHTML = `
     <div class="card decode-card">
@@ -2061,183 +1506,120 @@ function renderResultCards(mapped, dreamText, entryId){
           <h3>Dream Interpretation</h3>
           <p>${esc(formatDate(now))}</p>
         </div>
-
         <div class="result-actions">
           <button class="small-btn" type="button" id="editDreamBtn">Edit</button>
-          ${
-            entryId
-              ? `<button class="small-btn" type="button" id="favResultBtn">★</button>`
-              : ""
-          }
+          ${entryId ? `<button class="small-btn" type="button" id="favResultBtn">★</button>` : ""}
         </div>
       </div>
 
-      <div class="result-text">${esc(shortText(dreamText, 150))}</div>
+      <div class="dream-quote">${esc(shortText(dreamText, 160))}</div>
 
-      ${resultCard("Main Meaning", mapped.mainMeaning, "main")}
-      ${resultCard("Spiritual Warning", mapped.spiritualWarning, "warning")}
-      ${resultCard("Physical Effects", mapped.physicalEffects, "body")}
-      ${resultCard("What To Do", mapped.whatToDo, "action")}
-      ${resultCard("Dream Pattern", mapped.patternSummary, "pattern")}
+      <div class="result-hero">
+        <div class="hero-kicker">${iconSvg("main")} Main Meaning</div>
+        <div class="hero-text">${esc(mapped.mainMeaning)}</div>
+      </div>
 
-      <div class="result-card">
+      ${resultCard("Spiritual Warning", mapped.spiritualWarning, "warning", false, 1)}
+      ${resultCard("Physical Effects", mapped.physicalEffects, "body", false, 2)}
+      ${resultCard("What To Do", mapped.whatToDo, "action", true, 3)}
+      ${resultCard("Dream Pattern", mapped.patternSummary, "pattern", false, 4)}
+
+      <div class="result-card delay-4">
         <div class="label">Matched Symbols</div>
         <div class="symbol-matches">
           ${
             mapped.matchedSymbols.length
               ? mapped.matchedSymbols.map(name => {
                   const found = SYMBOLS.find(s => s.name.toLowerCase() === String(name).toLowerCase());
-
                   return `
                     <div class="match-pill">
-                      <strong>${esc(name)}</strong>
-                      <span>${esc(found?.meaning || "Symbol found in your dream.")}</span>
-                    </div>
-                  `;
+                      <div class="m-ico">${symbolSvgByName(name)}</div>
+                      <div>
+                        <strong>${esc(name)}</strong>
+                        <span>${esc(found?.meaning || "Symbol found in your dream.")}</span>
+                      </div>
+                    </div>`;
                 }).join("")
               : `<div class="result-text">No main symbols detected.</div>`
           }
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
 
   const editDreamBtn = byId("editDreamBtn");
-  if(editDreamBtn && dreamEl){
-    editDreamBtn.onclick = () => dreamEl.focus();
-  }
-
+  if(editDreamBtn && dreamEl){ editDreamBtn.onclick = () => dreamEl.focus(); }
   const favBtn = byId("favResultBtn");
-  if(favBtn && entryId){
-    favBtn.onclick = () => toggleFavorite(entryId, true);
-  }
-
+  if(favBtn && entryId){ favBtn.onclick = () => toggleFavorite(entryId, true); }
   result.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 function renderError(title, message, upgrade){
   if(!result) return;
-
   result.classList.add("show");
   result.innerHTML = `
     <div class="result-card error">
       <div class="label">${esc(title)}</div>
       <div class="result-text">${esc(message)}</div>
-      ${
-        upgrade
-          ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl ? emailEl.value : ""))}">View Access Options</a>`
-          : ""
-      }
-    </div>
-  `;
-
+      ${upgrade ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl ? emailEl.value : ""))}">View Access Options</a>` : ""}
+    </div>`;
   result.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 async function readResponse(res){
   const ct = (res.headers.get("content-type") || "").toLowerCase();
-
-  if(ct.includes("application/json")){
-    try{
-      return await res.json();
-    }catch(e){
-      return {};
-    }
-  }
-
-  try{
-    return {error: await res.text()};
-  }catch(e){
-    return {};
-  }
+  if(ct.includes("application/json")){ try{ return await res.json(); }catch(e){ return {}; } }
+  try{ return {error: await res.text()}; }catch(e){ return {}; }
 }
 
 function renderJournal(){
   if(!journalList) return;
-
   const q = String(journalSearch?.value || "").toLowerCase().trim();
   const now = new Date();
   const month = now.getMonth();
   const year = now.getFullYear();
-
   let entries = readJournal();
-
-  if(journalFilter === "favorites"){
-    entries = entries.filter(e => e.favorite);
-  }
-
-  if(journalFilter === "month"){
-    entries = entries.filter(e => {
-      const d = new Date(e.createdAt);
-      return d.getMonth() === month && d.getFullYear() === year;
-    });
-  }
-
+  if(journalFilter === "favorites"){ entries = entries.filter(e => e.favorite); }
+  if(journalFilter === "month"){ entries = entries.filter(e => { const d = new Date(e.createdAt); return d.getMonth() === month && d.getFullYear() === year; }); }
   if(q){
     entries = entries.filter(e =>
       String(e.dreamText || "").toLowerCase().includes(q) ||
       String(e.summary || "").toLowerCase().includes(q) ||
       String((e.matchedSymbols || []).join(" ")).toLowerCase().includes(q) ||
-      String(e.metadata?.emotion || "").toLowerCase().includes(q)
-    );
+      String(e.metadata?.emotion || "").toLowerCase().includes(q));
   }
-
   if(!entries.length){
-    journalList.innerHTML = `<div class="card empty">No saved dreams yet. Decode a dream and it will appear here.</div>`;
+    journalList.innerHTML = `<div class="card empty"><div class="empty-ico"><svg viewBox="0 0 24 24"><path d="M12 3c4 4 6 7 6 11a6 6 0 0 1-12 0c0-4 2-7 6-11z"/><path d="M9 15c2 2 4 2 6 0"/></svg></div>No saved dreams yet. Decode a dream and it will appear here.</div>`;
     return;
   }
-
   journalList.innerHTML = entries.map(entry => `
     <div class="journal-item" data-entry-id="${esc(entry.id)}">
-      <div class="journal-icon">${esc((entry.matchedSymbols || [])[0] || "☾")}</div>
-
+      <div class="journal-icon">${symbolSvgByName((entry.matchedSymbols || [])[0] || "")}</div>
       <button type="button" style="all:unset;cursor:pointer;" data-open-entry="${esc(entry.id)}">
         <div class="journal-title">${esc(shortText(entry.dreamText, 72))}</div>
         <div class="journal-date">${esc(formatDate(entry.createdAt))}${entry.metadata?.emotion ? " • " + esc(entry.metadata.emotion) : ""}</div>
       </button>
-
       <div class="entry-actions">
         <button class="icon-mini" type="button" data-favorite-entry="${esc(entry.id)}">${entry.favorite ? "★" : "☆"}</button>
         <button class="icon-mini danger" type="button" data-delete-entry="${esc(entry.id)}">×</button>
       </div>
-    </div>
-  `).join("");
-
-  document.querySelectorAll("[data-open-entry]").forEach(item => {
-    item.onclick = () => openJournalEntry(item.dataset.openEntry);
-  });
-
-  document.querySelectorAll("[data-favorite-entry]").forEach(item => {
-    item.onclick = e => {
-      e.stopPropagation();
-      toggleFavorite(item.dataset.favoriteEntry);
-    };
-  });
-
-  document.querySelectorAll("[data-delete-entry]").forEach(item => {
-    item.onclick = e => {
-      e.stopPropagation();
-      deleteEntry(item.dataset.deleteEntry);
-    };
-  });
+    </div>`).join("");
+  document.querySelectorAll("[data-open-entry]").forEach(item => { item.onclick = () => openJournalEntry(item.dataset.openEntry); });
+  document.querySelectorAll("[data-favorite-entry]").forEach(item => { item.onclick = e => { e.stopPropagation(); toggleFavorite(item.dataset.favoriteEntry); }; });
+  document.querySelectorAll("[data-delete-entry]").forEach(item => { item.onclick = e => { e.stopPropagation(); deleteEntry(item.dataset.deleteEntry); }; });
 }
 
 function openJournalEntry(id){
   const entry = readJournal().find(e => e.id === id);
   if(!entry || !dreamEl) return;
-
   switchTab("decode");
-
   dreamEl.value = entry.dreamText || "";
   if(emotionEl) emotionEl.value = entry.metadata?.emotion || "";
   if(endingEl) endingEl.value = entry.metadata?.ending || "";
   if(placeEl) placeEl.value = entry.metadata?.place || "";
   if(peopleEl) peopleEl.value = entry.metadata?.people || "";
   selectedGuidedSymbols = entry.metadata?.selectedSymbols || [];
-
   renderGuidedSymbols();
   updateCharCount();
-
   renderResultCards({
     mainMeaning: entry.interpretation?.mainMeaning || entry.summary || "",
     spiritualWarning: entry.interpretation?.spiritualWarning || "",
@@ -2251,22 +1633,12 @@ function openJournalEntry(id){
 function toggleFavorite(id, stayOnDecode){
   const entries = readJournal();
   const found = entries.find(e => e.id === id);
-
-  if(found){
-    found.favorite = !found.favorite;
-    writeJournal(entries);
-  }
-
+  if(found){ found.favorite = !found.favorite; writeJournal(entries); }
   renderJournal();
-
-  if(stayOnDecode && found){
-    alert(found.favorite ? "Added to favorites." : "Removed from favorites.");
-  }
+  if(stayOnDecode && found){ alert(found.favorite ? "Added to favorites." : "Removed from favorites."); }
 }
-
 function deleteEntry(id){
   if(!confirm("Delete this saved dream from your local journal?")) return;
-
   const entries = readJournal().filter(e => e.id !== id);
   writeJournal(entries);
   renderJournal();
@@ -2276,48 +1648,27 @@ function deleteEntry(id){
 function renderSymbols(){
   const symbolGrid = byId("symbolGrid");
   if(!symbolGrid) return;
-
   symbolGrid.innerHTML = SYMBOLS.map(s => `
     <button class="symbol-card" type="button" data-symbol="${esc(s.key)}">
-      <span class="big">${esc(s.icon)}</span>
+      <span class="sym-ico">${symbolSvg(s.key)}</span>
       <strong>${esc(s.name)}</strong>
       <span>${esc(s.meaning)}</span>
-    </button>
-  `).join("");
-
+    </button>`).join("");
   document.querySelectorAll(".symbol-card").forEach(card => {
-    card.onclick = () => {
-      appendDreamText(card.dataset.symbol);
-      switchTab("decode");
-      if(dreamEl) dreamEl.focus();
-    };
+    card.onclick = () => { appendDreamText(card.dataset.symbol); switchTab("decode"); if(dreamEl) dreamEl.focus(); };
   });
 }
 
 function renderGuidedSymbols(){
   const guidedSymbolChips = byId("guidedSymbolChips");
   if(!guidedSymbolChips) return;
-
   guidedSymbolChips.innerHTML = SYMBOLS.slice(0, 9).map(s => `
-    <button
-      class="tiny-chip ${selectedGuidedSymbols.includes(s.name) ? "selected" : ""}"
-      type="button"
-      data-guided-symbol="${esc(s.name)}"
-    >
-      ${esc(s.name)}
-    </button>
-  `).join("");
-
+    <button class="tiny-chip ${selectedGuidedSymbols.includes(s.name) ? "selected" : ""}" type="button" data-guided-symbol="${esc(s.name)}">${esc(s.name)}</button>`).join("");
   document.querySelectorAll("[data-guided-symbol]").forEach(btn => {
     btn.onclick = () => {
       const symbol = btn.dataset.guidedSymbol;
-
-      if(selectedGuidedSymbols.includes(symbol)){
-        selectedGuidedSymbols = selectedGuidedSymbols.filter(s => s !== symbol);
-      }else{
-        selectedGuidedSymbols.push(symbol);
-      }
-
+      if(selectedGuidedSymbols.includes(symbol)){ selectedGuidedSymbols = selectedGuidedSymbols.filter(s => s !== symbol); }
+      else{ selectedGuidedSymbols.push(symbol); }
       renderGuidedSymbols();
       updateCharCount();
     };
@@ -2328,186 +1679,87 @@ function refreshAccount(){
   const email = loadEmail();
   const count = readJournal().length;
   const premiumUrl = upgradeUrl(email);
-
-  if(emailEl && emailEl.value !== email){
-    emailEl.value = email;
-  }
-
-  if(memberLine){
-    memberLine.textContent = email
-      ? "Email saved • " + count + " dream(s)"
-      : "Local journal mode • " + count + " dream(s)";
-  }
-
-  if(subscriptionAccount){
-    subscriptionAccount.href = premiumUrl;
-  }
-
-  if(accountDreamPackEmail){
-    accountDreamPackEmail.value = email;
-  }
-
-  if(accountDreamPackReturn){
-    accountDreamPackReturn.value = getReturnUrl();
-  }
-
-  if(rewardUpgrade){
-    rewardUpgrade.href = premiumUrl;
-  }
+  if(emailEl && emailEl.value !== email){ emailEl.value = email; }
+  if(memberLine){ memberLine.textContent = email ? "Email saved • " + count + " dream(s)" : "Local journal mode • " + count + " dream(s)"; }
+  if(subscriptionAccount){ subscriptionAccount.href = premiumUrl; }
+  if(accountDreamPackEmail){ accountDreamPackEmail.value = email; }
+  if(accountDreamPackReturn){ accountDreamPackReturn.value = getReturnUrl(); }
+  if(rewardUpgrade){ rewardUpgrade.href = premiumUrl; }
 }
 
 function exportJournal(){
   const entries = readJournal();
   const blob = new Blob([JSON.stringify(entries, null, 2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
-
   const a = document.createElement("a");
-  a.href = url;
-  a.download = "jamaican-dream-journal.json";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
+  a.href = url; a.download = "jamaican-dream-journal.json";
+  document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
 
 function importJournalFile(file){
   if(!file) return;
-
   const reader = new FileReader();
-
   reader.onload = () => {
     try{
       const parsed = JSON.parse(reader.result);
-      if(!Array.isArray(parsed)){
-        alert("Invalid journal file.");
-        return;
-      }
-
+      if(!Array.isArray(parsed)){ alert("Invalid journal file."); return; }
       const existing = readJournal();
-      const byId = new Map();
-
-      [...parsed, ...existing].forEach(entry => {
-        if(entry && entry.id){
-          byId.set(entry.id, entry);
-        }
-      });
-
-      writeJournal(Array.from(byId.values()));
-      renderJournal();
-      refreshAccount();
+      const map = new Map();
+      [...parsed, ...existing].forEach(entry => { if(entry && entry.id){ map.set(entry.id, entry); } });
+      writeJournal(Array.from(map.values()));
+      renderJournal(); refreshAccount();
       alert("Journal imported.");
-    }catch(e){
-      alert("Could not import this journal file.");
-    }
+    }catch(e){ alert("Could not import this journal file."); }
   };
-
   reader.readAsText(file);
 }
 
 async function runInterpretation(){
   if(!dreamEl || !btn) return;
-
   const dream = buildDreamPayload();
   const rawDream = dreamEl.value.trim();
   const email = normalizeEmail(emailEl ? emailEl.value : "");
-
-  if(!rawDream){
-    alert("Enter your dream first.");
-    dreamEl.focus();
-    return;
-  }
-
-  if(email && !validEmail(email)){
-    switchTab("account");
-    alert("Enter a valid email or clear the email field.");
-    if(emailEl) emailEl.focus();
-    return;
-  }
-
-  if(email){
-    saveEmail(email);
-  }
-
+  if(!rawDream){ alert("Enter your dream first."); dreamEl.focus(); return; }
+  if(email && !validEmail(email)){ switchTab("account"); alert("Enter a valid email or clear the email field."); if(emailEl) emailEl.focus(); return; }
+  if(email){ saveEmail(email); }
   btn.disabled = true;
   btn.innerHTML = `<span class="loader-ring"></span> Decoding Dream...`;
-
-  if(result){
-    result.classList.remove("show");
-    result.innerHTML = "";
-  }
-
+  if(result){ result.classList.remove("show"); result.innerHTML = ""; }
   try{
     const res = await fetch(API + "/interpret", {
-      method:"POST",
-      mode:"cors",
-      credentials:"include",
-      headers:{
-        "Content-Type":"application/json",
-        "Accept":"application/json"
-      },
-      body:JSON.stringify({
-        text:dream,
-        email:email
-      })
+      method:"POST", mode:"cors", credentials:"include",
+      headers:{ "Content-Type":"application/json", "Accept":"application/json" },
+      body:JSON.stringify({ text:dream, email:email })
     });
-
     const data = await readResponse(res);
-
-    if(res.status === 402){
-      window.location.href = upgradeUrl(email);
-      return;
-    }
-
+    if(res.status === 402){ window.location.href = upgradeUrl(email); return; }
     if(!res.ok){
-      renderError(
-        "Interpreter Error",
-        data.error || data.message || data.details || "Something went wrong calling the interpreter API.",
-        false
-      );
+      renderError("Interpreter Error", data.error || data.message || data.details || "Something went wrong calling the interpreter API.", false);
       return;
     }
-
-    if(data.is_paid){
-      showAccessStatus("<strong>Access:</strong> Subscription active.");
-    }else if(data.dream_pack?.active){
-      showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining.");
-    }else if(typeof data.free_uses_left === "number"){
-      showAccessStatus("<strong>Access:</strong> Free mode • " + esc(String(data.free_uses_left)) + " free use(s) left.");
-    }
-
+    if(data.is_paid){ showAccessStatus("<strong>Access:</strong> Subscription active."); }
+    else if(data.dream_pack?.active){ showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining."); }
+    else if(typeof data.free_uses_left === "number"){ showAccessStatus("<strong>Access:</strong> Free mode • " + esc(String(data.free_uses_left)) + " free use(s) left."); }
     const mapped = mapInterpretation(data, dream);
     const entryId = "dream_" + Date.now();
-
     const entry = {
-      id:entryId,
-      createdAt:new Date().toISOString(),
-      dreamText:rawDream,
-      fullPrompt:dream,
-      summary:mapped.mainMeaning,
-      interpretation:mapped,
-      matchedSymbols:mapped.matchedSymbols,
-      favorite:false,
+      id:entryId, createdAt:new Date().toISOString(),
+      dreamText:rawDream, fullPrompt:dream,
+      summary:mapped.mainMeaning, interpretation:mapped,
+      matchedSymbols:mapped.matchedSymbols, favorite:false,
       metadata:{
-        emotion:emotionEl ? emotionEl.value : "",
-        ending:endingEl ? endingEl.value : "",
-        place:placeEl ? placeEl.value.trim() : "",
-        people:peopleEl ? peopleEl.value.trim() : "",
+        emotion:emotionEl ? emotionEl.value : "", ending:endingEl ? endingEl.value : "",
+        place:placeEl ? placeEl.value.trim() : "", people:peopleEl ? peopleEl.value.trim() : "",
         selectedSymbols:selectedGuidedSymbols.slice()
       },
       source:"api",
       accessType:data.is_paid ? "subscription" : data.dream_pack?.active ? "pack" : "free"
     };
-
     renderResultCards(mapped, rawDream, entryId);
     addJournalEntry(entry);
-
   }catch(e){
-    renderError(
-      "Network Error",
-      "The interpreter could not be reached. Check the Render deployment, domain, or CORS settings.",
-      false
-    );
+    renderError("Connection Error", "The interpreter could not be reached. Please try again. If this keeps happening, contact support from the Account tab.", false);
     console.error(e);
   }finally{
     btn.disabled = false;
@@ -2516,56 +1768,25 @@ async function runInterpretation(){
   }
 }
 
-if(menuBtn && menuPanel){
-  menuBtn.onclick = () => menuPanel.classList.add("open");
-}
+if(menuBtn){ menuBtn.onclick = openMenu; }
+if(closeMenu){ closeMenu.onclick = closeMenuPanel; }
+if(menuOverlay){ menuOverlay.onclick = closeMenuPanel; }
 
-if(closeMenu && menuPanel){
-  closeMenu.onclick = () => menuPanel.classList.remove("open");
-}
-
-document.querySelectorAll("[data-tab]").forEach(button => {
-  button.addEventListener("click", () => switchTab(button.dataset.tab));
-});
-
-document.querySelectorAll("[data-tab-link]").forEach(link => {
-  link.addEventListener("click", e => {
-    e.preventDefault();
-    switchTab(link.dataset.tabLink);
-  });
-});
+document.querySelectorAll("[data-tab]").forEach(button => { button.addEventListener("click", () => switchTab(button.dataset.tab)); });
+document.querySelectorAll("[data-tab-link]").forEach(link => { link.addEventListener("click", e => { e.preventDefault(); switchTab(link.dataset.tabLink); }); });
 
 const sparkBtn = byId("sparkBtn");
-if(sparkBtn){
-  sparkBtn.onclick = () => {
-    switchTab("decode");
-    if(dreamEl) setTimeout(() => dreamEl.focus(), 180);
-  };
-}
+if(sparkBtn){ sparkBtn.onclick = () => { switchTab("decode"); if(dreamEl) setTimeout(() => dreamEl.focus(), 180); }; }
 
-if(dreamEl){
-  dreamEl.addEventListener("input", updateCharCount);
-}
-
-if(emotionEl){
-  emotionEl.addEventListener("change", updateCharCount);
-}
-
-if(endingEl){
-  endingEl.addEventListener("change", updateCharCount);
-}
+if(dreamEl){ dreamEl.addEventListener("input", updateCharCount); }
+if(emotionEl){ emotionEl.addEventListener("change", updateCharCount); }
+if(endingEl){ endingEl.addEventListener("change", updateCharCount); }
 
 const guidedBtn = byId("guidedBtn");
-if(guidedBtn && guidedPanel){
-  guidedBtn.onclick = () => {
-    guidedPanel.classList.toggle("open");
-  };
-}
+if(guidedBtn && guidedPanel){ guidedBtn.onclick = () => { guidedPanel.classList.toggle("open"); }; }
 
 const symbolBtn = byId("symbolBtn");
-if(symbolBtn){
-  symbolBtn.onclick = () => switchTab("symbols");
-}
+if(symbolBtn){ symbolBtn.onclick = () => switchTab("symbols"); }
 
 const templateBtn = byId("templateBtn");
 if(templateBtn && dreamEl){
@@ -2584,7 +1805,6 @@ Emotion:
 
 Ending:
 [How did it end?]`;
-
     updateCharCount();
     dreamEl.focus();
   };
@@ -2594,23 +1814,15 @@ const clearBtn = byId("clearBtn");
 if(clearBtn){
   clearBtn.onclick = () => {
     if(!dreamEl) return;
-
     if(!dreamEl.value.trim() || confirm("Clear the current dream draft?")){
       dreamEl.value = "";
-
       if(emotionEl) emotionEl.value = "";
       if(endingEl) endingEl.value = "";
       if(placeEl) placeEl.value = "";
       if(peopleEl) peopleEl.value = "";
-
       selectedGuidedSymbols = [];
       renderGuidedSymbols();
-
-      if(result){
-        result.classList.remove("show");
-        result.innerHTML = "";
-      }
-
+      if(result){ result.classList.remove("show"); result.innerHTML = ""; }
       updateCharCount();
       dreamEl.focus();
     }
@@ -2621,22 +1833,15 @@ const newDreamBtn = byId("newDreamBtn");
 if(newDreamBtn){
   newDreamBtn.onclick = () => {
     if(dreamEl) dreamEl.value = "";
-
-    if(result){
-      result.classList.remove("show");
-      result.innerHTML = "";
-    }
-
+    if(result){ result.classList.remove("show"); result.innerHTML = ""; }
     if(emotionEl) emotionEl.value = "";
     if(endingEl) endingEl.value = "";
     if(placeEl) placeEl.value = "";
     if(peopleEl) peopleEl.value = "";
-
     selectedGuidedSymbols = [];
     renderGuidedSymbols();
     updateCharCount();
     switchTab("decode");
-
     if(dreamEl) setTimeout(() => dreamEl.focus(), 180);
   };
 }
@@ -2646,57 +1851,31 @@ if(emailEl){
   emailEl.addEventListener("blur", () => saveEmail(emailEl.value));
 }
 
-if(journalSearch){
-  journalSearch.addEventListener("input", renderJournal);
-}
-
+if(journalSearch){ journalSearch.addEventListener("input", renderJournal); }
 const clearJournalSearch = byId("clearJournalSearch");
-if(clearJournalSearch && journalSearch){
-  clearJournalSearch.onclick = () => {
-    journalSearch.value = "";
-    renderJournal();
-  };
-}
+if(clearJournalSearch && journalSearch){ clearJournalSearch.onclick = () => { journalSearch.value = ""; renderJournal(); }; }
 
 document.querySelectorAll("[data-journal-filter]").forEach(button => {
   button.onclick = () => {
     journalFilter = button.dataset.journalFilter;
-
     document.querySelectorAll("[data-journal-filter]").forEach(b => b.classList.remove("active"));
     button.classList.add("active");
-
     renderJournal();
   };
 });
 
 const exportBtn = byId("exportBtn");
-if(exportBtn){
-  exportBtn.onclick = exportJournal;
-}
-
+if(exportBtn){ exportBtn.onclick = exportJournal; }
 const importBtn = byId("importBtn");
 const importFile = byId("importFile");
-
-if(importBtn && importFile){
-  importBtn.onclick = () => {
-    importFile.click();
-  };
-}
-
-if(importFile){
-  importFile.addEventListener("change", (e) => {
-    importJournalFile(e.target.files[0]);
-    e.target.value = "";
-  });
-}
+if(importBtn && importFile){ importBtn.onclick = () => { importFile.click(); }; }
+if(importFile){ importFile.addEventListener("change", (e) => { importJournalFile(e.target.files[0]); e.target.value = ""; }); }
 
 const clearJournalBtn = byId("clearJournalBtn");
 if(clearJournalBtn){
   clearJournalBtn.onclick = () => {
     if(confirm("Clear all dream journal entries saved in this browser?")){
-      writeJournal([]);
-      renderJournal();
-      refreshAccount();
+      writeJournal([]); renderJournal(); refreshAccount();
     }
   };
 }
@@ -2706,10 +1885,7 @@ if(supportBtn){
   supportBtn.onclick = () => {
     const email = normalizeEmail(emailEl ? emailEl.value : "");
     const subject = encodeURIComponent("Jamaican Dream Interpreter Support");
-    const body = encodeURIComponent(
-      "Hello,\n\nI need help with the Jamaican Dream Interpreter.\n\nMy account email: " + (email || "[enter email here]") + "\n\nIssue:\n"
-    );
-
+    const body = encodeURIComponent("Hello,\n\nI need help with the Jamaican Dream Interpreter.\n\nMy account email: " + (email || "[enter email here]") + "\n\nIssue:\n");
     window.location.href = "mailto:" + SUPPORT_EMAIL + "?subject=" + subject + "&body=" + body;
   };
 }
@@ -2717,52 +1893,22 @@ if(supportBtn){
 if(accountDreamPackForm){
   accountDreamPackForm.addEventListener("submit", function(e){
     const email = normalizeEmail(emailEl ? emailEl.value : "");
-
-    if(!email){
-      e.preventDefault();
-      switchTab("account");
-      alert("Enter your email before checkout.");
-      if(emailEl) emailEl.focus();
-      return;
-    }
-
-    if(!validEmail(email)){
-      e.preventDefault();
-      switchTab("account");
-      alert("Enter a valid email before checkout.");
-      if(emailEl) emailEl.focus();
-      return;
-    }
-
+    if(!email){ e.preventDefault(); switchTab("account"); alert("Enter your email before checkout."); if(emailEl) emailEl.focus(); return; }
+    if(!validEmail(email)){ e.preventDefault(); switchTab("account"); alert("Enter a valid email before checkout."); if(emailEl) emailEl.focus(); return; }
     saveEmail(email);
-
+    accountDreamPackForm.action = API + "/create-dream-pack-checkout-session";
     if(accountDreamPackEmail) accountDreamPackEmail.value = email;
     if(accountDreamPackReturn) accountDreamPackReturn.value = getReturnUrl();
-
-    if(accountDreamPackBtn){
-      accountDreamPackBtn.disabled = true;
-      accountDreamPackBtn.innerHTML = `<span class="loader-ring"></span> Redirecting...`;
-    }
+    if(accountDreamPackBtn){ accountDreamPackBtn.disabled = true; accountDreamPackBtn.innerHTML = `<span class="loader-ring"></span> Redirecting...`; }
   });
 }
 
 if(btn){
   btn.onclick = async () => {
     if(!dreamEl) return;
-
     const rawDream = dreamEl.value.trim();
-
-    if(!rawDream){
-      alert("Enter your dream first.");
-      dreamEl.focus();
-      return;
-    }
-
-    if(shouldShowRewardAd()){
-      openRewardModal();
-      return;
-    }
-
+    if(!rawDream){ alert("Enter your dream first."); dreamEl.focus(); return; }
+    if(shouldShowRewardAd()){ openRewardModal(); return; }
     await runInterpretation();
   };
 }
@@ -2770,31 +1916,23 @@ if(btn){
 if(rewardContinue){
   rewardContinue.onclick = async () => {
     if(!rewardReady || !pendingRewardDecode) return;
-
     closeRewardModal();
     pendingRewardDecode = false;
-
     await runInterpretation();
   };
 }
 
 if(rewardModal){
   rewardModal.addEventListener("click", (e) => {
-    if(e.target === rewardModal){
-      closeRewardModal();
-      pendingRewardDecode = false;
-    }
+    if(e.target === rewardModal){ closeRewardModal(); pendingRewardDecode = false; }
   });
 }
 
 if("serviceWorker" in navigator){
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/static/service-worker.js").catch(() => {});
-  });
+  window.addEventListener("load", () => { navigator.serviceWorker.register("/static/service-worker.js").catch(() => {}); });
 }
 
 const savedEmail = loadEmail();
-
 if(savedEmail && emailEl){
   emailEl.value = savedEmail;
   showAccessStatus("<strong>Email saved:</strong> " + esc(savedEmail));
@@ -2811,4 +1949,4 @@ refreshAds();
 </script>
 
 </body>
-</html>
+  </html>

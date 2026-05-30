@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from typing import Any, Dict
+from urllib.parse import urlencode
 
 from flask import (
     Blueprint,
@@ -123,13 +124,26 @@ def _clear_free_cookie(resp):
     return resp
 
 
-def _build_success_url(endpoint: str, email: str, requested_return: str) -> str:
-    return url_for(
-        endpoint,
-        _external=True,
-        email=email,
-        **{"return": requested_return},
+def _build_success_url(endpoint: str, requested_return: str) -> str:
+    """
+    Stripe replaces {CHECKOUT_SESSION_ID} after successful checkout.
+
+    We verify that session ID on the success route before granting access.
+    This prevents someone from manually visiting a success URL with an email.
+    """
+    base_url = url_for(endpoint, _external=True)
+
+    query = urlencode(
+        {
+            "session_id": "{CHECKOUT_SESSION_ID}",
+            "return": requested_return,
+        }
     )
+
+    # Stripe requires the braces to stay literal.
+    query = query.replace("%7B", "{").replace("%7D", "}")
+
+    return f"{base_url}?{query}"
 
 
 def _build_cancel_url(email: str, requested_return: str) -> str:
@@ -293,7 +307,6 @@ def create_checkout_session():
             },
             success_url=_build_success_url(
                 "billing.payment_success",
-                email,
                 requested_return,
             ),
             cancel_url=_build_cancel_url(
@@ -349,7 +362,6 @@ def create_dream_pack_checkout_session():
             },
             success_url=_build_success_url(
                 "billing.dream_pack_success",
-                email,
                 requested_return,
             ),
             cancel_url=_build_cancel_url(
@@ -371,26 +383,66 @@ def create_dream_pack_checkout_session():
 
 @billing_bp.route("/payment-success", methods=["GET"])
 def payment_success():
-    email = normalize_email(request.args.get("email") or "")
+    session_id = (request.args.get("session_id") or "").strip()
 
     requested_return = _safe_return_url(
         request.args.get("return") or Config.RETURN_URL
     )
 
-    if validate_email(email):
-        persist_email_to_session(email)
+    if not session_id:
+        return redirect(requested_return, code=302)
 
-        try:
-            access_ok, access_meta = has_active_access(email)
+    try:
+        if not _stripe_ready():
+            return redirect(requested_return, code=302)
 
-            if access_ok and (
-                access_meta.get("type") or ""
-            ).strip().lower() == "subscription":
-                set_premium_session(email)
-                mark_subscriber(email, True)
+        _configure_stripe()
 
-        except Exception as exc:
-            print(f"Subscription success verification failed: {exc}", flush=True)
+        checkout = stripe.checkout.Session.retrieve(
+            session_id,
+            expand=["subscription"],
+        )
+
+        mode = (checkout.get("mode") or "").strip().lower()
+
+        if mode != "subscription":
+            return redirect(requested_return, code=302)
+
+        email = normalize_email(
+            checkout.get("customer_email")
+            or (
+                (checkout.get("customer_details") or {}).get("email")
+            )
+            or ""
+        )
+
+        if not validate_email(email):
+            return redirect(requested_return, code=302)
+
+        subscription = checkout.get("subscription") or {}
+        status = ""
+        customer_id = ""
+
+        if isinstance(subscription, dict):
+            status = (subscription.get("status") or "").strip().lower()
+            customer_id = subscription.get("customer") or ""
+        else:
+            sub = stripe.Subscription.retrieve(subscription)
+            status = (sub.get("status") or "").strip().lower()
+            customer_id = sub.get("customer") or ""
+
+        if status in {"active", "trialing"}:
+            persist_email_to_session(email)
+            set_premium_session(email)
+
+            mark_subscriber(
+                email=email,
+                is_active=True,
+                stripe_customer_id=customer_id,
+            )
+
+    except Exception as exc:
+        print(f"Subscription success verification failed: {exc}", flush=True)
 
     resp = redirect(requested_return, code=302)
 
@@ -403,13 +455,47 @@ def payment_success():
 
 @billing_bp.route("/dream-pack-success", methods=["GET"])
 def dream_pack_success():
-    email = normalize_email(request.args.get("email") or "")
+    session_id = (request.args.get("session_id") or "").strip()
 
     requested_return = _safe_return_url(
         request.args.get("return") or Config.RETURN_URL
     )
 
-    if validate_email(email):
+    if not session_id:
+        return redirect(requested_return, code=302)
+
+    try:
+        if not _stripe_ready():
+            return redirect(requested_return, code=302)
+
+        _configure_stripe()
+
+        checkout = stripe.checkout.Session.retrieve(session_id)
+
+        mode = (checkout.get("mode") or "").strip().lower()
+        payment_status = (checkout.get("payment_status") or "").strip().lower()
+        metadata = checkout.get("metadata") or {}
+        purchase_type = (metadata.get("purchase_type") or "").strip().lower()
+
+        if (
+            mode != "payment"
+            or purchase_type != "dream_pack"
+            or payment_status not in {"paid", "no_payment_required"}
+        ):
+            return redirect(requested_return, code=302)
+
+        email = normalize_email(
+            checkout.get("customer_email")
+            or (
+                (checkout.get("customer_details") or {}).get("email")
+            )
+            or metadata.get("email")
+            or ""
+        )
+
+        if not validate_email(email):
+            return redirect(requested_return, code=302)
+
         persist_email_to_session(email)
         set_buyer_session(email)
 
@@ -418,6 +504,9 @@ def dream_pack_success():
             uses=Config.DREAM_PACK_USES,
             hours=Config.DREAM_PACK_HOURS,
         )
+
+    except Exception as exc:
+        print(f"Dream pack success verification failed: {exc}", flush=True)
 
     resp = redirect(requested_return, code=302)
 

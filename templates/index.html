@@ -233,7 +233,7 @@ button{ cursor:pointer; }
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  margin-bottom:20px;
+  margin-bottom:22px;
 }
 
 .icon-btn{
@@ -259,46 +259,66 @@ button{ cursor:pointer; }
   stroke-linecap:round; stroke-linejoin:round;
 }
 
+/* ============ BRAND (logo-free premium wordmark) ============ */
 .brand{
   flex:1;
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:7px;
+  gap:8px;
+  min-width:0;
 }
-.brand-mark{
-  display:flex; align-items:center; gap:9px;
+.brand-eyebrow{
+  display:flex; align-items:center; gap:8px;
+  color:var(--emerald2);
+  font-family:Inter,sans-serif;
+  font-size:.5rem;
+  font-weight:800;
+  letter-spacing:.34em;
+  text-transform:uppercase;
+  opacity:.9;
 }
-.brand-logo{
-  width:38px;
-  height:38px;
-  object-fit:contain;
-  display:block;
-  filter:drop-shadow(0 0 12px rgba(212,175,55,.22));
+.brand-eyebrow .star{
+  width:9px; height:9px;
+  fill:var(--gold2);
+  filter:drop-shadow(0 0 5px rgba(212,175,55,.6));
 }
 .brand h1{
   margin:0;
   font-family:Cinzel,Georgia,serif;
-  font-size:1.02rem;
-  line-height:1.06;
+  font-weight:700;
+  font-size:1.16rem;
+  line-height:.98;
   color:var(--gold2);
   text-transform:uppercase;
-  letter-spacing:.14em;
-  text-shadow:0 0 20px rgba(212,175,55,.24);
+  letter-spacing:.2em;
   text-align:center;
-}
-.brand p{
-  margin:0;
-  font-size:.55rem;
-  color:rgba(255,244,220,.66);
-  text-transform:uppercase;
-  letter-spacing:.22em;
+  text-shadow:0 0 26px rgba(212,175,55,.28);
   white-space:nowrap;
 }
+.brand h1 .line-2{
+  display:block;
+  font-size:.66em;
+  font-weight:600;
+  letter-spacing:.32em;
+  margin-top:5px;
+  color:var(--gold3);
+}
 .brand .brand-rule{
-  width:92px; height:1px;
-  background:linear-gradient(90deg, transparent, rgba(63,191,117,.4), rgba(248,221,125,.85), rgba(63,191,117,.4), transparent);
-  opacity:.8;
+  display:flex; align-items:center; justify-content:center; gap:9px;
+  width:100%;
+}
+.brand .brand-rule .r-line{
+  height:1px; flex:1; max-width:74px;
+  background:linear-gradient(90deg, transparent, rgba(248,221,125,.7));
+}
+.brand .brand-rule .r-line.r{
+  background:linear-gradient(90deg, rgba(248,221,125,.7), transparent);
+}
+.brand .brand-rule .r-gem{
+  width:6px; height:6px; transform:rotate(45deg);
+  background:linear-gradient(135deg,var(--gold3),var(--gold));
+  box-shadow:0 0 9px rgba(212,175,55,.7);
 }
 
 /* ============ SCREENS ============ */
@@ -889,8 +909,8 @@ a.setting-row{ text-decoration:none; }
 
 @media(max-width:380px){
   .app{ padding-left:15px; padding-right:15px; padding-bottom:160px; }
-  .brand h1{ font-size:.92rem; letter-spacing:.11em; }
-  .brand p{ font-size:.5rem; letter-spacing:.16em; }
+  .brand h1{ font-size:1.02rem; letter-spacing:.16em; }
+  .brand-eyebrow{ font-size:.46rem; letter-spacing:.28em; }
   .icon-btn{ width:44px; height:44px; min-width:44px; }
   .chip{ font-size:.72rem; padding:9px; }
   .symbol-card{ min-height:104px; }
@@ -944,12 +964,17 @@ a.setting-row{ text-decoration:none; }
     </button>
 
     <div class="brand">
-      <div class="brand-mark">
-        <img class="brand-logo" src="/static/dream-logo.png" alt="Jamaican Dream Interpreter logo" />
-        <h1>Jamaican<br>Dream Interpreter</h1>
-      </div>
-      <span class="brand-rule"></span>
-      <p>Rooted in Caribbean Beliefs</p>
+      <span class="brand-eyebrow">
+        <svg class="star" viewBox="0 0 24 24"><path d="M12 2l2.4 7.2L22 11l-7.6 1.8L12 22l-2.4-9.2L2 11l7.6-1.8z"/></svg>
+        Jamaican True Stories
+        <svg class="star" viewBox="0 0 24 24"><path d="M12 2l2.4 7.2L22 11l-7.6 1.8L12 22l-2.4-9.2L2 11l7.6-1.8z"/></svg>
+      </span>
+      <h1>Jamaican<span class="line-2">Dream Interpreter</span></h1>
+      <span class="brand-rule">
+        <span class="r-line"></span>
+        <span class="r-gem"></span>
+        <span class="r-line r"></span>
+      </span>
     </div>
 
     <button class="icon-btn" id="sparkBtn" type="button" aria-label="Focus dream input">
@@ -1949,4 +1974,4 @@ refreshAds();
 </script>
 
 </body>
-  </html>
+</html>

@@ -36,6 +36,10 @@ def _json_response(payload: Dict[str, Any], status: int = 200):
     return resp
 
 
+def _empty_options_response():
+    return make_response("", 204)
+
+
 def _extract_json() -> Dict[str, Any]:
     return request.get_json(silent=True, force=False) or {}
 
@@ -62,6 +66,42 @@ def _safe_list(value: Any, max_items: int = 20):
             cleaned.append(item_text)
 
     return cleaned
+
+
+def _safe_count(history: Any) -> int:
+    """
+    get_journal_history() may return either:
+
+    1. A dictionary:
+       {
+           "count": 3,
+           "entries": [...]
+       }
+
+    2. A list:
+       [...]
+
+    This helper handles both safely.
+    """
+    try:
+        if isinstance(history, dict):
+            if "count" in history:
+                return max(0, int(history.get("count", 0) or 0))
+
+            entries = history.get("entries")
+
+            if isinstance(entries, list):
+                return len(entries)
+
+            return 0
+
+        if isinstance(history, list):
+            return len(history)
+
+        return 0
+
+    except Exception:
+        return 0
 
 
 def _build_entry_payload(data: Dict[str, Any], email: str) -> Dict[str, Any]:
@@ -130,7 +170,7 @@ def _build_entry_payload(data: Dict[str, Any], email: str) -> Dict[str, Any]:
 @journal_bp.route("/journal/save", methods=["POST", "OPTIONS"])
 def journal_save():
     if request.method == "OPTIONS":
-        return make_response("", 204)
+        return _empty_options_response()
 
     data = _extract_json()
 
@@ -189,11 +229,12 @@ def journal_save():
         )
 
     except Exception as e:
+        print(f"Failed to save journal entry: {e}", flush=True)
+
         return _json_response(
             {
                 "ok": False,
                 "error": "Failed to save journal entry.",
-                "details": str(e),
             },
             500,
         )
@@ -206,7 +247,7 @@ def journal_save():
 @journal_bp.route("/journal/history", methods=["GET", "OPTIONS"])
 def journal_history():
     if request.method == "OPTIONS":
-        return make_response("", 204)
+        return _empty_options_response()
 
     email = normalize_email(
         request.args.get("email") or ""
@@ -223,22 +264,24 @@ def journal_history():
 
     try:
         history = get_journal_history(email)
+        count = _safe_count(history)
 
         return _json_response(
             {
                 "ok": True,
                 "email": email,
                 "history": history,
-                "count": len(history) if isinstance(history, list) else 0,
+                "count": count,
             }
         )
 
     except Exception as e:
+        print(f"Failed to load journal history: {e}", flush=True)
+
         return _json_response(
             {
                 "ok": False,
                 "error": "Failed to load journal history.",
-                "details": str(e),
             },
             500,
         )

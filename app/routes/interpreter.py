@@ -7,11 +7,9 @@ from flask import (
     Blueprint,
     jsonify,
     make_response,
-    render_template,
     request,
 )
 
-from app.config import Config
 from app.services.interpreter_service import run_interpretation
 
 
@@ -55,36 +53,6 @@ def should_show_trace():
         os.getenv("FLASK_DEBUG", "0") == "1"
         or os.getenv("SHOW_ERROR_TRACE", "0") == "1"
     )
-
-
-# ============================================================
-# Home Page
-# ============================================================
-
-@interpreter_bp.route("/", methods=["GET"])
-def home():
-    return render_template(Config.TEMPLATE_INDEX)
-
-
-# ============================================================
-# Upgrade Page
-# ============================================================
-
-@interpreter_bp.route("/upgrade", methods=["GET"])
-def upgrade():
-    return render_template(Config.TEMPLATE_UPGRADE)
-
-
-# ============================================================
-# Health Check
-# ============================================================
-
-@interpreter_bp.route("/health", methods=["GET"])
-def health():
-    return json_ok({
-        "service": "dream-interpreter",
-        "mode": "standalone",
-    })
 
 
 # ============================================================

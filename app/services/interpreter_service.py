@@ -574,7 +574,7 @@ def run_interpretation():
         elif has_dream_pack:
             dream_pack_status = consume_dream_pack_use(session_email)
 
-    except Exception as e:
+    except Exception:
         import traceback
 
         trace = traceback.format_exc()
@@ -585,9 +585,7 @@ def run_interpretation():
 
         return jsonify(
             {
-                "error": "Access system failed",
-                "details": str(e),
-                "trace": trace,
+                "error": "Access system failed. Please try again."
             }
         ), 500
 
@@ -817,7 +815,7 @@ def run_interpretation():
                 },
             }
 
-    except Exception as e:
+    except Exception:
         import traceback
 
         trace = traceback.format_exc()
@@ -828,9 +826,7 @@ def run_interpretation():
 
         return jsonify(
             {
-                "error": "Interpreter engine failed",
-                "details": str(e),
-                "trace": trace,
+                "error": "Interpreter engine failed. Please try again."
             }
         ), 500
 

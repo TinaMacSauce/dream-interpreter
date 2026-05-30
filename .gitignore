@@ -5,6 +5,9 @@ credentials.json
 *.pem
 *.key
 
+# --- Private app data ---
+data/
+
 # --- Python caches & build ---
 __pycache__/
 *.py[cod]

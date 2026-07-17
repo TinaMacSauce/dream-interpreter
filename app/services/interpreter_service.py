@@ -1,5 +1,7 @@
+import os
 import re
 import secrets
+import time
 from typing import Any, Dict, List, Optional
 
 from flask import jsonify, make_response, request
@@ -62,12 +64,60 @@ from app.utils import (
 # ACCESS HELPERS
 # =========================================================
 
-def _access_label(is_paid: bool, has_dream_pack: bool) -> str:
+def _access_label(
+    is_paid: bool,
+    has_dream_pack: bool,
+    has_rewarded_access: bool = False,
+) -> str:
     if is_paid:
         return "paid"
     if has_dream_pack:
         return "dream_pack"
+    if has_rewarded_access:
+        return "rewarded_ad"
     return "free"
+
+
+def _env_flag(name: str, default: str = "0") -> bool:
+    return str(os.getenv(name, default)).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _has_valid_test_reward(data: Dict[str, Any]) -> bool:
+    """Accept a client reward only while the server is explicitly in test mode.
+
+    This is intentionally limited to Google test ads. Before live ads are enabled,
+    replace this test grant with verified AdMob server-side verification (SSV).
+    """
+    if not _env_flag("REWARDED_AD_TEST_MODE"):
+        return False
+
+    reward = data.get("rewarded_ad")
+    if not isinstance(reward, dict):
+        return False
+
+    if reward.get("mode") != "test" or reward.get("earned") is not True:
+        return False
+
+    if _safe_int(reward.get("amount"), 0) < 1:
+        return False
+
+    attempt_id = _clean(reward.get("attempt_id"))
+    if len(attempt_id) < 12 or len(attempt_id) > 128:
+        return False
+
+    earned_at_ms = _safe_int(reward.get("earned_at"), 0)
+    now_ms = int(time.time() * 1000)
+
+    # Reject stale or implausibly future-dated test rewards.
+    if earned_at_ms <= 0 or abs(now_ms - earned_at_ms) > 5 * 60 * 1000:
+        return False
+
+    return True
 
 
 def _build_receipt(top_symbols: List[str]) -> Dict[str, Any]:
@@ -545,11 +595,16 @@ def run_interpretation():
 
         is_paid = access_ok and access_type == "subscription"
         has_dream_pack = access_ok and access_type == "dream_pack"
+        has_rewarded_access = _has_valid_test_reward(data)
+        used_free_try = False
 
         free_uses_left = 0
         dream_pack_status = get_dream_pack_status(session_email)
 
-        if not access_ok:
+        # A completed Google test rewarded ad grants exactly this decode and does
+        # not consume a free try. This branch is disabled unless the Render
+        # environment variable REWARDED_AD_TEST_MODE is set to 1.
+        if not access_ok and not has_rewarded_access:
             ip = get_client_ip()
             cookie_used = get_cookie_tries_used()
             ip_used = shadow_count(ip)
@@ -568,7 +623,7 @@ def run_interpretation():
                 ), 402
 
             shadow_increment(ip)
-
+            used_free_try = True
             free_uses_left = free_tries_remaining_after_this(effective_used)
 
         elif has_dream_pack:
@@ -733,7 +788,8 @@ def run_interpretation():
 
             payload = {
                 "engine_mode": "doctrine_event",
-                "access": _access_label(is_paid, has_dream_pack),
+                "access": _access_label(is_paid, has_dream_pack, has_rewarded_access),
+                "is_rewarded": bool(has_rewarded_access),
                 "is_paid": bool(is_paid),
                 "email": session_email,
                 "free_uses_left": free_uses_left,
@@ -782,7 +838,8 @@ def run_interpretation():
 
             payload = {
                 "engine_mode": "legacy",
-                "access": _access_label(is_paid, has_dream_pack),
+                "access": _access_label(is_paid, has_dream_pack, has_rewarded_access),
+                "is_rewarded": bool(has_rewarded_access),
                 "is_paid": bool(is_paid),
                 "email": session_email,
                 "free_uses_left": free_uses_left,
@@ -836,7 +893,7 @@ def run_interpretation():
 
     response = make_response(jsonify(payload))
 
-    if not access_ok:
+    if used_free_try:
         response.set_cookie(
             Config.COOKIE_NAME,
             str(get_cookie_tries_used() + 1),
@@ -845,7 +902,7 @@ def run_interpretation():
             secure=Config.SESSION_COOKIE_SECURE,
         )
 
-    else:
+    elif access_ok:
         response.set_cookie(
             Config.COOKIE_NAME,
             "0",

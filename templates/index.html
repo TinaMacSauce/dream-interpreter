@@ -1292,6 +1292,7 @@ let rewardReady = false;
 let rewardTimer = null;
 let pendingRewardDecode = false;
 let rewardAttemptId = 0;
+let pendingRewardGrant = null;
 
 /* ---- custom line-art symbol icons ---- */
 const SYMBOL_SVG = {
@@ -1491,6 +1492,7 @@ async function openRewardModal(){
 
   rewardReady = false;
   pendingRewardDecode = true;
+  pendingRewardGrant = null;
 
   if(rewardTimer){
     clearInterval(rewardTimer);
@@ -1544,6 +1546,18 @@ async function openRewardModal(){
       throw new Error("The rewarded ad was closed before the reward was earned.");
     }
 
+    pendingRewardGrant = {
+      mode: "test",
+      earned: true,
+      amount: Number(reward.amount || 0),
+      type: String(reward.type || "Deep Insight"),
+      attempt_id:
+        window.crypto && typeof window.crypto.randomUUID === "function"
+          ? window.crypto.randomUUID()
+          : "reward_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+      earned_at: Date.now()
+    };
+
     rewardReady = true;
     rewardCount.textContent = "Ad complete — reward earned";
     rewardContinue.disabled = false;
@@ -1564,6 +1578,7 @@ function closeRewardModal(){
   rewardAttemptId += 1;
   rewardReady = false;
   pendingRewardDecode = false;
+  pendingRewardGrant = null;
 
   if(rewardModal){
     rewardModal.classList.remove("show");
@@ -1922,7 +1937,7 @@ function importJournalFile(file){
   reader.readAsText(file);
 }
 
-async function runInterpretation(){
+async function runInterpretation(rewardGrant = null){
   if(!dreamEl || !btn) return;
   const dream = buildDreamPayload();
   const rawDream = dreamEl.value.trim();
@@ -1937,16 +1952,32 @@ async function runInterpretation(){
     const res = await fetch(API + "/interpret", {
       method:"POST", mode:"cors", credentials:"include",
       headers:{ "Content-Type":"application/json", "Accept":"application/json" },
-      body:JSON.stringify({ text:dream, email:email })
+      body:JSON.stringify({
+        text:dream,
+        email:email,
+        rewarded_ad:rewardGrant
+      })
     });
     const data = await readResponse(res);
-    if(res.status === 402){ window.location.href = upgradeUrl(email); return; }
+    if(res.status === 402){
+      if(rewardGrant){
+        renderError(
+          "Reward Not Applied",
+          data.message || "The ad was completed, but the reward could not be applied. Please try again.",
+          false
+        );
+        return;
+      }
+      window.location.href = upgradeUrl(email);
+      return;
+    }
     if(!res.ok){
       renderError("Interpreter Error", data.error || data.message || data.details || "Something went wrong calling the interpreter API.", false);
       return;
     }
     if(data.is_paid){ showAccessStatus("<strong>Access:</strong> Subscription active."); }
     else if(data.dream_pack?.active){ showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining."); }
+    else if(data.is_rewarded || data.access === "rewarded_ad"){ showAccessStatus("<strong>Access:</strong> Sponsored decode unlocked."); }
     else if(typeof data.free_uses_left === "number"){ showAccessStatus("<strong>Access:</strong> Free mode • " + esc(String(data.free_uses_left)) + " free use(s) left."); }
     const mapped = mapInterpretation(data, dream);
     const entryId = "dream_" + Date.now();
@@ -1961,7 +1992,13 @@ async function runInterpretation(){
         selectedSymbols:selectedGuidedSymbols.slice()
       },
       source:"api",
-      accessType:data.is_paid ? "subscription" : data.dream_pack?.active ? "pack" : "free"
+      accessType:data.is_paid
+        ? "subscription"
+        : data.dream_pack?.active
+          ? "pack"
+          : (data.is_rewarded || data.access === "rewarded_ad")
+            ? "rewarded_ad"
+            : "free"
     };
     renderResultCards(mapped, rawDream, entryId);
     addJournalEntry(entry);
@@ -2143,10 +2180,11 @@ if(btn){
 
 if(rewardContinue){
   rewardContinue.onclick = async () => {
-    if(!rewardReady || !pendingRewardDecode) return;
+    if(!rewardReady || !pendingRewardDecode || !pendingRewardGrant) return;
+
+    const rewardGrant = { ...pendingRewardGrant };
     closeRewardModal();
-    pendingRewardDecode = false;
-    await runInterpretation();
+    await runInterpretation(rewardGrant);
   };
 }
 

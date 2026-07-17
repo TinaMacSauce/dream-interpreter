@@ -8,6 +8,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import unquote
 
 import requests
 from cryptography.exceptions import InvalidSignature
@@ -19,7 +20,6 @@ from app.sheets import get_or_create_worksheet
 
 
 ADMOB_PUBLIC_KEYS_URL = "https://www.gstatic.com/admob/reward/verifier-keys.json"
-ADMOB_TEST_PUBLIC_KEYS_URL = "https://www.gstatic.com/admob/reward/verifier-keys-test.json"
 REWARDS_SHEET_NAME = "AdMobRewards"
 
 REWARD_HEADERS = [
@@ -174,9 +174,16 @@ def _extract_signed_parts(raw_query_string: str) -> Tuple[bytes, bytes, int]:
         key_id_position
     ]
 
-    content_to_verify = raw_query_string[
+    # Google's official RewardedAdsVerifier parses the callback with
+    # Java URI.getQuery(), which percent-decodes escaped octets before
+    # verifying the signature. Flask's request.query_string is raw, so
+    # decode only the signed prefix while preserving parameter order.
+    raw_content_to_verify = raw_query_string[
         :signature_position
-    ].encode("utf-8")
+    ]
+    content_to_verify = unquote(
+        raw_content_to_verify
+    ).encode("utf-8")
 
     signature_bytes = _urlsafe_b64decode(signature_text)
 
@@ -359,12 +366,6 @@ def _fetch_public_keys(
             return dict(cached_keys)
 
         keys = _download_public_keys(ADMOB_PUBLIC_KEYS_URL)
-
-        if _env_flag("ADMOB_SSV_ALLOW_TEST_KEYS"):
-            test_keys = _download_public_keys(
-                ADMOB_TEST_PUBLIC_KEYS_URL
-            )
-            keys.update(test_keys)
 
         _PUBLIC_KEY_CACHE["keys"] = dict(keys)
         _PUBLIC_KEY_CACHE["fetched_at"] = now

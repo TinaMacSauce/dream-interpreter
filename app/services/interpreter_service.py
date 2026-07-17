@@ -48,6 +48,10 @@ from app.seal import (
     compute_doctrine_seal,
     compute_seal_from_symbol_count,
 )
+from app.services.admob_ssv_service import (
+    consume_verified_reward,
+    reward_is_available,
+)
 from app.services.narration_service import build_narration_result
 from app.sheets import (
     doctrine_available,
@@ -118,6 +122,33 @@ def _has_valid_test_reward(data: Dict[str, Any]) -> bool:
         return False
 
     return True
+
+
+def _get_ssv_reward_request(
+    data: Dict[str, Any],
+) -> Optional[Dict[str, str]]:
+    """Return a structurally valid verified-reward request from the app."""
+    reward = data.get("rewarded_ad")
+
+    if not isinstance(reward, dict):
+        return None
+
+    if _clean(reward.get("mode")).lower() != "ssv":
+        return None
+
+    reward_id = _clean(reward.get("reward_id"))
+    user_id = _clean(reward.get("user_id"))
+
+    if len(reward_id) < 12 or len(reward_id) > 128:
+        return None
+
+    if len(user_id) < 6 or len(user_id) > 128:
+        return None
+
+    return {
+        "reward_id": reward_id,
+        "user_id": user_id,
+    }
 
 
 def _build_receipt(top_symbols: List[str]) -> Dict[str, Any]:
@@ -595,15 +626,29 @@ def run_interpretation():
 
         is_paid = access_ok and access_type == "subscription"
         has_dream_pack = access_ok and access_type == "dream_pack"
-        has_rewarded_access = _has_valid_test_reward(data)
+
+        has_test_rewarded_access = _has_valid_test_reward(data)
+        ssv_reward_request = _get_ssv_reward_request(data)
+        has_ssv_rewarded_access = False
+
+        if not access_ok and ssv_reward_request:
+            has_ssv_rewarded_access = reward_is_available(
+                reward_id=ssv_reward_request["reward_id"],
+                user_id=ssv_reward_request["user_id"],
+            )
+
+        has_rewarded_access = (
+            has_test_rewarded_access
+            or has_ssv_rewarded_access
+        )
         used_free_try = False
 
         free_uses_left = 0
         dream_pack_status = get_dream_pack_status(session_email)
 
-        # A completed Google test rewarded ad grants exactly this decode and does
-        # not consume a free try. This branch is disabled unless the Render
-        # environment variable REWARDED_AD_TEST_MODE is set to 1.
+        # A verified rewarded ad grants exactly one decode without consuming a
+        # free try. The legacy client-side test grant remains available only
+        # while REWARDED_AD_TEST_MODE is explicitly enabled on Render.
         if not access_ok and not has_rewarded_access:
             ip = get_client_ip()
             cookie_used = get_cookie_tries_used()
@@ -890,6 +935,29 @@ def run_interpretation():
     # =====================================================
     # RESPONSE
     # =====================================================
+
+    # Consume the SSV reward only after a successful interpretation. This makes
+    # each verified Google transaction usable for one dream decode only.
+    if (
+        not access_ok
+        and has_ssv_rewarded_access
+        and ssv_reward_request
+    ):
+        reward_consumed = consume_verified_reward(
+            reward_id=ssv_reward_request["reward_id"],
+            user_id=ssv_reward_request["user_id"],
+        )
+
+        if not reward_consumed:
+            return jsonify(
+                {
+                    "blocked": True,
+                    "reason": "reward_unavailable",
+                    "message": "This sponsored reward has already been used or is no longer available.",
+                    "access": "blocked",
+                    "email": session_email,
+                }
+            ), 409
 
     response = make_response(jsonify(payload))
 

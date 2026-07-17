@@ -1155,6 +1155,10 @@ a.setting-row{ text-decoration:none; }
         <span class="sr-ico"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7z"/></svg></span>
         <span class="sr-label">Privacy Policy</span><span class="sr-arrow">›</span>
       </a>
+      <button class="setting-row" type="button" id="privacyChoicesBtn" hidden>
+        <span class="sr-ico"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7z"/><path d="M9 12h6"/><path d="M12 9v6"/></svg></span>
+        <span class="sr-label">Privacy Choices</span><span class="sr-arrow">›</span>
+      </button>
       <button class="setting-row" type="button" id="supportBtn">
         <span class="sr-ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 4 2c0 1.5-2 2-2 3"/><path d="M12 17h.01"/></svg></span>
         <span class="sr-label">Help &amp; Support</span><span class="sr-arrow">›</span>
@@ -1280,6 +1284,7 @@ const rewardModal = byId("rewardModal");
 const rewardContinue = byId("rewardContinue");
 const rewardCount = byId("rewardCount");
 const rewardUpgrade = byId("rewardUpgrade");
+const privacyChoicesBtn = byId("privacyChoicesBtn");
 
 let journalFilter = "all";
 let selectedGuidedSymbols = [];
@@ -1412,6 +1417,57 @@ async function initializeNativeAdMob(AdMob){
   window.__jdiAdMobInitialized = true;
 }
 
+function updatePrivacyOptionsButton(consentInfo){
+  if(!privacyChoicesBtn) return;
+
+  const requirement = String(
+    consentInfo?.privacyOptionsRequirementStatus || "UNKNOWN"
+  ).toUpperCase();
+
+  privacyChoicesBtn.hidden = requirement !== "REQUIRED";
+}
+
+async function requestNativeConsent(AdMob, forceRefresh = false){
+  if(!forceRefresh && window.__jdiConsentInfo){
+    updatePrivacyOptionsButton(window.__jdiConsentInfo);
+    return window.__jdiConsentInfo;
+  }
+
+  if(!forceRefresh && window.__jdiConsentPromise){
+    return window.__jdiConsentPromise;
+  }
+
+  window.__jdiConsentPromise = (async () => {
+    let consentInfo = await AdMob.requestConsentInfo();
+
+    if(!consentInfo.canRequestAds && consentInfo.isConsentFormAvailable){
+      consentInfo = await AdMob.showConsentForm();
+    }
+
+    window.__jdiConsentInfo = consentInfo;
+    updatePrivacyOptionsButton(consentInfo);
+    return consentInfo;
+  })();
+
+  try{
+    return await window.__jdiConsentPromise;
+  }finally{
+    window.__jdiConsentPromise = null;
+  }
+}
+
+async function initializeNativePrivacy(){
+  const AdMob = getNativeAdMob();
+  if(!AdMob) return;
+
+  try{
+    await initializeNativeAdMob(AdMob);
+    await requestNativeConsent(AdMob, true);
+  }catch(error){
+    console.warn("AdMob consent initialization failed", error);
+  }
+}
+
 async function openRewardModal(){
   const AdMob = getNativeAdMob();
 
@@ -1458,6 +1514,11 @@ async function openRewardModal(){
 
   try{
     await initializeNativeAdMob(AdMob);
+
+    const consentInfo = await requestNativeConsent(AdMob);
+    if(!consentInfo || !consentInfo.canRequestAds){
+      throw new Error("Ads cannot be requested until the privacy choice is complete.");
+    }
 
     if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
 
@@ -2026,6 +2087,27 @@ if(clearJournalBtn){
   };
 }
 
+if(privacyChoicesBtn){
+  privacyChoicesBtn.onclick = async () => {
+    const AdMob = getNativeAdMob();
+
+    if(!AdMob){
+      window.location.href = "/privacy";
+      return;
+    }
+
+    try{
+      await initializeNativeAdMob(AdMob);
+      await AdMob.showPrivacyOptionsForm();
+      const consentInfo = await requestNativeConsent(AdMob, true);
+      updatePrivacyOptionsButton(consentInfo);
+    }catch(error){
+      console.warn("Privacy options form failed", error);
+      alert("Privacy choices are temporarily unavailable. Please try again later.");
+    }
+  };
+}
+
 const supportBtn = byId("supportBtn");
 if(supportBtn){
   supportBtn.onclick = () => {
@@ -2092,6 +2174,7 @@ renderSymbols();
 renderJournal();
 refreshAccount();
 refreshAds();
+initializeNativePrivacy();
 </script>
 
 </body>

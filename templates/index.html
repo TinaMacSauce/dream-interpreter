@@ -1218,8 +1218,8 @@ a.setting-row{ text-decoration:none; }
     <div class="reward-kicker">Sponsored Access</div>
     <h2 class="reward-title" id="rewardTitle">Watch to Continue</h2>
     <p class="reward-copy">Free dream decoding is supported by sponsored content. Continue when the message is complete.</p>
-    <div class="reward-ad-space" id="rewardAdSpace">Sponsored message loading...</div>
-    <div class="reward-count" id="rewardCount">Continue available in 5 seconds</div>
+    <div class="reward-ad-space" id="rewardAdSpace">Sponsored video will open when you continue.</div>
+    <div class="reward-count" id="rewardCount">Preparing sponsored access</div>
     <div class="reward-actions">
       <button class="reward-continue" type="button" id="rewardContinue" disabled>Continue Decode</button>
       <a class="reward-upgrade" id="rewardUpgrade" href="#">Skip Ads With $1 Dream Decode</a>
@@ -1241,6 +1241,14 @@ const EMAIL_KEY = "jdi_email";
 const LEGACY_EMAIL_KEY = "jts_email";
 const JOURNAL_KEY = "jdi_journal";
 const SUPPORT_EMAIL = "tinamaccontent@gmail.com";
+
+/*
+ * Keep this true until the rewarded-ad flow has been tested on a real Android device.
+ * When production is ready, change only ADMOB_TEST_MODE to false.
+ */
+const ADMOB_TEST_MODE = true;
+const ADMOB_REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
+const ADMOB_REWARDED_PRODUCTION_ID = "ca-app-pub-2148520143702642/6436071510";
 
 function byId(id){ return document.getElementById(id); }
 
@@ -1278,6 +1286,7 @@ let selectedGuidedSymbols = [];
 let rewardReady = false;
 let rewardTimer = null;
 let pendingRewardDecode = false;
+let rewardAttemptId = 0;
 
 /* ---- custom line-art symbol icons ---- */
 const SYMBOL_SVG = {
@@ -1366,32 +1375,144 @@ function userHasPaidAccess(){
 function refreshAds(){ const decodeAd = byId("decodeAd"); if(!decodeAd) return; decodeAd.classList.toggle("hidden", userHasPaidAccess()); }
 function shouldShowRewardAd(){ return !userHasPaidAccess(); }
 
-function openRewardModal(){
-  if(!rewardModal || !rewardContinue || !rewardCount){ runInterpretation(); return; }
+function getNativeAdMob(){
+  const capacitor = window.Capacitor;
+  if(!capacitor) return null;
+
+  const isNative =
+    typeof capacitor.isNativePlatform === "function"
+      ? capacitor.isNativePlatform()
+      : typeof capacitor.getPlatform === "function"
+        ? capacitor.getPlatform() !== "web"
+        : false;
+
+  if(!isNative) return null;
+
+  if(capacitor.Plugins && capacitor.Plugins.AdMob){
+    return capacitor.Plugins.AdMob;
+  }
+
+  if(typeof capacitor.registerPlugin === "function"){
+    if(!window.__jdiAdMobPlugin){
+      window.__jdiAdMobPlugin = capacitor.registerPlugin("AdMob");
+    }
+    return window.__jdiAdMobPlugin;
+  }
+
+  return null;
+}
+
+async function initializeNativeAdMob(AdMob){
+  if(window.__jdiAdMobInitialized) return;
+
+  await AdMob.initialize({
+    initializeForTesting: ADMOB_TEST_MODE
+  });
+
+  window.__jdiAdMobInitialized = true;
+}
+
+async function openRewardModal(){
+  const AdMob = getNativeAdMob();
+
+  /*
+   * The normal website cannot display native AdMob ads.
+   * Let web visitors continue without showing a fake ad.
+   */
+  if(!AdMob){
+    pendingRewardDecode = false;
+    await runInterpretation();
+    return;
+  }
+
+  if(!rewardModal || !rewardContinue || !rewardCount){
+    alert("Sponsored access is temporarily unavailable.");
+    return;
+  }
+
+  const attemptId = ++rewardAttemptId;
+  const rewardAdSpace = byId("rewardAdSpace");
+
   rewardReady = false;
   pendingRewardDecode = true;
-  if(rewardTimer){ clearInterval(rewardTimer); rewardTimer = null; }
+
+  if(rewardTimer){
+    clearInterval(rewardTimer);
+    rewardTimer = null;
+  }
+
   rewardContinue.disabled = true;
   rewardContinue.textContent = "Continue Decode";
-  let seconds = 5;
-  rewardCount.textContent = "Continue available in " + seconds + " seconds";
-  if(rewardUpgrade){ rewardUpgrade.href = upgradeUrl(emailEl ? emailEl.value : ""); }
+  rewardCount.textContent = "Loading sponsored video...";
+
+  if(rewardAdSpace){
+    rewardAdSpace.textContent = "A rewarded test ad will open automatically.";
+  }
+
+  if(rewardUpgrade){
+    rewardUpgrade.href = upgradeUrl(emailEl ? emailEl.value : "");
+  }
+
   rewardModal.classList.add("show");
-  rewardModal.setAttribute("aria-hidden","false");
-  rewardTimer = setInterval(function(){
-    seconds -= 1;
-    if(seconds > 0){ rewardCount.textContent = "Continue available in " + seconds + " seconds"; return; }
-    clearInterval(rewardTimer); rewardTimer = null;
+  rewardModal.setAttribute("aria-hidden", "false");
+
+  try{
+    await initializeNativeAdMob(AdMob);
+
+    if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
+
+    const adId = ADMOB_TEST_MODE
+      ? ADMOB_REWARDED_TEST_ID
+      : ADMOB_REWARDED_PRODUCTION_ID;
+
+    await AdMob.prepareRewardVideoAd({
+      adId,
+      isTesting: ADMOB_TEST_MODE,
+      immersiveMode: true
+    });
+
+    if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
+
+    rewardCount.textContent = "Sponsored video ready";
+
+    const reward = await AdMob.showRewardVideoAd();
+
+    if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
+
+    if(!reward || Number(reward.amount || 0) < 1){
+      throw new Error("The rewarded ad was closed before the reward was earned.");
+    }
+
     rewardReady = true;
-    rewardCount.textContent = "Sponsored message complete";
+    rewardCount.textContent = "Ad complete — reward earned";
     rewardContinue.disabled = false;
-  },1000);
+
+    if(rewardAdSpace){
+      rewardAdSpace.textContent = "Thank you. Your dream decode is ready.";
+    }
+  }catch(error){
+    console.warn("Rewarded ad failed", error);
+
+    if(attemptId !== rewardAttemptId) return;
+
+    closeRewardModal();
+    alert("The sponsored video could not be completed. Please tap Decode Dream and try again.");
+  }
 }
 function closeRewardModal(){
-  if(!rewardModal) return;
-  rewardModal.classList.remove("show");
-  rewardModal.setAttribute("aria-hidden","true");
-  if(rewardTimer){ clearInterval(rewardTimer); rewardTimer = null; }
+  rewardAttemptId += 1;
+  rewardReady = false;
+  pendingRewardDecode = false;
+
+  if(rewardModal){
+    rewardModal.classList.remove("show");
+    rewardModal.setAttribute("aria-hidden", "true");
+  }
+
+  if(rewardTimer){
+    clearInterval(rewardTimer);
+    rewardTimer = null;
+  }
 }
 
 function openMenu(){ if(menuPanel) menuPanel.classList.add("open"); if(menuOverlay) menuOverlay.classList.add("show"); }

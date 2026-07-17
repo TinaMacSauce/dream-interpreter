@@ -136,6 +136,7 @@ def create_app() -> Flask:
             "/create-dream-pack-checkout-session",
             "/payment-success",
             "/dream-pack-success",
+            "/admob-ssv",
         )
 
         if request.path.startswith(no_store_paths):
@@ -240,6 +241,7 @@ def create_app() -> Flask:
     # Blueprints
     # ============================================================
     from app.routes.admin import admin_bp
+    from app.routes.admob import admob_bp
     from app.routes.billing import billing_bp
     from app.routes.health import health_bp
     from app.routes.home import home_bp
@@ -255,6 +257,7 @@ def create_app() -> Flask:
         journal_bp,
         admin_bp,
         tracking_bp,
+        admob_bp,
     ]
 
     for blueprint in blueprints:

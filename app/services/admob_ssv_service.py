@@ -238,7 +238,18 @@ def _validate_callback_fields(request_obj: Request) -> Dict[str, Any]:
 
     expected_ad_unit = _expected_ad_unit()
 
-    if not ad_unit or ad_unit != expected_ad_unit:
+    google_verification_test = (
+        _env_flag("ADMOB_SSV_ALLOW_TEST_KEYS")
+        and ad_unit == "1234567890"
+    )
+
+    if (
+        not ad_unit
+        or (
+            ad_unit != expected_ad_unit
+            and not google_verification_test
+        )
+    ):
         raise AdMobSSVError(
             "The callback ad unit does not match the configured rewarded ad unit."
         )

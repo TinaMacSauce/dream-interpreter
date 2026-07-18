@@ -1244,15 +1244,14 @@ const API =
 const EMAIL_KEY = "jdi_email";
 const LEGACY_EMAIL_KEY = "jts_email";
 const JOURNAL_KEY = "jdi_journal";
+const ADMOB_USER_ID_KEY = "jdi_admob_user_id";
 const SUPPORT_EMAIL = "tinamaccontent@gmail.com";
 
 /*
- * Keep this true until the rewarded-ad flow has been tested on a real Android device.
- * When production is ready, change only ADMOB_TEST_MODE to false.
+ * Production rewarded ad unit.
+ * SSV ties each completed ad to one server-verified dream decode.
  */
-const ADMOB_TEST_MODE = true;
-const ADMOB_REWARDED_TEST_ID = "ca-app-pub-3940256099942544/5224354917";
-const ADMOB_REWARDED_PRODUCTION_ID = "ca-app-pub-2148520143702642/6436071510";
+const ADMOB_REWARDED_ID = "ca-app-pub-2148520143702642/6436071510";
 
 function byId(id){ return document.getElementById(id); }
 
@@ -1353,6 +1352,99 @@ function loadEmail(){
   try{ return normalizeEmail(localStorage.getItem(EMAIL_KEY) || localStorage.getItem(LEGACY_EMAIL_KEY) || ""); }
   catch(e){ return ""; }
 }
+function createSecureId(prefix){
+  const value =
+    window.crypto && typeof window.crypto.randomUUID === "function"
+      ? window.crypto.randomUUID()
+      : Date.now().toString(36) + "_" + Math.random().toString(36).slice(2);
+
+  return prefix + "_" + value;
+}
+
+function getAdMobUserId(){
+  try{
+    let userId = String(localStorage.getItem(ADMOB_USER_ID_KEY) || "").trim();
+
+    if(!/^[A-Za-z0-9._:@+-]{6,128}$/.test(userId)){
+      userId = createSecureId("jdi");
+      localStorage.setItem(ADMOB_USER_ID_KEY, userId);
+    }
+
+    return userId;
+  }catch(error){
+    if(!window.__jdiFallbackAdMobUserId){
+      window.__jdiFallbackAdMobUserId = createSecureId("jdi");
+    }
+
+    return window.__jdiFallbackAdMobUserId;
+  }
+}
+
+function sleep(milliseconds){
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function getRewardVerificationStatus(rewardId, userId){
+  const response = await fetch(API + "/admob-reward-status", {
+    method:"POST",
+    mode:"cors",
+    credentials:"include",
+    headers:{
+      "Content-Type":"application/json",
+      "Accept":"application/json"
+    },
+    body:JSON.stringify({
+      reward_id:rewardId,
+      user_id:userId
+    })
+  });
+
+  const data = await readResponse(response);
+
+  if(!response.ok){
+    throw new Error(
+      data.message ||
+      data.error ||
+      "The reward verification service is temporarily unavailable."
+    );
+  }
+
+  return data;
+}
+
+async function waitForVerifiedReward(
+  rewardId,
+  userId,
+  attemptId,
+  maxChecks = 20
+){
+  for(let check = 1; check <= maxChecks; check += 1){
+    if(attemptId !== rewardAttemptId || !pendingRewardDecode){
+      return false;
+    }
+
+    rewardCount.textContent =
+      "Verifying earned reward… " + check + "/" + maxChecks;
+
+    const status = await getRewardVerificationStatus(
+      rewardId,
+      userId
+    );
+
+    if(status.verified === true && status.status === "verified"){
+      return true;
+    }
+
+    if(status.status === "consumed"){
+      throw new Error("This sponsored reward has already been used.");
+    }
+
+    await sleep(check < 10 ? 1000 : 2000);
+  }
+
+  return false;
+}
+
 function getReturnUrl(){ return window.location.href.split("#")[0]; }
 function upgradeUrl(email){
   const clean = normalizeEmail(email);
@@ -1411,9 +1503,7 @@ function getNativeAdMob(){
 async function initializeNativeAdMob(AdMob){
   if(window.__jdiAdMobInitialized) return;
 
-  await AdMob.initialize({
-    initializeForTesting: ADMOB_TEST_MODE
-  });
+  await AdMob.initialize();
 
   window.__jdiAdMobInitialized = true;
 }
@@ -1473,8 +1563,8 @@ async function openRewardModal(){
   const AdMob = getNativeAdMob();
 
   /*
-   * The normal website cannot display native AdMob ads.
-   * Let web visitors continue without showing a fake ad.
+   * Native AdMob rewarded ads are available only inside the Android app.
+   * The normal website keeps its existing web-access behavior.
    */
   if(!AdMob){
     pendingRewardDecode = false;
@@ -1489,6 +1579,9 @@ async function openRewardModal(){
 
   const attemptId = ++rewardAttemptId;
   const rewardAdSpace = byId("rewardAdSpace");
+  const rewardId = createSecureId("reward");
+  const userId = getAdMobUserId();
+  const email = normalizeEmail(emailEl ? emailEl.value : "");
 
   rewardReady = false;
   pendingRewardDecode = true;
@@ -1501,14 +1594,14 @@ async function openRewardModal(){
 
   rewardContinue.disabled = true;
   rewardContinue.textContent = "Continue Decode";
-  rewardCount.textContent = "Loading sponsored video...";
+  rewardCount.textContent = "Loading sponsored video…";
 
   if(rewardAdSpace){
-    rewardAdSpace.textContent = "A rewarded test ad will open automatically.";
+    rewardAdSpace.textContent = "A sponsored video will open automatically.";
   }
 
   if(rewardUpgrade){
-    rewardUpgrade.href = upgradeUrl(emailEl ? emailEl.value : "");
+    rewardUpgrade.href = upgradeUrl(email);
   }
 
   rewardModal.classList.add("show");
@@ -1519,19 +1612,26 @@ async function openRewardModal(){
 
     const consentInfo = await requestNativeConsent(AdMob);
     if(!consentInfo || !consentInfo.canRequestAds){
-      throw new Error("Ads cannot be requested until the privacy choice is complete.");
+      throw new Error(
+        "Ads cannot be requested until the privacy choice is complete."
+      );
     }
 
     if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
 
-    const adId = ADMOB_TEST_MODE
-      ? ADMOB_REWARDED_TEST_ID
-      : ADMOB_REWARDED_PRODUCTION_ID;
+    const customData = JSON.stringify({
+      reward_id:rewardId,
+      email:email
+    });
 
     await AdMob.prepareRewardVideoAd({
-      adId,
-      isTesting: ADMOB_TEST_MODE,
-      immersiveMode: true
+      adId:ADMOB_REWARDED_ID,
+      isTesting:false,
+      immersiveMode:true,
+      ssv:{
+        userId:userId,
+        customData:customData
+      }
     });
 
     if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
@@ -1543,27 +1643,55 @@ async function openRewardModal(){
     if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
 
     if(!reward || Number(reward.amount || 0) < 1){
-      throw new Error("The rewarded ad was closed before the reward was earned.");
+      throw new Error(
+        "The sponsored video was closed before the reward was earned."
+      );
     }
 
     pendingRewardGrant = {
-      mode: "test",
-      earned: true,
-      amount: Number(reward.amount || 0),
-      type: String(reward.type || "Deep Insight"),
-      attempt_id:
-        window.crypto && typeof window.crypto.randomUUID === "function"
-          ? window.crypto.randomUUID()
-          : "reward_" + Date.now() + "_" + Math.random().toString(36).slice(2),
-      earned_at: Date.now()
+      mode:"ssv",
+      reward_id:rewardId,
+      user_id:userId
     };
 
-    rewardReady = true;
-    rewardCount.textContent = "Ad complete — reward earned";
+    rewardCount.textContent = "Ad complete — verifying reward";
+
+    if(rewardAdSpace){
+      rewardAdSpace.textContent =
+        "Thank you. Google is securely verifying your earned decode.";
+    }
+
+    const verified = await waitForVerifiedReward(
+      rewardId,
+      userId,
+      attemptId,
+      20
+    );
+
+    if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
+
+    if(verified){
+      rewardReady = true;
+      rewardCount.textContent = "Reward verified — decode ready";
+      rewardContinue.textContent = "Continue Decode";
+      rewardContinue.disabled = false;
+
+      if(rewardAdSpace){
+        rewardAdSpace.textContent =
+          "Your sponsored dream decode is ready.";
+      }
+
+      return;
+    }
+
+    rewardReady = false;
+    rewardCount.textContent = "Verification is taking longer than usual";
+    rewardContinue.textContent = "Check Reward";
     rewardContinue.disabled = false;
 
     if(rewardAdSpace){
-      rewardAdSpace.textContent = "Thank you. Your dream decode is ready.";
+      rewardAdSpace.textContent =
+        "Your reward is still processing. Tap Check Reward in a moment.";
     }
   }catch(error){
     console.warn("Rewarded ad failed", error);
@@ -1571,7 +1699,10 @@ async function openRewardModal(){
     if(attemptId !== rewardAttemptId) return;
 
     closeRewardModal();
-    alert("The sponsored video could not be completed. Please tap Decode Dream and try again.");
+    alert(
+      error?.message ||
+      "The sponsored video could not be completed. Please try again."
+    );
   }
 }
 function closeRewardModal(){
@@ -2180,7 +2311,43 @@ if(btn){
 
 if(rewardContinue){
   rewardContinue.onclick = async () => {
-    if(!rewardReady || !pendingRewardDecode || !pendingRewardGrant) return;
+    if(!pendingRewardDecode || !pendingRewardGrant) return;
+
+    if(!rewardReady){
+      const attemptId = rewardAttemptId;
+
+      rewardContinue.disabled = true;
+      rewardContinue.textContent = "Checking Reward…";
+
+      try{
+        const verified = await waitForVerifiedReward(
+          pendingRewardGrant.reward_id,
+          pendingRewardGrant.user_id,
+          attemptId,
+          10
+        );
+
+        if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
+
+        if(!verified){
+          rewardCount.textContent =
+            "Reward is still processing. Please check again shortly.";
+          rewardContinue.textContent = "Check Reward";
+          rewardContinue.disabled = false;
+          return;
+        }
+
+        rewardReady = true;
+        rewardCount.textContent = "Reward verified — decode ready";
+      }catch(error){
+        console.warn("Reward verification check failed", error);
+        rewardCount.textContent =
+          "Reward verification is temporarily unavailable.";
+        rewardContinue.textContent = "Check Reward";
+        rewardContinue.disabled = false;
+        return;
+      }
+    }
 
     const rewardGrant = { ...pendingRewardGrant };
     closeRewardModal();

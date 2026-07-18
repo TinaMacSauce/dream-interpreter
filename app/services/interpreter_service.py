@@ -1,7 +1,5 @@
-import os
 import re
 import secrets
-import time
 from typing import Any, Dict, List, Optional
 
 from flask import jsonify, make_response, request
@@ -80,48 +78,6 @@ def _access_label(
     if has_rewarded_access:
         return "rewarded_ad"
     return "free"
-
-
-def _env_flag(name: str, default: str = "0") -> bool:
-    return str(os.getenv(name, default)).strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
-
-def _has_valid_test_reward(data: Dict[str, Any]) -> bool:
-    """Accept a client reward only while the server is explicitly in test mode.
-
-    This is intentionally limited to Google test ads. Before live ads are enabled,
-    replace this test grant with verified AdMob server-side verification (SSV).
-    """
-    if not _env_flag("REWARDED_AD_TEST_MODE"):
-        return False
-
-    reward = data.get("rewarded_ad")
-    if not isinstance(reward, dict):
-        return False
-
-    if reward.get("mode") != "test" or reward.get("earned") is not True:
-        return False
-
-    if _safe_int(reward.get("amount"), 0) < 1:
-        return False
-
-    attempt_id = _clean(reward.get("attempt_id"))
-    if len(attempt_id) < 12 or len(attempt_id) > 128:
-        return False
-
-    earned_at_ms = _safe_int(reward.get("earned_at"), 0)
-    now_ms = int(time.time() * 1000)
-
-    # Reject stale or implausibly future-dated test rewards.
-    if earned_at_ms <= 0 or abs(now_ms - earned_at_ms) > 5 * 60 * 1000:
-        return False
-
-    return True
 
 
 def _get_ssv_reward_request(
@@ -627,7 +583,6 @@ def run_interpretation():
         is_paid = access_ok and access_type == "subscription"
         has_dream_pack = access_ok and access_type == "dream_pack"
 
-        has_test_rewarded_access = _has_valid_test_reward(data)
         ssv_reward_request = _get_ssv_reward_request(data)
         has_ssv_rewarded_access = False
 
@@ -637,18 +592,14 @@ def run_interpretation():
                 user_id=ssv_reward_request["user_id"],
             )
 
-        has_rewarded_access = (
-            has_test_rewarded_access
-            or has_ssv_rewarded_access
-        )
+        has_rewarded_access = has_ssv_rewarded_access
         used_free_try = False
 
         free_uses_left = 0
         dream_pack_status = get_dream_pack_status(session_email)
 
-        # A verified rewarded ad grants exactly one decode without consuming a
-        # free try. The legacy client-side test grant remains available only
-        # while REWARDED_AD_TEST_MODE is explicitly enabled on Render.
+        # A Google-verified SSV reward grants exactly one decode without
+        # consuming a free try.
         if not access_ok and not has_rewarded_access:
             ip = get_client_ip()
             cookie_used = get_cookie_tries_used()

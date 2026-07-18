@@ -9,6 +9,15 @@
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2148520143702642"
      crossorigin="anonymous"></script>
 
+<!-- Google Analytics 4 -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-F3STGBBPBV"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
+  window.gtag("js", new Date());
+  window.gtag("config", "G-F3STGBBPBV");
+</script>
+
 <link rel="manifest" href="/static/manifest.json" />
 <meta name="theme-color" content="#020303" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -1292,6 +1301,7 @@ let rewardTimer = null;
 let pendingRewardDecode = false;
 let rewardAttemptId = 0;
 let pendingRewardGrant = null;
+let rewardVerifiedAnalyticsSent = false;
 
 /* ---- custom line-art symbol icons ---- */
 const SYMBOL_SVG = {
@@ -1384,6 +1394,29 @@ function sleep(milliseconds){
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
 
+function trackAnalyticsEvent(eventName, parameters = {}){
+  try{
+    if(typeof window.gtag !== "function") return;
+
+    window.gtag("event", eventName, {
+      app_surface:getNativeAdMob() ? "android_app" : "website",
+      ad_format:"rewarded",
+      ...parameters
+    });
+  }catch(error){
+    console.warn("Analytics event failed", eventName, error);
+  }
+}
+
+function trackRewardVerifiedOnce(){
+  if(rewardVerifiedAnalyticsSent) return;
+
+  rewardVerifiedAnalyticsSent = true;
+  trackAnalyticsEvent("reward_verified", {
+    verification_method:"server_side_verification"
+  });
+}
+
 async function getRewardVerificationStatus(rewardId, userId){
   const response = await fetch(API + "/admob-reward-status", {
     method:"POST",
@@ -1432,6 +1465,7 @@ async function waitForVerifiedReward(
     );
 
     if(status.verified === true && status.status === "verified"){
+      trackRewardVerifiedOnce();
       return true;
     }
 
@@ -1586,6 +1620,7 @@ async function openRewardModal(){
   rewardReady = false;
   pendingRewardDecode = true;
   pendingRewardGrant = null;
+  rewardVerifiedAnalyticsSent = false;
 
   if(rewardTimer){
     clearInterval(rewardTimer);
@@ -1624,6 +1659,10 @@ async function openRewardModal(){
       email:email
     });
 
+    trackAnalyticsEvent("reward_ad_requested", {
+      ad_network:"admob"
+    });
+
     await AdMob.prepareRewardVideoAd({
       adId:ADMOB_REWARDED_ID,
       isTesting:false,
@@ -1647,6 +1686,11 @@ async function openRewardModal(){
         "The sponsored video was closed before the reward was earned."
       );
     }
+
+    trackAnalyticsEvent("reward_ad_completed", {
+      ad_network:"admob",
+      reward_amount:Number(reward.amount || 0)
+    });
 
     pendingRewardGrant = {
       mode:"ssv",
@@ -2110,6 +2154,16 @@ async function runInterpretation(rewardGrant = null){
     else if(data.dream_pack?.active){ showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining."); }
     else if(data.is_rewarded || data.access === "rewarded_ad"){ showAccessStatus("<strong>Access:</strong> Sponsored decode unlocked."); }
     else if(typeof data.free_uses_left === "number"){ showAccessStatus("<strong>Access:</strong> Free mode • " + esc(String(data.free_uses_left)) + " free use(s) left."); }
+
+    if(
+      rewardGrant?.mode === "ssv" &&
+      (data.is_rewarded || data.access === "rewarded_ad")
+    ){
+      trackAnalyticsEvent("reward_decode_success", {
+        access_type:"rewarded_ad"
+      });
+    }
+
     const mapped = mapInterpretation(data, dream);
     const entryId = "dream_" + Date.now();
     const entry = {

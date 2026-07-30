@@ -1132,7 +1132,7 @@ a.setting-row{ text-decoration:none; }
 
       <button id="interpret" class="primary" type="button">Decode Dream</button>
 
-      <div class="ad-card" id="decodeAd">
+      <div class="ad-card hidden" id="decodeAd">
         <div class="ad-label">Sponsored</div>
         <div class="ad-slot">Sponsored message may appear here for free access.</div>
       </div>
@@ -1280,15 +1280,43 @@ a.setting-row{ text-decoration:none; }
 <div class="reward-modal" id="rewardModal" aria-hidden="true">
   <div class="reward-box" role="dialog" aria-modal="true" aria-labelledby="rewardTitle">
     <div class="reward-kicker">Sponsored Access</div>
-    <h2 class="reward-title" id="rewardTitle">Watch to Continue</h2>
-    <p class="reward-copy">Free dream decoding is supported by sponsored content. Continue when the message is complete.</p>
-    <div class="reward-ad-space" id="rewardAdSpace">Sponsored video will open when you continue.</div>
-    <div class="reward-count" id="rewardCount">Preparing sponsored access</div>
-    <div class="reward-actions">
-      <button class="reward-continue" type="button" id="rewardContinue" disabled>Continue Decode</button>
-      <a class="reward-upgrade" id="rewardUpgrade" href="#">Skip Ads With $1 Dream Decode</a>
+
+    <h2 class="reward-title" id="rewardTitle">
+      Unlock 1 Dream Decode
+    </h2>
+
+    <p class="reward-copy">
+      Watch one sponsored video to unlock one dream interpretation. The video will only open after you choose to continue.
+    </p>
+
+    <div class="reward-ad-space" id="rewardAdSpace">
+      Your sponsored video has not started.
     </div>
-    <p class="reward-note">Free access is supported by sponsored content. Paid access skips this step.</p>
+
+    <div class="reward-count" id="rewardCount">
+      Choose an option below.
+    </div>
+
+    <div class="reward-actions">
+      <button class="reward-continue" type="button" id="rewardStart">
+        Watch Ad to Unlock 1 Decode
+      </button>
+     <button class="reward-upgrade" type="button" id="rewardCancel">
+  Not Now
+</button> 
+
+      <button class="reward-continue" type="button" id="rewardContinue" hidden disabled>
+        Continue Decode
+      </button>
+
+      <a class="reward-upgrade" id="rewardUpgrade" href="#">
+        Skip Ads With $1 Dream Decode
+      </a>
+    </div>
+
+    <p class="reward-note">
+      Watching the ad is optional. Paid access skips this step.
+    </p>
   </div>
 </div>
 
@@ -1340,6 +1368,8 @@ const menuPanel = byId("menuPanel");
 const menuOverlay = byId("menuOverlay");
 const closeMenu = byId("closeMenu");
 const rewardModal = byId("rewardModal");
+const rewardStart = byId("rewardStart");  
+const rewardCancel = byId("rewardCancel");
 const rewardContinue = byId("rewardContinue");
 const rewardCount = byId("rewardCount");
 const rewardUpgrade = byId("rewardUpgrade");
@@ -1864,7 +1894,7 @@ async function openRewardModal(){
   const AdMob = getNativeAdMob();
 
   /*
-   * Native AdMob rewarded ads are available only inside the Android app.
+   * Rewarded ads are available only inside the Android app.
    * The normal website keeps its existing web-access behavior.
    */
   if(!AdMob){
@@ -1873,7 +1903,69 @@ async function openRewardModal(){
     return;
   }
 
-  if(!rewardModal || !rewardContinue || !rewardCount){
+  if(
+    !rewardModal ||
+    !rewardStart ||
+    !rewardContinue ||
+    !rewardCount
+  ){
+    alert("Sponsored access is temporarily unavailable.");
+    return;
+  }
+
+  const rewardAdSpace = byId("rewardAdSpace");
+  const email = normalizeEmail(emailEl ? emailEl.value : "");
+
+  /*
+   * Invalidate any older rewarded-ad attempt and prepare the
+   * modal without requesting or opening an ad.
+   */
+  rewardAttemptId += 1;
+  rewardReady = false;
+  pendingRewardDecode = true;
+  pendingRewardGrant = null;
+  rewardVerifiedAnalyticsSent = false;
+
+  if(rewardTimer){
+    clearInterval(rewardTimer);
+    rewardTimer = null;
+  }
+
+  rewardStart.hidden = false;
+  rewardStart.disabled = false;
+  rewardStart.textContent = "Watch Ad to Unlock 1 Decode";
+
+  rewardContinue.hidden = true;
+  rewardContinue.disabled = true;
+  rewardContinue.textContent = "Continue Decode";
+
+  rewardCount.textContent = "Choose an option below.";
+
+  if(rewardAdSpace){
+    rewardAdSpace.textContent =
+      "Your sponsored video has not started.";
+  }
+
+  if(rewardUpgrade){
+    rewardUpgrade.href = upgradeUrl(email);
+  }
+
+  rewardModal.classList.add("show");
+  rewardModal.setAttribute("aria-hidden", "false");
+}
+
+async function startRewardedAd(){
+  const AdMob = getNativeAdMob();
+
+  if(!AdMob || !pendingRewardDecode){
+    return;
+  }
+
+  if(
+    !rewardStart ||
+    !rewardContinue ||
+    !rewardCount
+  ){
     alert("Sponsored access is temporarily unavailable.");
     return;
   }
@@ -1885,7 +1977,6 @@ async function openRewardModal(){
   const email = normalizeEmail(emailEl ? emailEl.value : "");
 
   rewardReady = false;
-  pendingRewardDecode = true;
   pendingRewardGrant = null;
   rewardVerifiedAnalyticsSent = false;
 
@@ -1894,32 +1985,37 @@ async function openRewardModal(){
     rewardTimer = null;
   }
 
+  rewardStart.disabled = true;
+  rewardStart.textContent = "Starting Sponsored Video…";
+
+  rewardContinue.hidden = true;
   rewardContinue.disabled = true;
   rewardContinue.textContent = "Continue Decode";
+
   rewardCount.textContent = "Loading sponsored video…";
 
   if(rewardAdSpace){
-    rewardAdSpace.textContent = "A sponsored video will open automatically.";
+    rewardAdSpace.textContent =
+      "Please wait while your sponsored video loads.";
   }
-
-  if(rewardUpgrade){
-    rewardUpgrade.href = upgradeUrl(email);
-  }
-
-  rewardModal.classList.add("show");
-  rewardModal.setAttribute("aria-hidden", "false");
 
   try{
     await initializeNativeAdMob(AdMob);
 
     const consentInfo = await requestNativeConsent(AdMob);
+
     if(!consentInfo || !consentInfo.canRequestAds){
       throw new Error(
         "Ads cannot be requested until the privacy choice is complete."
       );
     }
 
-    if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
+    if(
+      attemptId !== rewardAttemptId ||
+      !pendingRewardDecode
+    ){
+      return;
+    }
 
     const customData = JSON.stringify({
       reward_id:rewardId,
@@ -1940,13 +2036,23 @@ async function openRewardModal(){
       }
     });
 
-    if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
+    if(
+      attemptId !== rewardAttemptId ||
+      !pendingRewardDecode
+    ){
+      return;
+    }
 
     rewardCount.textContent = "Sponsored video ready";
 
     const reward = await AdMob.showRewardVideoAd();
 
-    if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
+    if(
+      attemptId !== rewardAttemptId ||
+      !pendingRewardDecode
+    ){
+      return;
+    }
 
     if(!reward || Number(reward.amount || 0) < 1){
       throw new Error(
@@ -1965,7 +2071,9 @@ async function openRewardModal(){
       user_id:userId
     };
 
-    rewardCount.textContent = "Ad complete — verifying reward";
+    rewardStart.hidden = true;
+    rewardCount.textContent =
+      "Ad complete — verifying reward";
 
     if(rewardAdSpace){
       rewardAdSpace.textContent =
@@ -1979,12 +2087,21 @@ async function openRewardModal(){
       20
     );
 
-    if(attemptId !== rewardAttemptId || !pendingRewardDecode) return;
+    if(
+      attemptId !== rewardAttemptId ||
+      !pendingRewardDecode
+    ){
+      return;
+    }
+
+    rewardContinue.hidden = false;
 
     if(verified){
       rewardReady = true;
-      rewardCount.textContent = "Reward verified — decode ready";
-      rewardContinue.textContent = "Continue Decode";
+      rewardCount.textContent =
+        "Reward verified — decode ready";
+      rewardContinue.textContent =
+        "Continue Decode";
       rewardContinue.disabled = false;
 
       if(rewardAdSpace){
@@ -1996,7 +2113,8 @@ async function openRewardModal(){
     }
 
     rewardReady = false;
-    rewardCount.textContent = "Verification is taking longer than usual";
+    rewardCount.textContent =
+      "Verification is taking longer than usual";
     rewardContinue.textContent = "Check Reward";
     rewardContinue.disabled = false;
 
@@ -2007,9 +2125,29 @@ async function openRewardModal(){
   }catch(error){
     console.warn("Rewarded ad failed", error);
 
-    if(attemptId !== rewardAttemptId) return;
+    if(attemptId !== rewardAttemptId){
+      return;
+    }
 
-    closeRewardModal();
+    rewardReady = false;
+    pendingRewardGrant = null;
+
+    rewardStart.hidden = false;
+    rewardStart.disabled = false;
+    rewardStart.textContent =
+      "Watch Ad to Unlock 1 Decode";
+
+    rewardContinue.hidden = true;
+    rewardContinue.disabled = true;
+
+    rewardCount.textContent =
+      "The sponsored video was not completed.";
+
+    if(rewardAdSpace){
+      rewardAdSpace.textContent =
+        "No decode was used. You may try again.";
+    }
+
     alert(
       error?.message ||
       "The sponsored video could not be completed. Please try again."
@@ -2703,8 +2841,18 @@ if(btn){
     await openRewardModal();
   };
 }
+if(rewardCancel){
+  rewardCancel.onclick = () => {
+    closeRewardModal();
+  };
+}
 
-if(rewardContinue){
+if(rewardStart){
+  rewardStart.onclick = async () => {
+    await startRewardedAd();
+  };
+}
+     if(rewardContinue){
   rewardContinue.onclick = async () => {
     if(!pendingRewardDecode || !pendingRewardGrant) return;
 

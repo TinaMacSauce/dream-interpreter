@@ -598,12 +598,15 @@ def run_interpretation():
         free_uses_left = 0
         dream_pack_status = get_dream_pack_status(session_email)
 
-        # A Google-verified SSV reward grants exactly one decode without
-        # consuming a free try.
+        # Check access now, but do not deduct anything until the
+        # interpretation has been created successfully.
+        free_try_ip = ""
+        should_consume_dream_pack = False
+
         if not access_ok and not has_rewarded_access:
-            ip = get_client_ip()
+            free_try_ip = get_client_ip()
             cookie_used = get_cookie_tries_used()
-            ip_used = shadow_count(ip)
+            ip_used = shadow_count(free_try_ip)
             effective_used = max(cookie_used, ip_used)
 
             if effective_used >= Config.FREE_TRIES:
@@ -618,12 +621,13 @@ def run_interpretation():
                     }
                 ), 402
 
-            shadow_increment(ip)
             used_free_try = True
-            free_uses_left = free_tries_remaining_after_this(effective_used)
+            free_uses_left = free_tries_remaining_after_this(
+                effective_used
+            )
 
         elif has_dream_pack:
-            dream_pack_status = consume_dream_pack_use(session_email)
+            should_consume_dream_pack = True
 
     except Exception:
         import traceback
@@ -886,6 +890,45 @@ def run_interpretation():
     # =====================================================
     # RESPONSE
     # =====================================================
+
+    # Deduct free or Dream Pack access only after the interpretation
+    # payload has been created successfully.
+    try:
+        if used_free_try:
+            shadow_increment(free_try_ip)
+            payload["free_uses_left"] = free_uses_left
+        elif should_consume_dream_pack:
+            dream_pack_status = consume_dream_pack_use(
+                session_email
+            )
+
+            payload["dream_pack"] = dream_pack_status
+
+    except Exception:
+     
+        import traceback
+
+        trace = traceback.format_exc()
+
+        print(
+            "\n========== ACCESS DEDUCTION TRACEBACK ==========",
+            flush=True,
+        )
+        print(trace, flush=True)
+        print(
+            "================================================\n",
+            flush=True,
+        )
+
+        return jsonify(
+            {
+                "error": (
+                    "Your interpretation was created, but access "
+                    "could not be updated. No result was delivered. "
+                    "Please try again."
+                )
+            }
+        ), 500
 
     # Consume the SSV reward only after a successful interpretation. This makes
     # each verified Google transaction usable for one dream decode only.

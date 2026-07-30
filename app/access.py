@@ -463,11 +463,15 @@ def mark_dream_pack_purchase(
     email: str,
     uses: int = Config.DREAM_PACK_USES,
     hours: int = Config.DREAM_PACK_HOURS,
-) -> None:
+    stripe_checkout_session_id: str = "",
+) -> bool:
     email_n = normalize_email(email)
+    checkout_id = (
+        stripe_checkout_session_id or ""
+    ).strip()
 
     if not email_n:
-        return
+        return False
 
     with _json_file_lock(SUBSCRIBERS_PATH):
         subscribers = _load_subscribers_unlocked()
@@ -476,6 +480,19 @@ def mark_dream_pack_purchase(
 
         if not isinstance(rec, dict):
             rec = {}
+
+        processed_sessions = rec.get(
+            "processed_dream_pack_sessions"
+        )
+
+        if not isinstance(processed_sessions, list):
+            processed_sessions = []
+
+        if (
+            checkout_id
+            and checkout_id in processed_sessions
+        ):
+            return False
 
         expires_at = (
             utc_now()
@@ -494,6 +511,12 @@ def mark_dream_pack_purchase(
 
         rec["updated_at"] = iso_now()
 
+        if checkout_id:
+            processed_sessions.append(checkout_id)
+            rec["processed_dream_pack_sessions"] = (
+                processed_sessions[-100:]
+            )
+
         if "is_active" not in rec:
             rec["is_active"] = False
 
@@ -503,6 +526,8 @@ def mark_dream_pack_purchase(
         subscribers[email_n] = rec
 
         _save_subscribers_unlocked(subscribers)
+
+        return True
 
 
 def _get_dream_pack_status_from_record(

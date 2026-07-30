@@ -329,7 +329,53 @@ button{ cursor:pointer; }
   background:linear-gradient(135deg,var(--gold3),var(--gold));
   box-shadow:0 0 9px rgba(212,175,55,.7);
 }
+/* ============ IMPROVEMENT NOTICE ============ */
+.improvement-banner{
+  width:100%;
+  max-width:440px;
+  margin:0 auto 20px;
+  padding:16px 18px;
+  border:2px solid #fff4dc;
+  border-radius:18px;
+  background:
+    linear-gradient(135deg,#fff0b8 0%,#f8dd7d 55%,#d4af37 100%);
+  color:#090805;
+  text-align:center;
+  box-shadow:
+    0 16px 34px rgba(0,0,0,.52),
+    0 0 30px rgba(212,175,55,.3),
+    inset 0 1px 0 rgba(255,255,255,.72);
+}
 
+.improvement-banner strong{
+  display:block;
+  margin-bottom:6px;
+  font-family:Cinzel,Georgia,serif;
+  font-size:.88rem;
+  font-weight:800;
+  letter-spacing:.08em;
+  line-height:1.3;
+  text-transform:uppercase;
+}
+
+.improvement-banner span{
+  display:block;
+  font-size:.78rem;
+  font-weight:700;
+  line-height:1.5;
+}
+
+@media(min-width:768px){
+  .improvement-banner{
+    max-width:640px;
+  }
+}
+
+@media(min-width:1100px){
+  .improvement-banner{
+    max-width:700px;
+  }
+}
 /* ============ SCREENS ============ */
 .screen{ display:none; }
 .screen.active{
@@ -994,6 +1040,11 @@ a.setting-row{ text-decoration:none; }
     </button>
   </header>
 
+<div class="improvement-banner" role="status" aria-label="App improvement notice">
+  <strong>The Dream Interpreter Is Getting Stronger</strong>
+  <span>We’re actively improving accuracy, speed, and your overall experience. Come back often for new updates and stronger dream interpretations.</span>
+</div>
+     
   <section class="screen active" id="decodeScreen">
     <div class="page-title">
       <h2>Decode Your Dream</h2>
@@ -1303,6 +1354,17 @@ let rewardAttemptId = 0;
 let pendingRewardGrant = null;
 let rewardVerifiedAnalyticsSent = false;
 
+     
+let accessState = {
+  email:"",
+  checked:false,
+  hasPaidAccess:false,
+  accessType:"",
+  dreamPack:null
+};
+
+let accessCheckPromise = null;
+     
 /* ---- custom line-art symbol icons ---- */
 const SYMBOL_SVG = {
   dog:`<svg viewBox="0 0 24 24"><path d="M5 9l-1.5-4 4 2h5l4-2L15 9"/><path d="M4 9v6c0 2 2 4 4 4h8c2 0 4-2 4-4V9"/><path d="M9 13h.01"/><path d="M15 13h.01"/><path d="M10 17h4"/></svg>`,
@@ -1498,15 +1560,220 @@ function addJournalEntry(entry){
   refreshAccount();
 }
 
-function showAccessStatus(html){ if(!accessStatus) return; accessStatus.style.display = "block"; accessStatus.innerHTML = html; refreshAds(); }
-function hideAccessStatus(){ if(!accessStatus) return; accessStatus.style.display = "none"; accessStatus.innerHTML = ""; refreshAds(); }
-function userHasPaidAccess(){
-  const statusText = String(accessStatus?.textContent || "").toLowerCase();
-  return statusText.includes("subscription active") || statusText.includes("dream pack active");
-}
-function refreshAds(){ const decodeAd = byId("decodeAd"); if(!decodeAd) return; decodeAd.classList.toggle("hidden", userHasPaidAccess()); }
-function shouldShowRewardAd(){ return !userHasPaidAccess(); }
 
+function showAccessStatus(html){
+  if(!accessStatus) return;
+  accessStatus.style.display = "block";
+  accessStatus.innerHTML = html;
+  refreshAds();
+}
+
+function hideAccessStatus(){
+  if(!accessStatus) return;
+  accessStatus.style.display = "none";
+  accessStatus.innerHTML = "";
+  refreshAds();
+}
+
+function resetAccessState(email = ""){
+  accessState = {
+    email:normalizeEmail(email),
+    checked:false,
+    hasPaidAccess:false,
+    accessType:"",
+    dreamPack:null
+  };
+
+  refreshAds();
+}
+
+function userHasPaidAccess(){
+  return accessState.checked === true &&
+    accessState.hasPaidAccess === true;
+}
+
+function refreshAds(){
+  const decodeAd = byId("decodeAd");
+  if(!decodeAd) return;
+
+  /*
+   * Hide regular ads while access is active.
+   * Also hide them while access is still being verified so a paying
+   * customer never briefly sees an ad during startup.
+   */
+  const shouldHide =
+    userHasPaidAccess() ||
+    Boolean(accessState.email && !accessState.checked);
+
+  decodeAd.classList.toggle("hidden", shouldHide);
+}
+
+async function checkServerAccess(email, options = {}){
+  const clean = normalizeEmail(email);
+  const showStatus = options.showStatus !== false;
+
+  if(!clean || !validEmail(clean)){
+    resetAccessState(clean);
+    return accessState;
+  }
+
+  if(
+    accessState.email === clean &&
+    accessState.checked === true &&
+    options.force !== true
+  ){
+    return accessState;
+  }
+
+  if(accessCheckPromise && options.force !== true){
+    return accessCheckPromise;
+  }
+
+  accessState = {
+    email:clean,
+    checked:false,
+    hasPaidAccess:false,
+    accessType:"",
+    dreamPack:null
+  };
+
+  if(showStatus){
+    showAccessStatus(
+      "<strong>Access:</strong> Checking your saved access..."
+    );
+  }else{
+    refreshAds();
+  }
+
+  const requestedEmail = clean;
+
+  accessCheckPromise = (async () => {
+    try{
+      const response = await fetch(API + "/check-access", {
+        method:"POST",
+        mode:"cors",
+        credentials:"include",
+        headers:{
+          "Content-Type":"application/json",
+          "Accept":"application/json"
+        },
+        body:JSON.stringify({
+          email:requestedEmail
+        })
+      });
+
+      const data = await readResponse(response);
+
+      /*
+       * Ignore a late response if the user changed the email
+       * while this request was running.
+       */
+      if(normalizeEmail(loadEmail()) !== requestedEmail){
+        return accessState;
+      }
+
+      if(
+        response.ok &&
+        data.access_type === "subscription" &&
+        data.is_paid === true
+      ){
+        accessState = {
+          email:requestedEmail,
+          checked:true,
+          hasPaidAccess:true,
+          accessType:"subscription",
+          dreamPack:null
+        };
+
+        if(showStatus){
+          showAccessStatus(
+            "<strong>Access:</strong> Subscription active. Ads are skipped."
+          );
+        }else{
+          refreshAds();
+        }
+
+        return accessState;
+      }
+
+      if(
+        response.ok &&
+        data.access_type === "dream_pack" &&
+        data.dream_pack?.active === true
+      ){
+        accessState = {
+          email:requestedEmail,
+          checked:true,
+          hasPaidAccess:true,
+          accessType:"dream_pack",
+          dreamPack:data.dream_pack
+        };
+
+        if(showStatus){
+          showAccessStatus(
+            "<strong>Access:</strong> Dream Pack active • " +
+            esc(String(data.dream_pack.uses_remaining || 0)) +
+            " use(s) remaining. Ads are skipped."
+          );
+        }else{
+          refreshAds();
+        }
+
+        return accessState;
+      }
+
+      if(response.status === 402){
+        accessState = {
+          email:requestedEmail,
+          checked:true,
+          hasPaidAccess:false,
+          accessType:"free",
+          dreamPack:data.dream_pack || null
+        };
+
+        if(showStatus){
+          showAccessStatus(
+            "<strong>Access:</strong> Free access."
+          );
+        }else{
+          refreshAds();
+        }
+
+        return accessState;
+      }
+
+      throw new Error(
+        data.message ||
+        data.error ||
+        "Access could not be verified."
+      );
+    }catch(error){
+      console.warn("Access verification failed", error);
+
+      accessState = {
+        email:requestedEmail,
+        checked:false,
+        hasPaidAccess:false,
+        accessType:"unknown",
+        dreamPack:null
+      };
+
+      if(showStatus){
+        showAccessStatus(
+          "<strong>Access check unavailable:</strong> We could not verify your account. Please try again before watching an ad."
+        );
+      }else{
+        refreshAds();
+      }
+
+      return accessState;
+    }finally{
+      accessCheckPromise = null;
+    }
+  })();
+
+  return accessCheckPromise;
+}
 function getNativeAdMob(){
   const capacitor = window.Capacitor;
   if(!capacitor) return null;
@@ -2276,8 +2543,34 @@ if(newDreamBtn){
 }
 
 if(emailEl){
-  emailEl.addEventListener("input", () => saveEmail(emailEl.value));
-  emailEl.addEventListener("blur", () => saveEmail(emailEl.value));
+  emailEl.addEventListener("input", () => {
+    const email = normalizeEmail(emailEl.value);
+
+    saveEmail(email);
+    resetAccessState(email);
+
+    if(email && validEmail(email)){
+      showAccessStatus(
+        "<strong>Access:</strong> Email changed. Access will be checked before decoding."
+      );
+    }else{
+      hideAccessStatus();
+    }
+  });
+
+  emailEl.addEventListener("blur", async () => {
+    const email = normalizeEmail(emailEl.value);
+
+    saveEmail(email);
+    resetAccessState(email);
+
+    if(email && validEmail(email)){
+      await checkServerAccess(email, {
+        showStatus:true,
+        force:true
+      });
+    }
+  });
 }
 
 if(journalSearch){ journalSearch.addEventListener("input", renderJournal); }
@@ -2356,10 +2649,58 @@ if(accountDreamPackForm){
 if(btn){
   btn.onclick = async () => {
     if(!dreamEl) return;
+
     const rawDream = dreamEl.value.trim();
-    if(!rawDream){ alert("Enter your dream first."); dreamEl.focus(); return; }
-    if(shouldShowRewardAd()){ openRewardModal(); return; }
-    await runInterpretation();
+    const email = normalizeEmail(emailEl ? emailEl.value : "");
+
+    if(!rawDream){
+      alert("Enter your dream first.");
+      dreamEl.focus();
+      return;
+    }
+
+    if(email && !validEmail(email)){
+      switchTab("account");
+      alert("Enter a valid email or clear the email field.");
+      if(emailEl) emailEl.focus();
+      return;
+    }
+
+    if(email){
+      saveEmail(email);
+
+      btn.disabled = true;
+      btn.textContent = "Checking Access...";
+
+      const verifiedAccess = await checkServerAccess(email, {
+        showStatus:true,
+        force:true
+      });
+
+      btn.disabled = false;
+      btn.textContent = "Decode Dream";
+
+      if(
+        verifiedAccess.email === email &&
+        verifiedAccess.hasPaidAccess === true
+      ){
+        await runInterpretation();
+        return;
+      }
+
+      if(
+        verifiedAccess.email === email &&
+        verifiedAccess.checked !== true &&
+        verifiedAccess.accessType === "unknown"
+      ){
+        alert(
+          "We could not verify your access. Please check your connection and try again. No ad was opened."
+        );
+        return;
+      }
+    }
+
+    await openRewardModal();
   };
 }
 
@@ -2419,11 +2760,27 @@ if("serviceWorker" in navigator){
   window.addEventListener("load", () => { navigator.serviceWorker.register("/static/service-worker.js").catch(() => {}); });
 }
 
-const savedEmail = loadEmail();
-if(savedEmail && emailEl){
-  emailEl.value = savedEmail;
-  showAccessStatus("<strong>Email saved:</strong> " + esc(savedEmail));
-}else{
+async function initializeSavedAccess(){
+  const savedEmail = loadEmail();
+
+  if(savedEmail && emailEl){
+    emailEl.value = savedEmail;
+
+    /*
+     * Mark access as pending immediately so ads remain hidden
+     * until the server confirms whether this user has paid access.
+     */
+    resetAccessState(savedEmail);
+
+    await checkServerAccess(savedEmail, {
+      showStatus:true,
+      force:true
+    });
+
+    return;
+  }
+
+  resetAccessState("");
   hideAccessStatus();
 }
 
@@ -2432,7 +2789,7 @@ renderGuidedSymbols();
 renderSymbols();
 renderJournal();
 refreshAccount();
-refreshAds();
+initializeSavedAccess();
 initializeNativePrivacy();
 </script>
 

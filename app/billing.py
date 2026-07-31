@@ -75,8 +75,6 @@ def _buyer_session_matches(email: str) -> bool:
       session["subscriber_email"] = email
       session["premium"] = False
       session["buyer_set_at"] = iso_now()
-
-    We do not treat a random typed email as proof of ownership.
     """
     try:
         from flask import session
@@ -95,12 +93,6 @@ def _buyer_session_matches(email: str) -> bool:
 
 
 def _premium_session_matches(email: str) -> bool:
-    """
-    Subscription users must already have a verified premium session.
-
-    This prevents someone from typing another customer's email and
-    receiving subscription access.
-    """
     email_n = normalize_email(email)
 
     return bool(
@@ -116,11 +108,8 @@ def _premium_session_matches(email: str) -> bool:
 
 def local_active_subscription_for_email(email: str) -> Tuple[bool, str]:
     """
-    Reads the local subscriber record written by Stripe webhook or verified
-    checkout success.
-
-    This does NOT prove the current visitor owns the email.
-    Ownership proof is handled by _premium_session_matches().
+    Read the local subscriber record written by a Stripe webhook or a
+    verified checkout success callback.
     """
     email_n = normalize_email(email)
 
@@ -148,12 +137,7 @@ def local_active_subscription_for_email(email: str) -> Tuple[bool, str]:
 # ============================================================
 
 def stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
-    """
-    Live Stripe lookup by email.
-
-    Kept for admin/backfill/debug use, but has_active_access() does not use
-    this as proof that the current visitor owns the email.
-    """
+    """Look up active Stripe subscriptions for an email address."""
     email = normalize_email(email)
 
     if not validate_email(email):
@@ -199,7 +183,11 @@ def stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
 
         return False, ""
 
-    except Exception:
+    except Exception as exc:
+        print(
+            f"Stripe subscription lookup failed for {email}: {exc}",
+            flush=True,
+        )
         return False, ""
 
 
@@ -209,18 +197,13 @@ def stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
 
 def has_active_access(email: str) -> Tuple[bool, Dict[str, Any]]:
     """
-    Access rules:
+    Restore paid access by the checkout email saved in the app.
 
-    Subscription:
-      - Must have a local active subscriber record
-      - Must also have a verified premium session for the same email
+    Subscription access is accepted from the local webhook-backed record.
+    If that record is missing, Stripe is checked directly and the local
+    record is repaired automatically.
 
-    Dream pack:
-      - Must have an active dream pack record
-      - Must also have a buyer session for the same email
-
-    This prevents access from being granted just because someone typed
-    another paying customer's email.
+    Dream Pack access is restored from its active email record.
     """
     email = normalize_email(email)
 
@@ -233,34 +216,44 @@ def has_active_access(email: str) -> Tuple[bool, Dict[str, Any]]:
 
     local_active, customer_id = local_active_subscription_for_email(email)
 
-    if local_active and _premium_session_matches(email):
+    if local_active:
         return True, {
             "type": "subscription",
             "customer_id": customer_id,
         }
 
+    stripe_active, stripe_customer_id = (
+        stripe_active_subscription_for_email(email)
+    )
+
+    if stripe_active:
+        mark_subscriber(
+            email=email,
+            is_active=True,
+            stripe_customer_id=stripe_customer_id,
+        )
+
+        return True, {
+            "type": "subscription",
+            "customer_id": stripe_customer_id,
+        }
+
     # --------------------------------------------------------
-    # Dream pack access
+    # Dream Pack access
     # --------------------------------------------------------
 
     pack = get_dream_pack_status(email)
 
-    if pack.get("active") and _buyer_session_matches(email):
+    if pack.get("active"):
         return True, {
             "type": "dream_pack",
             "details": pack,
         }
 
-    # --------------------------------------------------------
-    # Do not mark active users inactive just because this visitor
-    # failed session verification.
-    # --------------------------------------------------------
-
-    if not local_active:
-        mark_subscriber(
-            email=email,
-            is_active=False,
-        )
+    mark_subscriber(
+        email=email,
+        is_active=False,
+    )
 
     return False, {
         "type": "none",

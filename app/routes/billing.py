@@ -148,7 +148,7 @@ def _build_success_url(endpoint: str, requested_return: str) -> str:
 
 def _build_cancel_url(email: str, requested_return: str) -> str:
     return url_for(
-        "interpreter.upgrade",
+        "home.upgrade",
         _external=True,
         email=email,
         **{"return": requested_return},

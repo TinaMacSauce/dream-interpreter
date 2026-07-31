@@ -503,6 +503,7 @@ def dream_pack_success():
             email=email,
             uses=Config.DREAM_PACK_USES,
             hours=Config.DREAM_PACK_HOURS,
+            stripe_checkout_session_id=session_id,
         )
 
     except Exception as exc:
@@ -571,6 +572,9 @@ def _handle_checkout_completed(data_obj: Dict[str, Any]) -> None:
     email = normalize_email(
         metadata.get("email")
         or data_obj.get("customer_email")
+        or (
+            (data_obj.get("customer_details") or {}).get("email")
+        )
         or ""
     )
 
@@ -580,6 +584,10 @@ def _handle_checkout_completed(data_obj: Dict[str, Any]) -> None:
         metadata.get("purchase_type") or ""
     ).strip().lower()
 
+    checkout_session_id = (
+        data_obj.get("id") or ""
+    ).strip()
+
     if not validate_email(email):
         return
 
@@ -588,6 +596,7 @@ def _handle_checkout_completed(data_obj: Dict[str, Any]) -> None:
             email=email,
             uses=Config.DREAM_PACK_USES,
             hours=Config.DREAM_PACK_HOURS,
+            stripe_checkout_session_id=checkout_session_id,
         )
 
         return

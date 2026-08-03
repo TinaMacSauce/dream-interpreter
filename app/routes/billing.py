@@ -128,8 +128,7 @@ def _build_success_url(endpoint: str, requested_return: str) -> str:
     """
     Stripe replaces {CHECKOUT_SESSION_ID} after successful checkout.
 
-    We verify that session ID on the success route before granting access.
-    This prevents someone from manually visiting a success URL with an email.
+    The app verifies that session ID before granting paid access.
     """
     base_url = url_for(endpoint, _external=True)
 
@@ -140,7 +139,7 @@ def _build_success_url(endpoint: str, requested_return: str) -> str:
         }
     )
 
-    # Stripe requires the braces to stay literal.
+    # Stripe requires the braces to remain literal.
     query = query.replace("%7B", "{").replace("%7D", "}")
 
     return f"{base_url}?{query}"
@@ -269,13 +268,16 @@ def check_access():
 
 
 # ============================================================
-# Subscription Checkout
+# Monthly Subscription Checkout With 3-Day Trial
 # ============================================================
 
 @billing_bp.route("/create-checkout-session", methods=["POST"])
 def create_checkout_session():
-    if not stripe_config_ok():
-        return _checkout_error("Stripe subscription config missing.", 500)
+    if not stripe_config_ok() or not Config.PRICE_MONTHLY:
+        return _checkout_error(
+            "Stripe monthly subscription config missing.",
+            500,
+        )
 
     email = _extract_email_from_request()
 
@@ -292,23 +294,45 @@ def create_checkout_session():
             mode="subscription",
             customer_email=email,
             billing_address_collection="auto",
+
+            # Collect a card before beginning the free trial.
+            payment_method_collection="always",
+
             allow_promotion_codes=True,
             expires_at=int(time.time()) + 1800,
+
+            # New subscriptions use the monthly Stripe price.
             line_items=[
                 {
-                    "price": Config.DEFAULT_STRIPE_PRICE_ID,
+                    "price": Config.PRICE_MONTHLY,
                     "quantity": 1,
                 }
             ],
+
+            # New monthly subscribers receive three free days.
+            subscription_data={
+                "trial_period_days": 3,
+                "metadata": {
+                    "purchase_type": "subscription",
+                    "plan": "monthly",
+                    "trial_days": "3",
+                    "email": email,
+                },
+            },
+
             metadata={
                 "purchase_type": "subscription",
+                "plan": "monthly",
+                "trial_days": "3",
                 "email": email,
                 "return_url": requested_return,
             },
+
             success_url=_build_success_url(
                 "billing.payment_success",
                 requested_return,
             ),
+
             cancel_url=_build_cancel_url(
                 email,
                 requested_return,
@@ -318,18 +342,31 @@ def create_checkout_session():
         return redirect(checkout.url, code=303)
 
     except Exception as exc:
-        print(f"Stripe subscription checkout error: {exc}", flush=True)
-        return _checkout_error("Stripe checkout failed. Please try again.", 500)
+        print(
+            f"Stripe subscription checkout error: {exc}",
+            flush=True,
+        )
+
+        return _checkout_error(
+            "Stripe checkout failed. Please try again.",
+            500,
+        )
 
 
 # ============================================================
 # Dream Pack Checkout
 # ============================================================
 
-@billing_bp.route("/create-dream-pack-checkout-session", methods=["POST", "GET"])
+@billing_bp.route(
+    "/create-dream-pack-checkout-session",
+    methods=["POST", "GET"],
+)
 def create_dream_pack_checkout_session():
     if not stripe_dream_pack_ok():
-        return _checkout_error("Dream pack Stripe config missing.", 500)
+        return _checkout_error(
+            "Dream pack Stripe config missing.",
+            500,
+        )
 
     email = _extract_email_from_request()
 
@@ -347,12 +384,14 @@ def create_dream_pack_checkout_session():
             customer_email=email,
             allow_promotion_codes=True,
             expires_at=int(time.time()) + 1800,
+
             line_items=[
                 {
                     "price": Config.PRICE_DREAM_PACK,
                     "quantity": 1,
                 }
             ],
+
             metadata={
                 "purchase_type": "dream_pack",
                 "dream_pack_uses": str(Config.DREAM_PACK_USES),
@@ -360,10 +399,12 @@ def create_dream_pack_checkout_session():
                 "email": email,
                 "return_url": requested_return,
             },
+
             success_url=_build_success_url(
                 "billing.dream_pack_success",
                 requested_return,
             ),
+
             cancel_url=_build_cancel_url(
                 email,
                 requested_return,
@@ -373,12 +414,19 @@ def create_dream_pack_checkout_session():
         return redirect(checkout.url, code=303)
 
     except Exception as exc:
-        print(f"Stripe dream pack checkout error: {exc}", flush=True)
-        return _checkout_error("Dream pack checkout failed. Please try again.", 500)
+        print(
+            f"Stripe dream pack checkout error: {exc}",
+            flush=True,
+        )
+
+        return _checkout_error(
+            "Dream pack checkout failed. Please try again.",
+            500,
+        )
 
 
 # ============================================================
-# Payment Success
+# Subscription Payment / Trial Success
 # ============================================================
 
 @billing_bp.route("/payment-success", methods=["GET"])
@@ -424,13 +472,22 @@ def payment_success():
         customer_id = ""
 
         if isinstance(subscription, dict):
-            status = (subscription.get("status") or "").strip().lower()
+            status = (
+                subscription.get("status") or ""
+            ).strip().lower()
+
             customer_id = subscription.get("customer") or ""
+
         else:
             sub = stripe.Subscription.retrieve(subscription)
-            status = (sub.get("status") or "").strip().lower()
+
+            status = (
+                sub.get("status") or ""
+            ).strip().lower()
+
             customer_id = sub.get("customer") or ""
 
+        # Trialing customers receive premium access immediately.
         if status in {"active", "trialing"}:
             persist_email_to_session(email)
             set_premium_session(email)
@@ -442,7 +499,10 @@ def payment_success():
             )
 
     except Exception as exc:
-        print(f"Subscription success verification failed: {exc}", flush=True)
+        print(
+            f"Subscription success verification failed: {exc}",
+            flush=True,
+        )
 
     resp = redirect(requested_return, code=302)
 
@@ -473,14 +533,24 @@ def dream_pack_success():
         checkout = stripe.checkout.Session.retrieve(session_id)
 
         mode = (checkout.get("mode") or "").strip().lower()
-        payment_status = (checkout.get("payment_status") or "").strip().lower()
+
+        payment_status = (
+            checkout.get("payment_status") or ""
+        ).strip().lower()
+
         metadata = checkout.get("metadata") or {}
-        purchase_type = (metadata.get("purchase_type") or "").strip().lower()
+
+        purchase_type = (
+            metadata.get("purchase_type") or ""
+        ).strip().lower()
 
         if (
             mode != "payment"
             or purchase_type != "dream_pack"
-            or payment_status not in {"paid", "no_payment_required"}
+            or payment_status not in {
+                "paid",
+                "no_payment_required",
+            }
         ):
             return redirect(requested_return, code=302)
 
@@ -507,7 +577,10 @@ def dream_pack_success():
         )
 
     except Exception as exc:
-        print(f"Dream pack success verification failed: {exc}", flush=True)
+        print(
+            f"Dream pack success verification failed: {exc}",
+            flush=True,
+        )
 
     resp = redirect(requested_return, code=302)
 
@@ -620,10 +693,15 @@ def _handle_checkout_completed(data_obj: Dict[str, Any]) -> None:
             )
 
         except Exception as exc:
-            print(f"Subscription retrieve failed: {exc}", flush=True)
+            print(
+                f"Subscription retrieve failed: {exc}",
+                flush=True,
+            )
 
 
-def _handle_subscription_updated(data_obj: Dict[str, Any]) -> None:
+def _handle_subscription_updated(
+    data_obj: Dict[str, Any],
+) -> None:
     status = (data_obj.get("status") or "").lower()
     customer_id = data_obj.get("customer") or ""
 
@@ -632,7 +710,10 @@ def _handle_subscription_updated(data_obj: Dict[str, Any]) -> None:
 
     try:
         customer = stripe.Customer.retrieve(customer_id)
-        email = normalize_email(customer.get("email") or "")
+
+        email = normalize_email(
+            customer.get("email") or ""
+        )
 
         if not validate_email(email):
             return
@@ -644,10 +725,15 @@ def _handle_subscription_updated(data_obj: Dict[str, Any]) -> None:
         )
 
     except Exception as exc:
-        print(f"Subscription update handling failed: {exc}", flush=True)
+        print(
+            f"Subscription update handling failed: {exc}",
+            flush=True,
+        )
 
 
-def _handle_subscription_inactive(data_obj: Dict[str, Any]) -> None:
+def _handle_subscription_inactive(
+    data_obj: Dict[str, Any],
+) -> None:
     customer_id = data_obj.get("customer") or ""
 
     if not customer_id:
@@ -655,7 +741,10 @@ def _handle_subscription_inactive(data_obj: Dict[str, Any]) -> None:
 
     try:
         customer = stripe.Customer.retrieve(customer_id)
-        email = normalize_email(customer.get("email") or "")
+
+        email = normalize_email(
+            customer.get("email") or ""
+        )
 
         if not validate_email(email):
             return
@@ -667,4 +756,7 @@ def _handle_subscription_inactive(data_obj: Dict[str, Any]) -> None:
         )
 
     except Exception as exc:
-        print(f"Subscription inactive handling failed: {exc}", flush=True)
+        print(
+            f"Subscription inactive handling failed: {exc}",
+            flush=True,
+        )

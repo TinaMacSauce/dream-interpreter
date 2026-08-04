@@ -284,7 +284,8 @@ def create_checkout_session():
 
     if not validate_email(email):
         return _checkout_error("Missing valid email.", 400)
-            subscription_state = stripe_subscription_state_for_email(email)
+
+    subscription_state = stripe_subscription_state_for_email(email)
 
     if not subscription_state["lookup_ok"]:
         return _checkout_error(
@@ -303,7 +304,8 @@ def create_checkout_session():
         if not subscription_state["has_subscription_history"]
         else 0
     )
-        subscription_data = {
+
+    subscription_data = {
         "metadata": {
             "purchase_type": "subscription",
             "plan": "monthly",
@@ -321,7 +323,7 @@ def create_checkout_session():
     requested_return = _requested_return_url()
 
     try:
-                checkout = stripe.checkout.Session.create(
+        checkout = stripe.checkout.Session.create(
             mode="subscription",
             customer_email=email,
             billing_address_collection="auto",

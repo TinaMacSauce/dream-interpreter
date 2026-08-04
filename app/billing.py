@@ -190,7 +190,85 @@ def stripe_active_subscription_for_email(email: str) -> Tuple[bool, str]:
         )
         return False, ""
 
+def stripe_subscription_state_for_email(
+    email: str,
+) -> Dict[str, Any]:
+    """
+    Check whether an email already has a current subscription
+    or has previously used a subscription trial.
+    """
+    email_n = normalize_email(email)
 
+    state = {
+        "lookup_ok": False,
+        "has_current_subscription": False,
+        "has_subscription_history": False,
+        "customer_id": "",
+    }
+
+    if not validate_email(email_n):
+        return state
+
+    if not configure_stripe():
+        return state
+
+    current_statuses = {
+        "incomplete",
+        "trialing",
+        "active",
+        "past_due",
+        "unpaid",
+        "paused",
+    }
+
+    try:
+        customers = stripe.Customer.list(
+            email=email_n,
+            limit=100,
+        )
+
+        for customer in customers.data or []:
+            customer_id = customer.get("id") or ""
+
+            if not customer_id:
+                continue
+
+            if not state["customer_id"]:
+                state["customer_id"] = customer_id
+
+            subscriptions = stripe.Subscription.list(
+                customer=customer_id,
+                status="all",
+                limit=100,
+            )
+
+            for subscription in subscriptions.data or []:
+                status = (
+                    subscription.get("status")
+                    or ""
+                ).lower()
+
+                if not status:
+                    continue
+
+                if status != "incomplete_expired":
+                    state["has_subscription_history"] = True
+
+                if status in current_statuses:
+                    state["has_current_subscription"] = True
+                    state["customer_id"] = customer_id
+
+        state["lookup_ok"] = True
+        return state
+
+    except Exception as exc:
+        print(
+            f"Stripe subscription state lookup failed for "
+            f"{email_n}: {exc}",
+            flush=True,
+        )
+
+        return state
 # ============================================================
 # ACCESS CHECK
 # ============================================================

@@ -550,14 +550,15 @@ class Config:
         "",
     ).strip()
 
-   DEFAULT_STRIPE_PRICE_ID = (
-    PRICE_MONTHLY
-    or PRICE_WEEKLY
-)
-SUBSCRIPTION_TRIAL_DAYS = _env_int(
-    "SUBSCRIPTION_TRIAL_DAYS",
-    3,
-)
+       DEFAULT_STRIPE_PRICE_ID = (
+        PRICE_MONTHLY
+        or PRICE_WEEKLY
+    )
+
+    SUBSCRIPTION_TRIAL_DAYS = _env_int(
+        "SUBSCRIPTION_TRIAL_DAYS",
+        3,
+    )
     PRICE_DREAM_PACK = os.getenv(
         "PRICE_DREAM_PACK",
         "",

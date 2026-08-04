@@ -27,6 +27,7 @@ from app.billing import (
     stripe,
     stripe_config_ok,
     stripe_dream_pack_ok,
+    stripe_subscription_state_for_email,
 )
 
 from app.config import Config
@@ -283,6 +284,36 @@ def create_checkout_session():
 
     if not validate_email(email):
         return _checkout_error("Missing valid email.", 400)
+            subscription_state = stripe_subscription_state_for_email(email)
+
+    if not subscription_state["lookup_ok"]:
+        return _checkout_error(
+            "Unable to verify subscription history. Please try again.",
+            503,
+        )
+
+    if subscription_state["has_current_subscription"]:
+        return _checkout_error(
+            "A current subscription already exists for this email.",
+            409,
+        )
+
+    trial_days = (
+        Config.SUBSCRIPTION_TRIAL_DAYS
+        if not subscription_state["has_subscription_history"]
+        else 0
+    )
+        subscription_data = {
+        "metadata": {
+            "purchase_type": "subscription",
+            "plan": "monthly",
+            "trial_days": str(trial_days),
+            "email": email,
+        },
+    }
+
+    if trial_days > 0:
+        subscription_data["trial_period_days"] = trial_days
 
     persist_email_to_session(email)
     _configure_stripe()
@@ -290,18 +321,14 @@ def create_checkout_session():
     requested_return = _requested_return_url()
 
     try:
-        checkout = stripe.checkout.Session.create(
+                checkout = stripe.checkout.Session.create(
             mode="subscription",
             customer_email=email,
             billing_address_collection="auto",
-
-            # Collect a card before beginning the free trial.
             payment_method_collection="always",
-
             allow_promotion_codes=True,
             expires_at=int(time.time()) + 1800,
 
-            # New subscriptions use the monthly Stripe price.
             line_items=[
                 {
                     "price": Config.PRICE_MONTHLY,
@@ -309,21 +336,12 @@ def create_checkout_session():
                 }
             ],
 
-            # New monthly subscribers receive three free days.
-            subscription_data={
-                "trial_period_days": Config.SUBSCRIPTION_TRIAL_DAYS,
-                "metadata": {
-                    "purchase_type": "subscription",
-                    "plan": "monthly",
-                    "trial_days": str(Config.SUBSCRIPTION_TRIAL_DAYS),
-                    "email": email,
-                },
-            },
+            subscription_data=subscription_data,
 
             metadata={
                 "purchase_type": "subscription",
                 "plan": "monthly",
-                "trial_days": str(Config.SUBSCRIPTION_TRIAL_DAYS),
+                "trial_days": str(trial_days),
                 "email": email,
                 "return_url": requested_return,
             },

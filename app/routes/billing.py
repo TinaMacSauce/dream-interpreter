@@ -311,11 +311,11 @@ def create_checkout_session():
 
             # New monthly subscribers receive three free days.
             subscription_data={
-                "trial_period_days": 3,
+                "trial_period_days": Config.SUBSCRIPTION_TRIAL_DAYS,
                 "metadata": {
                     "purchase_type": "subscription",
                     "plan": "monthly",
-                    "trial_days": "3",
+                   "trial_days": str(Config.SUBSCRIPTION_TRIAL_DAYS),
                     "email": email,
                 },
             },
@@ -323,7 +323,7 @@ def create_checkout_session():
             metadata={
                 "purchase_type": "subscription",
                 "plan": "monthly",
-                "trial_days": "3",
+                "trial_days": str(Config.SUBSCRIPTION_TRIAL_DAYS),
                 "email": email,
                 "return_url": requested_return,
             },

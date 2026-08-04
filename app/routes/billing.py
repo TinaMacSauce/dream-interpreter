@@ -315,7 +315,7 @@ def create_checkout_session():
                 "metadata": {
                     "purchase_type": "subscription",
                     "plan": "monthly",
-                   "trial_days": str(Config.SUBSCRIPTION_TRIAL_DAYS),
+                    "trial_days": str(Config.SUBSCRIPTION_TRIAL_DAYS),
                     "email": email,
                 },
             },

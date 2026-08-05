@@ -293,7 +293,7 @@ def create_checkout_session():
             503,
         )
 
-     if subscription_state["has_current_subscription"]:
+    if subscription_state["has_current_subscription"]:
         return redirect(
             url_for(
                 "home.upgrade",

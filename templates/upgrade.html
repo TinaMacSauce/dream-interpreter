@@ -894,8 +894,9 @@ const API_BASE = IS_LOCAL
     ? window.location.origin
     : HOSTED_APP;
 
-  const DEFAULT_RETURN_URL =
-    HOSTED_APP + "/";
+ const DEFAULT_RETURN_URL = IS_RENDER_PREVIEW
+  ? window.location.origin + "/"
+  : HOSTED_APP + "/";
 
   const EMAIL_KEY =
     "jdi_email";

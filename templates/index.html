@@ -40,12 +40,12 @@
   --gold3:#fff0b8;
   --cream:#fff4dc;
 
-  --emerald:#3fbf75;
-  --emerald2:#6fe7a8;
-  --emerald-deep:#135e37;
-  --emeraldSoft:rgba(63,191,117,.06);
-  --emeraldLine:rgba(111,231,168,.16);
-
+  --emerald:#1E5F4E;
+  --emerald2:#2A6B58;
+  --emerald-deep:#174A3D;
+  --emeraldSoft:rgba(30,95,78,.08);
+  --emeraldLine:rgba(42,107,88,.22);
+     
   --text:#f8efd9;
   --muted:rgba(248,239,217,.56);
   --muted2:rgba(248,239,217,.38);
@@ -276,6 +276,14 @@ button{ cursor:pointer; }
   align-items:center;
   gap:8px;
   min-width:0;
+}
+.brand-logo{
+  width:38px;
+  height:38px;
+  object-fit:contain;
+  display:block;
+  margin-bottom:2px;
+  filter:drop-shadow(0 0 12px rgba(212,175,55,.28));
 }
 .brand-eyebrow{
   display:flex; align-items:center; gap:8px;
@@ -1019,6 +1027,7 @@ a.setting-row{ text-decoration:none; }
     </button>
 
     <div class="brand">
+      <img class="brand-logo" src="/static/dream-logo.png" alt="Jamaican True Stories logo" />
       <span class="brand-eyebrow">
         <svg class="star" viewBox="0 0 24 24"><path d="M12 2l2.4 7.2L22 11l-7.6 1.8L12 22l-2.4-9.2L2 11l7.6-1.8z"/></svg>
         Jamaican True Stories

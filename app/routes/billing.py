@@ -293,16 +293,16 @@ def create_checkout_session():
             503,
         )
 
-    if subscription_state["has_current_subscription"]:
-    return redirect(
-        url_for(
-            "home.upgrade",
-            email=email,
-            notice="already_subscribed",
-            **{"return": _requested_return_url()},
-        ),
-        code=303,
-    )
+     if subscription_state["has_current_subscription"]:
+        return redirect(
+            url_for(
+                "home.upgrade",
+                email=email,
+                notice="already_subscribed",
+                **{"return": _requested_return_url()},
+            ),
+            code=303,
+        )
 
     trial_days = (
         Config.SUBSCRIPTION_TRIAL_DAYS

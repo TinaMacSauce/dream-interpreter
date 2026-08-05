@@ -2567,18 +2567,24 @@ async function runInterpretation(rewardGrant = null){
       })
     });
     const data = await readResponse(res);
-    if(res.status === 402){
-      if(rewardGrant){
-        renderError(
-          "Reward Not Applied",
-          data.message || "The ad was completed, but the reward could not be applied. Please try again.",
-          false
-        );
-        return;
-      }
-      window.location.href = upgradeUrl(email);
-      return;
-    }
+   if(res.status === 402){
+  if(rewardGrant){
+    renderError(
+      "Reward Not Applied",
+      data.message || "The ad was completed, but the reward could not be applied. Please try again.",
+      false
+    );
+    return;
+  }
+
+  if(getNativeAdMob()){
+    await openRewardModal();
+    return;
+  }
+
+  window.location.href = upgradeUrl(email);
+  return;
+}
     if(!res.ok){
       renderError("Interpreter Error", data.error || data.message || data.details || "Something went wrong calling the interpreter API.", false);
       return;

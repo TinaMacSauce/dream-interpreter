@@ -666,6 +666,10 @@ input::placeholder{
   </section>
 
   <section class="card main-panel">
+    <div id="accountNotice" class="message ok" hidden>
+  This email already has an active subscription. Use “Unlock Existing Access” below,
+  or manage your subscription from the Account menu.
+</div>
 
     <div class="section-title">Access Includes</div>
 
@@ -936,6 +940,9 @@ input::placeholder{
 
   const decodeNav =
     document.getElementById("decodeNav");
+  
+  const accountNotice =
+  document.getElementById("accountNotice");
 
   function normalizeEmail(email){
     return String(email || "")
@@ -1145,6 +1152,13 @@ input::placeholder{
 
   syncEmail();
   syncReturn();
+
+  if (
+  accountNotice &&
+  getUrlParam("notice") === "already_subscribed"
+) {
+  accountNotice.hidden = false;
+}
 
   emailInput.addEventListener(
     "input",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from typing import Any, Dict
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from flask import (
     Blueprint,
@@ -78,27 +78,25 @@ def _safe_return_url(value: str | None) -> str:
     if not value:
         return Config.RETURN_URL
 
-    allowed_prefixes = (
-        "https://jamaicantruestories.com",
-        "https://www.jamaicantruestories.com",
-        "https://interpreter.jamaicantruestories.com",
-        "/",
-    )
+    if value.startswith("/") and not value.startswith("//"):
+        return value
 
-    if value.startswith(allowed_prefixes):
+    parsed = urlparse(value)
+
+    allowed_hosts = {
+        "jamaicantruestories.com",
+        "www.jamaicantruestories.com",
+        "interpreter.jamaicantruestories.com",
+        request.host.split(":", 1)[0].lower(),
+    }
+
+    if (
+        parsed.scheme == "https"
+        and (parsed.hostname or "").lower() in allowed_hosts
+    ):
         return value
 
     return Config.RETURN_URL
-
-
-def _requested_return_url() -> str:
-    return _safe_return_url(
-        request.form.get("return")
-        or request.args.get("return")
-        or request.headers.get("X-Return-Url")
-        or Config.RETURN_URL
-    )
-
 
 def _stripe_ready() -> bool:
     return bool(stripe and Config.STRIPE_SECRET_KEY)

@@ -267,7 +267,17 @@ button{ cursor:pointer; }
   stroke-width:2.4; stroke:currentColor; fill:none;
   stroke-linecap:round; stroke-linejoin:round;
 }
-
+.corner-logo{
+  width:32px;
+  height:32px;
+  object-fit:cover;
+  display:block;
+  border-radius:50%;
+  box-shadow:
+    0 0 0 2px rgba(255,244,220,.18),
+    0 6px 18px rgba(0,0,0,.38),
+    0 10px 22px rgba(42,107,88,.28);
+}
 /* ============ BRAND (logo-free premium wordmark) ============ */
 .brand{
   flex:1;
@@ -1042,10 +1052,7 @@ a.setting-row{ text-decoration:none; }
     </div>
 
     <button class="icon-btn" id="sparkBtn" type="button" aria-label="Focus dream input">
-      <svg viewBox="0 0 24 24">
-        <path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2z"/>
-        <path d="M19 15l.8 2.7L22 18.5l-2.2.8L19 22l-.8-2.7-2.2-.8 2.2-.8L19 15z"/>
-      </svg>
+    <img src="/static/dream-logo.png" alt="Jamaican True Stories logo" class="corner-logo" />
     </button>
   </header>
 

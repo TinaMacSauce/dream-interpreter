@@ -294,10 +294,15 @@ def create_checkout_session():
         )
 
     if subscription_state["has_current_subscription"]:
-        return _checkout_error(
-            "A current subscription already exists for this email.",
-            409,
-        )
+    return redirect(
+        url_for(
+            "home.upgrade",
+            email=email,
+            notice="already_subscribed",
+            **{"return": _requested_return_url()},
+        ),
+        code=303,
+    )
 
     trial_days = (
         Config.SUBSCRIPTION_TRIAL_DAYS

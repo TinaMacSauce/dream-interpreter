@@ -1023,6 +1023,7 @@ const API_BASE = IS_LOCAL
     }
 
     if(
+      raw.startsWith(window.location.origin + "/") ||
       raw.startsWith("https://interpreter.jamaicantruestories.com") ||
       raw.startsWith("https://jamaicantruestories.com") ||
       raw.startsWith("https://www.jamaicantruestories.com") ||

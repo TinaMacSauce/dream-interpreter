@@ -97,6 +97,8 @@ def _safe_return_url(value: str | None) -> str:
         return value
 
     return Config.RETURN_URL
+
+
 def _requested_return_url() -> str:
     return _safe_return_url(
         request.form.get("return")
@@ -104,6 +106,8 @@ def _requested_return_url() -> str:
         or request.headers.get("X-Return-Url")
         or Config.RETURN_URL
     )
+
+
 def _stripe_ready() -> bool:
     return bool(stripe and Config.STRIPE_SECRET_KEY)
 

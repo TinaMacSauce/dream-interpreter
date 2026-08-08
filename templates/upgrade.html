@@ -1015,25 +1015,41 @@ const API_BASE = IS_LOCAL
   }
 
   function getReturnFromUrl(){
-    const raw =
-      getUrlParam("return");
+  const raw =
+    getUrlParam("return");
 
-    if(!raw){
-      return "";
-    }
-
-    if(
-      raw.startsWith(window.location.origin + "/") ||
-      raw.startsWith("https://interpreter.jamaicantruestories.com") ||
-      raw.startsWith("https://jamaicantruestories.com") ||
-      raw.startsWith("https://www.jamaicantruestories.com") ||
-      raw.startsWith("/")
-    ){
-      return raw;
-    }
-
+  if(!raw){
     return "";
   }
+
+  if(
+    raw.startsWith("/") &&
+    !raw.startsWith("//")
+  ){
+    return raw;
+  }
+
+  try{
+    const parsed =
+      new URL(raw);
+
+    const allowedHosts = [
+      window.location.hostname.toLowerCase(),
+      "interpreter.jamaicantruestories.com",
+      "jamaicantruestories.com",
+      "www.jamaicantruestories.com"
+    ];
+
+    if(
+      parsed.protocol === "https:" &&
+      allowedHosts.includes(parsed.hostname.toLowerCase())
+    ){
+      return parsed.href;
+    }
+  }catch(e){}
+
+  return "";
+}
 
   function currentReturnUrl(){
     return (

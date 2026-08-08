@@ -2636,9 +2636,16 @@ if(isNativeApp()){
 
 window.location.href = upgradeUrl(email);
 return;
-      renderError("Interpreter Error", data.error || data.message || data.details || "Something went wrong calling the interpreter API.", false);
-      return;
-    }
+}
+
+if(!res.ok){
+  renderError(
+    "Interpreter Error",
+    data.error || data.message || data.details || "Something went wrong calling the interpreter API.",
+    false
+  );
+  return;
+}
     if(data.is_paid){ showAccessStatus("<strong>Access:</strong> Subscription active."); }
     else if(data.dream_pack?.active){ showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining."); }
     else if(data.is_rewarded || data.access === "rewarded_ad"){ showAccessStatus("<strong>Access:</strong> Sponsored decode unlocked."); }

@@ -1415,7 +1415,32 @@ const rewardCancel = byId("rewardCancel");
 const rewardContinue = byId("rewardContinue");
 const rewardCount = byId("rewardCount");
 const rewardUpgrade = byId("rewardUpgrade");
+const manageSubscriptionLink = document.querySelector('a[href^="https://billing.stripe.com/"]');
+const premiumCard = document.querySelector("#accountScreen .premium-card");
 const privacyChoicesBtn = byId("privacyChoicesBtn");
+function applyNativeBillingPolicy(){
+  if(!isNativeApp()) return;
+
+  if(rewardUpgrade){
+    rewardUpgrade.style.display = "none";
+
+    const rewardUpgradeNote = rewardUpgrade.nextElementSibling;
+    if(
+      rewardUpgradeNote &&
+      rewardUpgradeNote.classList.contains("reward-note")
+    ){
+      rewardUpgradeNote.style.display = "none";
+    }
+  }
+
+  if(manageSubscriptionLink){
+    manageSubscriptionLink.style.display = "none";
+  }
+
+  if(premiumCard){
+    premiumCard.style.display = "none";
+  }
+}
 
 let journalFilter = "all";
 let selectedGuidedSymbols = [];
@@ -1846,18 +1871,24 @@ async function checkServerAccess(email, options = {}){
 
   return accessCheckPromise;
 }
+function isNativeApp(){
+  const capacitor = window.Capacitor;
+  if(!capacitor) return false;
+
+  if(typeof capacitor.isNativePlatform === "function"){
+    return capacitor.isNativePlatform();
+  }
+
+  if(typeof capacitor.getPlatform === "function"){
+    return capacitor.getPlatform() !== "web";
+  }
+
+  return false;
+}
+
 function getNativeAdMob(){
   const capacitor = window.Capacitor;
-  if(!capacitor) return null;
-
-  const isNative =
-    typeof capacitor.isNativePlatform === "function"
-      ? capacitor.isNativePlatform()
-      : typeof capacitor.getPlatform === "function"
-        ? capacitor.getPlatform() !== "web"
-        : false;
-
-  if(!isNative) return null;
+  if(!capacitor || !isNativeApp()) return null;
 
   if(capacitor.Plugins && capacitor.Plugins.AdMob){
     return capacitor.Plugins.AdMob;
@@ -1872,8 +1903,6 @@ function getNativeAdMob(){
 
   return null;
 }
-
-async function initializeNativeAdMob(AdMob){
   if(window.__jdiAdMobInitialized) return;
 
   await AdMob.initialize();
@@ -2404,7 +2433,7 @@ function renderError(title, message, upgrade){
     <div class="result-card error">
       <div class="label">${esc(title)}</div>
       <div class="result-text">${esc(message)}</div>
-      ${upgrade ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl ? emailEl.value : ""))}">View Access Options</a>` : ""}
+      ${upgrade && !isNativeApp() ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl ? emailEl.value : ""))}">View Access Options</a>` : ""}
     </div>`;
   result.scrollIntoView({behavior:"smooth", block:"start"});
 }
@@ -2591,15 +2620,21 @@ async function runInterpretation(rewardGrant = null){
     return;
   }
 
+if(isNativeApp()){
   if(getNativeAdMob()){
     await openRewardModal();
-    return;
+  }else{
+    renderError(
+      "Sponsored Access Unavailable",
+      "Rewarded ads are temporarily unavailable. Please try again later.",
+      false
+    );
   }
-
-  window.location.href = upgradeUrl(email);
   return;
 }
-    if(!res.ok){
+
+window.location.href = upgradeUrl(email);
+return;
       renderError("Interpreter Error", data.error || data.message || data.details || "Something went wrong calling the interpreter API.", false);
       return;
     }
@@ -2821,6 +2856,11 @@ if(supportBtn){
 
 if(accountDreamPackForm){
   accountDreamPackForm.addEventListener("submit", function(e){
+    if(isNativeApp()){
+      e.preventDefault();
+      alert("Paid checkout is not available in the Android app.");
+      return;
+    }
     const email = normalizeEmail(emailEl ? emailEl.value : "");
     if(!email){ e.preventDefault(); switchTab("account"); alert("Enter your email before checkout."); if(emailEl) emailEl.focus(); return; }
     if(!validEmail(email)){ e.preventDefault(); switchTab("account"); alert("Enter a valid email before checkout."); if(emailEl) emailEl.focus(); return; }
@@ -2985,6 +3025,7 @@ renderGuidedSymbols();
 renderSymbols();
 renderJournal();
 refreshAccount();
+applyNativeBillingPolicy();
 initializeSavedAccess();
 initializeNativePrivacy();
 </script>

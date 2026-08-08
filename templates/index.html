@@ -40,12 +40,12 @@
   --gold3:#fff0b8;
   --cream:#fff4dc;
 
-  --emerald:#3fbf75;
-  --emerald2:#6fe7a8;
-  --emerald-deep:#135e37;
-  --emeraldSoft:rgba(63,191,117,.06);
-  --emeraldLine:rgba(111,231,168,.16);
-
+  --emerald:#1E5F4E;
+  --emerald2:#2A6B58;
+  --emerald-deep:#174A3D;
+  --emeraldSoft:rgba(30,95,78,.08);
+  --emeraldLine:rgba(42,107,88,.22);
+     
   --text:#f8efd9;
   --muted:rgba(248,239,217,.56);
   --muted2:rgba(248,239,217,.38);
@@ -267,8 +267,17 @@ button{ cursor:pointer; }
   stroke-width:2.4; stroke:currentColor; fill:none;
   stroke-linecap:round; stroke-linejoin:round;
 }
-
-/* ============ BRAND (logo-free premium wordmark) ============ */
+.corner-logo{
+  width:32px;
+  height:32px;
+  object-fit:cover;
+  display:block;
+  border-radius:50%;
+box-shadow:
+  0 0 0 1px rgba(255,244,220,.18),
+  0 6px 18px rgba(0,0,0,.38);
+}
+/* ============ BRAND HEADER ============ */
 .brand{
   flex:1;
   display:flex;
@@ -279,13 +288,21 @@ button{ cursor:pointer; }
 }
 .brand-eyebrow{
   display:flex; align-items:center; gap:8px;
-  color:var(--emerald2);
   font-family:Inter,sans-serif;
   font-size:.5rem;
   font-weight:800;
   letter-spacing:.34em;
   text-transform:uppercase;
   opacity:.9;
+
+     padding:5px 10px;
+border:1px solid rgba(248,221,125,.22);
+border-radius:999px;
+background:rgba(2,3,3,.58);
+box-shadow:
+  inset 0 0 0 1px rgba(42,107,88,.10),
+  0 4px 14px rgba(0,0,0,.22);
+color:#fff4dc;
 }
 .brand-eyebrow .star{
   width:9px; height:9px;
@@ -1033,10 +1050,7 @@ a.setting-row{ text-decoration:none; }
     </div>
 
     <button class="icon-btn" id="sparkBtn" type="button" aria-label="Focus dream input">
-      <svg viewBox="0 0 24 24">
-        <path d="M12 2l1.6 5.4L19 9l-5.4 1.6L12 16l-1.6-5.4L5 9l5.4-1.6L12 2z"/>
-        <path d="M19 15l.8 2.7L22 18.5l-2.2.8L19 22l-.8-2.7-2.2-.8 2.2-.8L19 15z"/>
-      </svg>
+    <img src="/static/dream-logo.png" alt="Jamaican True Stories logo" class="corner-logo" />
     </button>
   </header>
 
@@ -1211,6 +1225,23 @@ a.setting-row{ text-decoration:none; }
         <span class="sr-ico"><svg viewBox="0 0 24 24"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/></svg></span>
         <span class="sr-label">Clear Local Journal</span><span class="sr-arrow">›</span>
       </button>
+     <a
+        class="setting-row"
+        href="https://billing.stripe.com/p/login/5kQ7sK9v34b6c7S2urcwg00"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <span class="sr-ico">
+          <svg viewBox="0 0 24 24">
+            <rect x="3" y="5" width="18" height="14" rx="2"/>
+            <path d="M3 10h18"/>
+            <path d="M7 15h4"/>
+          </svg>
+        </span>
+        <span class="sr-label">Manage Subscription</span>
+        <span class="sr-arrow">›</span>
+      </a>  
+     
       <a class="setting-row" href="/privacy">
         <span class="sr-ico"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.3 8-8 9-4.7-1-8-4-8-9V7z"/></svg></span>
         <span class="sr-label">Privacy Policy</span><span class="sr-arrow">›</span>
@@ -1301,17 +1332,21 @@ a.setting-row{ text-decoration:none; }
       <button class="reward-continue" type="button" id="rewardStart">
         Watch Ad to Unlock 1 Decode
       </button>
-     <button class="reward-upgrade" type="button" id="rewardCancel">
-  Not Now
-</button> 
+    <button class="reward-upgrade" type="button" id="rewardCancel">
+  Return to Home
+</button>
 
-      <button class="reward-continue" type="button" id="rewardContinue" hidden disabled>
-        Continue Decode
-      </button>
+<button class="reward-continue" type="button" id="rewardContinue" hidden disabled>
+  Continue Decode
+</button>
 
-      <a class="reward-upgrade" id="rewardUpgrade" href="#">
-        Skip Ads With $1 Dream Decode
-      </a>
+<a class="reward-upgrade" id="rewardUpgrade" href="#">
+  Get 3 Dream Decodes for $1
+</a>
+
+<p class="reward-note">
+  One-time purchase • 3 decodes • Valid for 72 hours
+</p>
     </div>
 
     <p class="reward-note">
@@ -1323,10 +1358,17 @@ a.setting-row{ text-decoration:none; }
 <script>
 const HOSTED_APP = "https://interpreter.jamaicantruestories.com";
 
-const API =
-  window.location.origin.includes("localhost") ||
-  window.location.origin.includes("127.0.0.1")
-    ? "http://127.0.0.1:5000"
+const IS_LOCAL =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
+
+const IS_RENDER_PREVIEW =
+  window.location.hostname.endsWith(".onrender.com");
+
+const API = IS_LOCAL
+  ? "http://127.0.0.1:5000"
+  : IS_RENDER_PREVIEW
+    ? window.location.origin
     : HOSTED_APP;
 
 const EMAIL_KEY = "jdi_email";
@@ -1373,7 +1415,32 @@ const rewardCancel = byId("rewardCancel");
 const rewardContinue = byId("rewardContinue");
 const rewardCount = byId("rewardCount");
 const rewardUpgrade = byId("rewardUpgrade");
+const manageSubscriptionLink = document.querySelector('a[href^="https://billing.stripe.com/"]');
+const premiumCard = document.querySelector("#accountScreen .premium-card");
 const privacyChoicesBtn = byId("privacyChoicesBtn");
+function applyNativeBillingPolicy(){
+  if(!isNativeApp()) return;
+
+  if(rewardUpgrade){
+    rewardUpgrade.style.display = "none";
+
+    const rewardUpgradeNote = rewardUpgrade.nextElementSibling;
+    if(
+      rewardUpgradeNote &&
+      rewardUpgradeNote.classList.contains("reward-note")
+    ){
+      rewardUpgradeNote.style.display = "none";
+    }
+  }
+
+  if(manageSubscriptionLink){
+    manageSubscriptionLink.style.display = "none";
+  }
+
+  if(premiumCard){
+    premiumCard.style.display = "none";
+  }
+}
 
 let journalFilter = "all";
 let selectedGuidedSymbols = [];
@@ -1804,18 +1871,24 @@ async function checkServerAccess(email, options = {}){
 
   return accessCheckPromise;
 }
+function isNativeApp(){
+  const capacitor = window.Capacitor;
+  if(!capacitor) return false;
+
+  if(typeof capacitor.isNativePlatform === "function"){
+    return capacitor.isNativePlatform();
+  }
+
+  if(typeof capacitor.getPlatform === "function"){
+    return capacitor.getPlatform() !== "web";
+  }
+
+  return false;
+}
+
 function getNativeAdMob(){
   const capacitor = window.Capacitor;
-  if(!capacitor) return null;
-
-  const isNative =
-    typeof capacitor.isNativePlatform === "function"
-      ? capacitor.isNativePlatform()
-      : typeof capacitor.getPlatform === "function"
-        ? capacitor.getPlatform() !== "web"
-        : false;
-
-  if(!isNative) return null;
+  if(!capacitor || !isNativeApp()) return null;
 
   if(capacitor.Plugins && capacitor.Plugins.AdMob){
     return capacitor.Plugins.AdMob;
@@ -1830,8 +1903,7 @@ function getNativeAdMob(){
 
   return null;
 }
-
-async function initializeNativeAdMob(AdMob){
+  async function initializeNativeAdMob(AdMob){
   if(window.__jdiAdMobInitialized) return;
 
   await AdMob.initialize();
@@ -2362,7 +2434,7 @@ function renderError(title, message, upgrade){
     <div class="result-card error">
       <div class="label">${esc(title)}</div>
       <div class="result-text">${esc(message)}</div>
-      ${upgrade ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl ? emailEl.value : ""))}">View Access Options</a>` : ""}
+      ${upgrade && !isNativeApp() ? `<a class="upgrade-link" href="${esc(upgradeUrl(emailEl ? emailEl.value : ""))}">View Access Options</a>` : ""}
     </div>`;
   result.scrollIntoView({behavior:"smooth", block:"start"});
 }
@@ -2539,22 +2611,41 @@ async function runInterpretation(rewardGrant = null){
       })
     });
     const data = await readResponse(res);
-    if(res.status === 402){
-      if(rewardGrant){
-        renderError(
-          "Reward Not Applied",
-          data.message || "The ad was completed, but the reward could not be applied. Please try again.",
-          false
-        );
-        return;
-      }
-      window.location.href = upgradeUrl(email);
-      return;
-    }
-    if(!res.ok){
-      renderError("Interpreter Error", data.error || data.message || data.details || "Something went wrong calling the interpreter API.", false);
-      return;
-    }
+   if(res.status === 402){
+  if(rewardGrant){
+    renderError(
+      "Reward Not Applied",
+      data.message || "The ad was completed, but the reward could not be applied. Please try again.",
+      false
+    );
+    return;
+  }
+
+if(isNativeApp()){
+  if(getNativeAdMob()){
+    await openRewardModal();
+  }else{
+    renderError(
+      "Sponsored Access Unavailable",
+      "Rewarded ads are temporarily unavailable. Please try again later.",
+      false
+    );
+  }
+  return;
+}
+
+window.location.href = upgradeUrl(email);
+return;
+}
+
+if(!res.ok){
+  renderError(
+    "Interpreter Error",
+    data.error || data.message || data.details || "Something went wrong calling the interpreter API.",
+    false
+  );
+  return;
+}
     if(data.is_paid){ showAccessStatus("<strong>Access:</strong> Subscription active."); }
     else if(data.dream_pack?.active){ showAccessStatus("<strong>Access:</strong> Dream Pack active • " + esc(String(data.dream_pack.uses_remaining || 0)) + " use(s) remaining."); }
     else if(data.is_rewarded || data.access === "rewarded_ad"){ showAccessStatus("<strong>Access:</strong> Sponsored decode unlocked."); }
@@ -2773,6 +2864,11 @@ if(supportBtn){
 
 if(accountDreamPackForm){
   accountDreamPackForm.addEventListener("submit", function(e){
+    if(isNativeApp()){
+      e.preventDefault();
+      alert("Paid checkout is not available in the Android app.");
+      return;
+    }
     const email = normalizeEmail(emailEl ? emailEl.value : "");
     if(!email){ e.preventDefault(); switchTab("account"); alert("Enter your email before checkout."); if(emailEl) emailEl.focus(); return; }
     if(!validEmail(email)){ e.preventDefault(); switchTab("account"); alert("Enter a valid email before checkout."); if(emailEl) emailEl.focus(); return; }
@@ -2838,7 +2934,7 @@ if(btn){
       }
     }
 
-    await openRewardModal();
+    await runInterpretation();
   };
 }
 if(rewardCancel){
@@ -2937,6 +3033,7 @@ renderGuidedSymbols();
 renderSymbols();
 renderJournal();
 refreshAccount();
+applyNativeBillingPolicy();
 initializeSavedAccess();
 initializeNativePrivacy();
 </script>

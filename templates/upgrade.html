@@ -666,7 +666,11 @@ input::placeholder{
   </section>
 
   <section class="card main-panel">
-  
+    <div id="accountNotice" class="message ok" hidden>
+  This email already has an active subscription. Use “Unlock Existing Access” below,
+  or manage your subscription from the Account menu.
+</div>
+
     <div class="section-title">Access Includes</div>
 
     <div class="access-list">
@@ -748,21 +752,22 @@ input::placeholder{
           </div>
 
           <div>
-            <h3 class="price-title">Subscription</h3>
-            <p class="price-sub">
-              Best for ongoing access and frequent dream interpretation.
-            </p>
+           <h3 class="price-title">3-Day Free Trial</h3>
+<p class="price-sub">
+  $0 today, then $14.99 per month.
+</p>
           </div>
         </div>
 
-        <div class="badge">Best</div>
+       <div class="badge">3 Days Free</div>
       </div>
 
-      <ul class="price-list">
-        <li>Ongoing interpretation access</li>
-        <li>Better for repeat dream journaling</li>
-        <li>Restore access with your email</li>
-      </ul>
+     <ul class="price-list">
+  <li>Full premium dream interpretation access</li>
+  <li>Skip sponsored ads during premium access</li>
+  <li>Restore access with your email</li>
+  <li>Renews at $14.99 monthly until canceled</li>
+</ul>
 
       <form
         action="/create-checkout-session"
@@ -774,8 +779,12 @@ input::placeholder{
         <input type="hidden" name="return" id="returnHiddenSub" value="" />
 
         <button class="btn" type="submit" id="subscriptionBtn">
-          Start Subscription
+          Start 3-Day Free Trial
         </button>
+        <p class="micro">
+  Cancel before the 3-day trial ends to avoid the $14.99 monthly charge.
+  Your exact first billing date will be shown in secure checkout.
+</p>
       </form>
     </div>
 
@@ -872,14 +881,22 @@ input::placeholder{
   const HOSTED_APP =
     "https://interpreter.jamaicantruestories.com";
 
-  const API_BASE =
-    window.location.origin.includes("localhost") ||
-    window.location.origin.includes("127.0.0.1")
-      ? "http://127.0.0.1:5000"
-      : HOSTED_APP;
+  const IS_LOCAL =
+  window.location.hostname === "localhost" ||
+  window.location.hostname === "127.0.0.1";
 
-  const DEFAULT_RETURN_URL =
-    HOSTED_APP + "/";
+const IS_RENDER_PREVIEW =
+  window.location.hostname.endsWith(".onrender.com");
+
+const API_BASE = IS_LOCAL
+  ? "http://127.0.0.1:5000"
+  : IS_RENDER_PREVIEW
+    ? window.location.origin
+    : HOSTED_APP;
+
+ const DEFAULT_RETURN_URL = IS_RENDER_PREVIEW
+  ? window.location.origin + "/"
+  : HOSTED_APP + "/";
 
   const EMAIL_KEY =
     "jdi_email";
@@ -931,6 +948,9 @@ input::placeholder{
 
   const decodeNav =
     document.getElementById("decodeNav");
+  
+  const accountNotice =
+  document.getElementById("accountNotice");
 
   function normalizeEmail(email){
     return String(email || "")
@@ -995,24 +1015,41 @@ input::placeholder{
   }
 
   function getReturnFromUrl(){
-    const raw =
-      getUrlParam("return");
+  const raw =
+    getUrlParam("return");
 
-    if(!raw){
-      return "";
-    }
-
-    if(
-      raw.startsWith("https://interpreter.jamaicantruestories.com") ||
-      raw.startsWith("https://jamaicantruestories.com") ||
-      raw.startsWith("https://www.jamaicantruestories.com") ||
-      raw.startsWith("/")
-    ){
-      return raw;
-    }
-
+  if(!raw){
     return "";
   }
+
+  if(
+    raw.startsWith("/") &&
+    !raw.startsWith("//")
+  ){
+    return raw;
+  }
+
+  try{
+    const parsed =
+      new URL(raw);
+
+    const allowedHosts = [
+      window.location.hostname.toLowerCase(),
+      "interpreter.jamaicantruestories.com",
+      "jamaicantruestories.com",
+      "www.jamaicantruestories.com"
+    ];
+
+    if(
+      parsed.protocol === "https:" &&
+      allowedHosts.includes(parsed.hostname.toLowerCase())
+    ){
+      return parsed.href;
+    }
+  }catch(e){}
+
+  return "";
+}
 
   function currentReturnUrl(){
     return (
@@ -1140,6 +1177,13 @@ input::placeholder{
 
   syncEmail();
   syncReturn();
+
+  if (
+  accountNotice &&
+  getUrlParam("notice") === "already_subscribed"
+) {
+  accountNotice.hidden = false;
+}
 
   emailInput.addEventListener(
     "input",

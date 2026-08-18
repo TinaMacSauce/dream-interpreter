@@ -334,6 +334,8 @@ def _normalize_shadow_record(
         rec["count"] = 0
 
     return rec
+
+
 def _prune_stale_shadow_records_unlocked(
     data: Dict[str, Any],
 ) -> int:
@@ -365,6 +367,7 @@ def _prune_stale_shadow_records_unlocked(
         shadow.pop(ip, None)
 
     return len(stale_ips)
+    
 
 def shadow_get(ip: str) -> Dict[str, Any]:
     with _json_file_lock(USAGE_COUNTS_PATH):

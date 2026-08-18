@@ -368,7 +368,6 @@ def _prune_stale_shadow_records_unlocked(
 
     return len(stale_ips)
     
-
 def shadow_get(ip: str) -> Dict[str, Any]:
     with _json_file_lock(USAGE_COUNTS_PATH):
         data = _load_usage_counts_unlocked()

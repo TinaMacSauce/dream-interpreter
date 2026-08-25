@@ -336,11 +336,45 @@ def _normalize_shadow_record(
     return rec
 
 
+def _prune_stale_shadow_records_unlocked(
+    data: Dict[str, Any],
+) -> int:
+    shadow = data.get("ip_shadow")
+
+    if not isinstance(shadow, dict):
+        data["ip_shadow"] = {}
+        return 0
+
+    cutoff = utc_now() - timedelta(
+        hours=Config.SHADOW_WINDOW_HOURS
+    )
+
+    stale_ips = []
+
+    for ip, rec in shadow.items():
+        if not isinstance(rec, dict):
+            stale_ips.append(ip)
+            continue
+
+        last_seen = parse_iso_z(
+            rec.get("last_seen") or ""
+        )
+
+        if last_seen is None or last_seen < cutoff:
+            stale_ips.append(ip)
+
+    for ip in stale_ips:
+        shadow.pop(ip, None)
+
+    return len(stale_ips)
+
 def shadow_get(ip: str) -> Dict[str, Any]:
     with _json_file_lock(USAGE_COUNTS_PATH):
         data = _load_usage_counts_unlocked()
 
         shadow = data["ip_shadow"]
+
+        _prune_stale_shadow_records_unlocked(data)
 
         rec = _normalize_shadow_record(
             shadow.get(ip)
@@ -371,6 +405,8 @@ def shadow_increment(ip: str) -> int:
         data = _load_usage_counts_unlocked()
 
         shadow = data["ip_shadow"]
+
+        _prune_stale_shadow_records_unlocked(data)
 
         rec = _normalize_shadow_record(
             shadow.get(ip)

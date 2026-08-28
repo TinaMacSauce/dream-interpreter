@@ -419,7 +419,7 @@ class Config:
             "priority",
             "active",
         ],
-      "EndingRules": [
+        "EndingRules": [
             "ending_name",
             "keywords",
             "outcome_meaning",

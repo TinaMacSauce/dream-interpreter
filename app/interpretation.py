@@ -510,23 +510,8 @@ def build_event_scenario(
     behavior_names = {normalize_text(_hit_name(item)) for item in behaviors or []}
     location_names = {normalize_text(_hit_name(item)) for item in locations or []}
 
-    if _dream_escaped(dream):
-        seal_type = "Deliverance"
-    elif {"being chased", "chased", "chasing", "being attacked", "being bitten", "fighting", "stabbing"} & behavior_names:
-        seal_type = "Warfare"
-    elif {"escaping", "crossing", "finding"} & behavior_names:
-        seal_type = "Breakthrough"
-    elif {"old place", "old school", "old house", "old neighborhood", "old job"} & location_names:
-        seal_type = "Backwardness"
-    elif place_meaning and any(
-        term in normalize_text(place_meaning)
-        for term in ("backwardness", "stagnation", "regression")
-    ):
-        seal_type = "Backwardness"
-    elif relationship_meaning:
-        seal_type = "Relational"
-    else:
-        seal_type = ""
+    seal_type = _clean_output_phrase(seal.get("type", ""))
+    seal_message = _clean_output_phrase(seal.get("message", ""))
 
     lead_parts: List[str] = []
     support_parts: List[str] = []

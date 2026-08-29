@@ -300,7 +300,24 @@ def compute_doctrine_seal(
     if isinstance(primary_ending, dict)
     else ""
     )
-    outcome = _ending_outcome(dream)
+   ending_rule_outcome = {}
+
+    if primary_ending_row:
+    ending_rule_outcome = {
+        "outcome": primary_ending_name,
+        "status": str(primary_ending_row.get("status") or "").strip(),
+        "type": str(primary_ending_row.get("type") or "").strip(),
+        "risk": str(primary_ending_row.get("risk") or "").strip(),
+        "message": str(
+            primary_ending_row.get("outcome_meaning")
+            or primary_ending_row.get("meaning_modifier")
+            or primary_ending_row.get("spiritual_meaning")
+            or primary_ending_row.get("meaning")
+            or ""
+        ).strip(),
+    }
+
+    outcome = ending_rule_outcome or _ending_outcome(dream)
 
     status = "Processing"
     seal_type = "Layered"

@@ -258,6 +258,7 @@ def compute_doctrine_seal(
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
     override_hit: Optional[Dict[str, Any]],
+    endings: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Seal hierarchy:

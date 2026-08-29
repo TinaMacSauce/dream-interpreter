@@ -592,6 +592,14 @@ def build_core_message(
         focus.get("lead", "")
         or event_scenario.get("lead", "")
     )
+    event_seal_message = _clean_output_phrase(
+    event_scenario.get("seal_message", "")
+)
+
+if lead and event_seal_message:
+    lead = _clean_output_phrase(
+        f"{lead}. {event_seal_message}"
+    )
 
     if lead:
         if _is_full_sentence_fragment(lead):

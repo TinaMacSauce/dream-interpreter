@@ -289,7 +289,17 @@ def compute_doctrine_seal(
         symbol = get_base_symbol_input(row)
         if symbol and contains_phrase(ending_norm, symbol):
             ending_hits.append(symbol)
-
+    primary_ending = endings[0] if endings else None
+    primary_ending_row = (
+    primary_ending.get("row", {})
+    if isinstance(primary_ending, dict)
+    else {}
+    )
+    primary_ending_name = normalize_text(
+    primary_ending.get("name", "")
+    if isinstance(primary_ending, dict)
+    else ""
+    )
     outcome = _ending_outcome(dream)
 
     status = "Processing"

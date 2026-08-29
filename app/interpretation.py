@@ -560,7 +560,7 @@ def build_event_scenario(
         seal,
         narrative_max_symbols: int,
     ) -> Tuple[str, Dict[str, str], Dict[str, str]]:
-    focus = build_primary_focus(
+        focus = build_primary_focus(
         dream,
         base_matches,
         behaviors,

@@ -549,17 +549,17 @@ def build_event_scenario(
     }
 
 
-def build_core_message(
-    dream: str,
-    base_matches,
-    behaviors,
-    states,
-    locations,
-    relationships,
-    override_hit,
-    seal,
-    narrative_max_symbols: int,
-) -> Tuple[str, Dict[str, str], Dict[str, str]]:
+    def build_core_message(
+        dream: str,
+        base_matches,
+        behaviors,
+        states,
+        locations,
+        relationships,
+        override_hit,
+        seal,
+        narrative_max_symbols: int,
+    ) -> Tuple[str, Dict[str, str], Dict[str, str]]:
     focus = build_primary_focus(
         dream,
         base_matches,

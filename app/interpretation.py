@@ -538,11 +538,12 @@ def build_event_scenario(
 
     if not lead and subject_clause:
         lead = subject_clause
-
+        
     return {
         "lead": _clean_output_phrase(lead),
         "support": _clean_output_phrase(support),
         "seal_type": _clean_output_phrase(seal_type),
+        "seal_message": _clean_output_phrase(seal_message),
         "action_name": action_name,
         "place_name": _hit_name(primary_place) if primary_place else "",
     }

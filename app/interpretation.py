@@ -616,8 +616,8 @@ def build_core_message(
         parts.append(sentence(support))
 
     event_seal_type = _clean_output_phrase(event_scenario.get("seal_type", ""))
-    if event_seal_type:
-        seal_type = event_seal_type
+if not seal_type and event_seal_type:
+    seal_type = event_seal_type
 
     if seal_type:
         seal_n = normalize_text(seal_type)

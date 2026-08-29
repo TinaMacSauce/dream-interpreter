@@ -751,6 +751,7 @@ def run_interpretation():
                 locations,
                 relationships,
                 override_hit,
+                endings,
             )
 
             # BUILD INTERPRETATION

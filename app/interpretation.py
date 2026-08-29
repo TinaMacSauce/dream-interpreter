@@ -472,6 +472,7 @@ def build_event_scenario(
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
+    seal: Dict[str, Any],
     narrative_max_symbols: int,
 ) -> Dict[str, str]:
     primary_action = _primary_behavior(behaviors)
@@ -586,14 +587,15 @@ def build_core_message(
     )
 
     event_scenario = build_event_scenario(
-        dream,
-        base_matches,
-        behaviors,
-        states,
-        locations,
-        relationships,
-        narrative_max_symbols,
-    )
+    dream,
+    base_matches,
+    behaviors,
+    states,
+    locations,
+    relationships,
+    seal,
+    narrative_max_symbols,
+)
 
     seal_type = _clean_output_phrase(seal.get("type", ""))
     seal_message = _clean_output_phrase(seal.get("message", ""))

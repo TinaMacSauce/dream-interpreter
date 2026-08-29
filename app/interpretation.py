@@ -572,16 +572,16 @@ def build_core_message(
         narrative_max_symbols,
     )
 
-    event_scenario = build_event_scenario(
-    dream,
-    base_matches,
-    behaviors,
-    states,
-    locations,
-    relationships,
-    seal,
-    narrative_max_symbols,
-)
+        event_scenario = build_event_scenario(
+        dream,
+        base_matches,
+        behaviors,
+        states,
+        locations,
+        relationships,
+        seal,
+        narrative_max_symbols,
+    )
 
     seal_type = _clean_output_phrase(seal.get("type", ""))
     seal_message = _clean_output_phrase(seal.get("message", ""))
@@ -592,14 +592,15 @@ def build_core_message(
         focus.get("lead", "")
         or event_scenario.get("lead", "")
     )
-    event_seal_message = _clean_output_phrase(
-    event_scenario.get("seal_message", "")
-)
 
-if lead and event_seal_message:
-    lead = _clean_output_phrase(
-        f"{lead}. {event_seal_message}"
+    event_seal_message = _clean_output_phrase(
+        event_scenario.get("seal_message", "")
     )
+
+    if lead and event_seal_message:
+        lead = _clean_output_phrase(
+            f"{lead}. {event_seal_message}"
+        )
 
     if lead:
         if _is_full_sentence_fragment(lead):
@@ -611,10 +612,11 @@ if lead and event_seal_message:
     if support and normalize_text(support) not in normalize_text(lead):
         parts.append(sentence(support))
 
-    event_seal_type = _clean_output_phrase(event_scenario.get("seal_type", ""))
-if not seal_type and event_seal_type:
-    seal_type = event_seal_type
-
+    event_seal_type = _clean_output_phrase(
+        event_scenario.get("seal_type", "")
+    )
+    if not seal_type and event_seal_type:
+        seal_type = event_seal_type
     if seal_type:
         seal_n = normalize_text(seal_type)
 

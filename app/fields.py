@@ -171,6 +171,8 @@ def get_behavior_name(row: Dict[str, Any]) -> str:
 def get_behavior_meaning_modifier(row: Dict[str, Any]) -> str:
     return row_get(
         row,
+        "life_area_meaning",
+        "life area meaning",
         "meaning_modifier",
         "meaning modifier",
         "behavior_effect",
@@ -185,6 +187,8 @@ def get_behavior_meaning_modifier(row: Dict[str, Any]) -> str:
 def get_behavior_physical_modifier(row: Dict[str, Any]) -> str:
     return row_get(
         row,
+        "physical_area_meaning",
+        "physical area meaning",
         "physical_modifier",
         "physical modifier",
         "physical_effect",

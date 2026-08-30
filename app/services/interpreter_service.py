@@ -53,8 +53,10 @@ from app.services.admob_ssv_service import (
 from app.services.narration_service import build_narration_result
 from app.sheets import (
     doctrine_available,
+    get_or_create_worksheet,
     load_doctrine_sheets,
     load_legacy_rows,
+    worksheet_to_rows,
 )
 from app.utils import (
     normalize_email,
@@ -196,6 +198,7 @@ def _row_name(item: Any) -> str:
         or _clean(row.get("relationship_name"))
         or _clean(row.get("state_name"))
         or _clean(row.get("ending_name"))
+        or _clean(row.get("phrase"))
         or _clean(row.get("symbol"))
         or _clean(row.get("override_name"))
         or _clean(row.get("input"))
@@ -376,6 +379,33 @@ def _ending_action(row: Dict[str, Any]) -> str:
     )
 
 
+def _context_meaning(row: Dict[str, Any]) -> str:
+    return _row_get(
+        row,
+        "legacy_spiritual_meaning",
+        "spiritual_meaning",
+        "meaning",
+    )
+
+
+def _context_physical(row: Dict[str, Any]) -> str:
+    return _row_get(
+        row,
+        "legacy_physical_effects",
+        "physical_effects",
+        "physical_area_meaning",
+    )
+
+
+def _context_action(row: Dict[str, Any]) -> str:
+    return _row_get(
+        row,
+        "legacy_action",
+        "action_modifier",
+        "action",
+    )
+
+
 # =========================================================
 # OLD PLACE DOCTRINE
 # =========================================================
@@ -416,6 +446,49 @@ def _detect_old_place(dream: str):
             }
 
     return None
+
+
+# =========================================================
+# CONTEXT / LAYERED COMBINATION DETECTION
+# =========================================================
+
+def _load_layered_combinations() -> List[Dict[str, Any]]:
+    """Read the existing contextual-combination doctrine sheet."""
+    ws = get_or_create_worksheet("LayeredCombinations")
+    _headers, rows = worksheet_to_rows(ws)
+    return rows
+
+
+def _detect_contexts(
+    dream: str,
+    context_rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Match explicit active LayeredCombinations phrases conservatively."""
+    hits: List[Dict[str, Any]] = []
+
+    for row in context_rows or []:
+        if not isinstance(row, dict):
+            continue
+
+        active = _lower(row.get("active"))
+        if active and active not in {"1", "true", "yes", "on", "active"}:
+            continue
+
+        phrase = _clean(row.get("phrase"))
+        if not phrase or not _phrase_exists(dream, phrase):
+            continue
+
+        hits.append(
+            {
+                "name": phrase,
+                "row": row,
+                "kind": "context",
+                "priority": 0,
+                "score": len(phrase),
+            }
+        )
+
+    return _sort_hits(_normalize_hits(hits, "context"))
 
 
 # =========================================================
@@ -524,6 +597,14 @@ def _event_piece(
             "action": _clean(get_relationship_action_modifier(row)),
         }
 
+    if kind == "context":
+        return {
+            "name": name,
+            "meaning": _clean(_context_meaning(row)),
+            "physical_area": _clean(_context_physical(row)),
+            "action": _clean(_context_action(row)),
+        }
+
     if kind == "ending":
         return {
             "name": name,
@@ -546,12 +627,14 @@ def _build_event_context(
     locations,
     states,
     relationships,
+    contexts,
     endings,
 ):
     primary_action = _first_hit(behaviors)
     primary_place = _first_hit(locations)
     primary_state = _first_hit(states)
     primary_relationship = _first_hit(relationships)
+    primary_context = _first_hit(contexts)
     primary_ending = _first_hit(endings)
 
     subjects = []
@@ -564,12 +647,13 @@ def _build_event_context(
     primary_subject = subjects[0] if subjects else ""
 
     return {
-        "priority_order": ["action", "subject", "place", "ending"],
+        "priority_order": ["action", "subject", "place", "context", "ending"],
         "primary_action": _event_piece(primary_action, kind="behavior"),
         "primary_subject": primary_subject,
         "primary_place": _event_piece(primary_place, kind="location"),
         "primary_state": _event_piece(primary_state, kind="state"),
         "primary_relationship": _event_piece(primary_relationship, kind="relationship"),
+        "primary_context": _event_piece(primary_context, kind="context"),
         "primary_ending": _event_piece(primary_ending, kind="ending"),
         "subjects": subjects,
     }
@@ -702,6 +786,7 @@ def run_interpretation():
             override_rows = sheets.get(Config.SHEET_OVERRIDE_RULES, [])
             template_rows = sheets.get(Config.SHEET_OUTPUT_TEMPLATES, [])
             ending_rows = sheets.get(Config.SHEET_ENDING_RULES, [])
+            context_rows = _load_layered_combinations()
 
             # ACTION FIRST
             behaviors = detect_rule_hits(
@@ -744,6 +829,9 @@ def run_interpretation():
                 max_hits=Config.MAX_RULE_HITS_PER_LAYER,
             )
             relationships = _sort_hits(_normalize_hits(relationships, "relationship"))
+
+            # CONTEXT / LAYERED COMBINATIONS
+            contexts = _detect_contexts(dream, context_rows)
 
             # ENDINGS
             endings = _detect_endings(dream, ending_rows)
@@ -811,6 +899,7 @@ def run_interpretation():
                 locations=locations,
                 states=states,
                 relationships=relationships,
+                contexts=contexts,
                 endings=endings,
             )
 
@@ -837,17 +926,19 @@ def run_interpretation():
                 "dream_pack": dream_pack_status,
                 "seal": doctrine_seal,
                 "brain": {
-                    "priority_order": ["action", "subject", "place", "ending"],
+                    "priority_order": ["action", "subject", "place", "context", "ending"],
                     "primary_action": event_context["primary_action"],
                     "primary_subject": event_context["primary_subject"],
                     "primary_place": event_context["primary_place"],
                     "primary_state": event_context["primary_state"],
                     "primary_relationship": event_context["primary_relationship"],
+                    "primary_context": event_context["primary_context"],
                     "primary_ending": event_context["primary_ending"],
                     "behaviors": _safe_names(behaviors),
                     "states": _safe_names(states),
                     "locations": _safe_names(locations),
                     "relationships": _safe_names(relationships),
+                    "contexts": _safe_names(contexts),
                     "endings": _safe_names(endings),
                 },
                 "interpretation": built["interpretation"],

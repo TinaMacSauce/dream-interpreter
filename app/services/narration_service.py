@@ -280,24 +280,28 @@ def _build_event_lead_sentence(
 ) -> str:
     lead_message = _safe_text(lead_message)
     ending_name = _display_text(
-    _event_value(event_context, "primary_ending", "name")
-)
-ending_meaning = _phrase_to_natural_clause(
-    _event_value(event_context, "primary_ending", "meaning")
-)
+        _event_value(event_context, "primary_ending", "name")
+    )
+    ending_meaning = _phrase_to_natural_clause(
+        _event_value(event_context, "primary_ending", "meaning")
+    )
 
     if not lead_message:
         return ""
 
-   if _is_attack_or_impersonation_text(lead_message):
-       attack_clause = _phrase_to_natural_clause(lead_message)
+    if _is_attack_or_impersonation_text(lead_message):
+        attack_clause = _phrase_to_natural_clause(lead_message)
 
-       if ending_name and ending_meaning:
-           return _sentence(
-               f"{attack_clause}, but the ending {ending_name} points to {ending_meaning}"
-           )
+        if ending_name and ending_meaning:
+            return _sentence(
+                f"{attack_clause}, but the ending {ending_name} points to {ending_meaning}"
+            )
 
-       return _sentence(attack_clause)
+        return _sentence(attack_clause)
+
+    if _is_emotion_reversal_text(lead_message):
+        return _sentence(_phrase_to_natural_clause(lead_message))
+
     action_name = _display_text(_event_value(event_context, "primary_action", "name"))
     action_meaning = _phrase_to_natural_clause(
         _event_value(event_context, "primary_action", "meaning")

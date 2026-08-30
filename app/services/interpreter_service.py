@@ -274,6 +274,42 @@ def _safe_names(items: List[Dict[str, Any]]) -> List[str]:
     return output
 
 
+SYMBOL_DISPLAY_NAMES = {
+    "dog": "Dog",
+    "school": "School",
+    "water": "Water",
+    "teeth": "Teeth",
+    "falling": "Falling",
+    "money": "Money",
+    "house": "House",
+    "snake": "Snake",
+    "car": "Car",
+    "hair": "Hair",
+    "road": "Road",
+    "baby": "Baby",
+}
+
+
+def _canonical_top_symbols(items: List[Any]) -> List[str]:
+    """Return case-insensitive unique display names for the UI symbol list."""
+    output: List[str] = []
+    seen = set()
+
+    for item in items or []:
+        name = _clean(item)
+        if not name:
+            continue
+
+        key = name.casefold()
+        if key in seen:
+            continue
+
+        seen.add(key)
+        output.append(SYMBOL_DISPLAY_NAMES.get(key, name))
+
+    return output
+
+
 # =========================================================
 # FIELD FALLBACK HELPERS
 # =========================================================
@@ -780,6 +816,10 @@ def run_interpretation():
 
             doctrine_facts = built.get("doctrine_facts", {}) or {}
             doctrine_facts["event_context"] = event_context
+            doctrine_facts["top_symbols"] = _canonical_top_symbols(
+                doctrine_facts.get("top_symbols")
+                or built.get("top_symbols", [])
+            )
 
             narration = build_narration_result(
                 doctrine_facts=doctrine_facts,

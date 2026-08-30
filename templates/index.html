@@ -2305,8 +2305,30 @@ function buildDreamPayload(){
 function extractSymbols(data, dreamText){
   const facts = data.doctrine_facts || {};
   const fromApi = Array.isArray(facts.top_symbols) ? facts.top_symbols : [];
-  const detected = SYMBOLS.filter(s => dreamText.toLowerCase().includes(s.key)).map(s => s.name);
-  return [...new Set([...fromApi, ...selectedGuidedSymbols, ...detected])].slice(0, 6);
+  const normalizedDream = String(dreamText || "").toLowerCase();
+
+  const detected = SYMBOLS
+    .filter(symbol => {
+      const phrase = String(symbol.key || "").trim().toLowerCase();
+      if(!phrase) return false;
+
+      const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const pattern = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i");
+      return pattern.test(normalizedDream);
+    })
+    .map(symbol => symbol.name);
+
+  const merged = [...fromApi, ...selectedGuidedSymbols, ...detected];
+  const seen = new Set();
+
+  return merged
+    .filter(name => {
+      const key = String(name || "").trim().toLowerCase();
+      if(!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 6);
 }
 
 function buildPatternSummary(symbols, emotion){

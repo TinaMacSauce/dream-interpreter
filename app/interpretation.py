@@ -472,7 +472,6 @@ def build_event_scenario(
     states: List[Dict[str, Any]],
     locations: List[Dict[str, Any]],
     relationships: List[Dict[str, Any]],
-    seal: Dict[str, Any],
     narrative_max_symbols: int,
 ) -> Dict[str, str]:
     primary_action = _primary_behavior(behaviors)
@@ -510,8 +509,23 @@ def build_event_scenario(
     behavior_names = {normalize_text(_hit_name(item)) for item in behaviors or []}
     location_names = {normalize_text(_hit_name(item)) for item in locations or []}
 
-    seal_type = _clean_output_phrase(seal.get("type", ""))
-    seal_message = _clean_output_phrase(seal.get("message", ""))
+    if _dream_escaped(dream):
+        seal_type = "Deliverance"
+    elif {"being chased", "chased", "chasing", "being attacked", "being bitten", "fighting", "stabbing"} & behavior_names:
+        seal_type = "Warfare"
+    elif {"escaping", "crossing", "finding"} & behavior_names:
+        seal_type = "Breakthrough"
+    elif {"old place", "old school", "old house", "old neighborhood", "old job"} & location_names:
+        seal_type = "Backwardness"
+    elif place_meaning and any(
+        term in normalize_text(place_meaning)
+        for term in ("backwardness", "stagnation", "regression")
+    ):
+        seal_type = "Backwardness"
+    elif relationship_meaning:
+        seal_type = "Relational"
+    else:
+        seal_type = ""
 
     lead_parts: List[str] = []
     support_parts: List[str] = []
@@ -538,29 +552,28 @@ def build_event_scenario(
 
     if not lead and subject_clause:
         lead = subject_clause
-        
+
     return {
         "lead": _clean_output_phrase(lead),
         "support": _clean_output_phrase(support),
         "seal_type": _clean_output_phrase(seal_type),
-        "seal_message": _clean_output_phrase(seal_message),
         "action_name": action_name,
         "place_name": _hit_name(primary_place) if primary_place else "",
     }
 
 
-    def build_core_message(
-        dream: str,
-        base_matches,
-        behaviors,
-        states,
-        locations,
-        relationships,
-        override_hit,
-        seal,
-        narrative_max_symbols: int,
-    ) -> Tuple[str, Dict[str, str], Dict[str, str]]:
-        focus = build_primary_focus(
+def build_core_message(
+    dream: str,
+    base_matches,
+    behaviors,
+    states,
+    locations,
+    relationships,
+    override_hit,
+    seal,
+    narrative_max_symbols: int,
+) -> Tuple[str, Dict[str, str], Dict[str, str]]:
+    focus = build_primary_focus(
         dream,
         base_matches,
         behaviors,
@@ -572,14 +585,13 @@ def build_event_scenario(
         narrative_max_symbols,
     )
 
-        event_scenario = build_event_scenario(
+    event_scenario = build_event_scenario(
         dream,
         base_matches,
         behaviors,
         states,
         locations,
         relationships,
-        seal,
         narrative_max_symbols,
     )
 
@@ -593,15 +605,6 @@ def build_event_scenario(
         or event_scenario.get("lead", "")
     )
 
-    event_seal_message = _clean_output_phrase(
-        event_scenario.get("seal_message", "")
-    )
-
-    if lead and event_seal_message:
-        lead = _clean_output_phrase(
-            f"{lead}. {event_seal_message}"
-        )
-
     if lead:
         if _is_full_sentence_fragment(lead):
             parts.append(sentence(lead))
@@ -612,11 +615,10 @@ def build_event_scenario(
     if support and normalize_text(support) not in normalize_text(lead):
         parts.append(sentence(support))
 
-    event_seal_type = _clean_output_phrase(
-        event_scenario.get("seal_type", "")
-    )
-    if not seal_type and event_seal_type:
+    event_seal_type = _clean_output_phrase(event_scenario.get("seal_type", ""))
+    if event_seal_type:
         seal_type = event_seal_type
+
     if seal_type:
         seal_n = normalize_text(seal_type)
 

@@ -225,6 +225,25 @@ def _get_rule_name(row: Dict[str, Any], kind: str) -> str:
     return ""
 
 
+def _contextual_behavior_token(dream_norm: str, name: str) -> str:
+    """Return a canonical token for narrow behavior patterns whose words may be separated."""
+    n = normalize_text(name)
+
+    if n == "teeth falling out":
+        has_teeth = any(
+            contains_phrase(dream_norm, token)
+            for token in ("tooth", "teeth")
+        )
+        has_fallout = any(
+            contains_phrase(dream_norm, token)
+            for token in ("fell out", "falling out", "fall out", "came out", "coming out")
+        )
+        if has_teeth and has_fallout:
+            return "teeth fell out"
+
+    return ""
+
+
 def detect_rule_hits(
     dream: str,
     rows: List[Dict[str, Any]],
@@ -268,6 +287,15 @@ def detect_rule_hits(
                 token_len = len(kw_n)
                 matched_in_ending = contains_phrase(ending_norm, kw_n)
                 break
+
+        if not matched_token and kind == "behavior":
+            matched_token = _contextual_behavior_token(dream_norm, name)
+            if matched_token:
+                token_len = len(matched_token)
+                matched_in_ending = any(
+                    contains_phrase(ending_norm, token)
+                    for token in ("fell out", "falling out", "fall out", "came out", "coming out")
+                )
 
         if not matched_token:
             continue

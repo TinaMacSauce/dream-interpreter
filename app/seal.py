@@ -336,13 +336,13 @@ def compute_doctrine_seal(
         message = "The ending points to a sealed warning that should be taken seriously in prayer."
         
     elif primary_ending_row:
-    status = outcome.get("status") or "Resolved"
-    seal_type = outcome.get("type") or primary_ending_name or "Ending"
-    risk = outcome.get("risk") or "Medium"
-    message = (
-        outcome.get("message")
-        or "The ending changes how the overall dream should be understood."
-    )
+        status = outcome.get("status") or "Resolved"
+        seal_type = outcome.get("type") or primary_ending_name or "Ending"
+        risk = outcome.get("risk") or "Medium"
+        message = (
+            outcome.get("message")
+            or "The ending changes how the overall dream should be understood."
+        )
     elif _has_attack_signal(behavior_names, override_text) and outcome.get("type"):
         status = outcome["status"]
         seal_type = outcome["type"]

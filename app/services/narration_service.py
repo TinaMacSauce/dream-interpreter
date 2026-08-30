@@ -27,6 +27,8 @@ PHRASE_REPLACEMENTS = {
     "the behavior shows": "the action points to",
     "the setting connects this to": "the place points to",
     "active spiritual pursuit": "active spiritual pressure",
+    "old mindset,stagnant pattern": "old mindset or stagnant pattern",
+    "old mindset, stagnant pattern": "old mindset or stagnant pattern",
 }
 
 
@@ -190,7 +192,32 @@ def _phrase_to_natural_clause(text: str) -> str:
     for old, new in PHRASE_REPLACEMENTS.items():
         out = out.replace(f" {old} ", f" {new} ")
 
+    out = re.sub(r",(?=\S)", ", ", out)
     return WHITESPACE_RE.sub(" ", _display_text(out)).strip()
+
+
+def _ending_outcome_clause(ending_name: str, ending_meaning: str) -> str:
+    ending_name_clean = _display_text(ending_name)
+    ending_meaning_clean = _phrase_to_natural_clause(ending_meaning)
+
+    if not ending_name_clean or not ending_meaning_clean:
+        return ""
+
+    ending_n = normalize_text(ending_name_clean)
+    escape_endings = {
+        "escape",
+        "escaped",
+        "escaping",
+        "got away",
+        "got away safely",
+        "made it out",
+        "came out",
+    }
+
+    if ending_n in escape_endings:
+        return f"the successful escape points to {ending_meaning_clean}"
+
+    return f"the {ending_name_clean} ending points to {ending_meaning_clean}"
 
 
 def _is_full_sentence_fragment(text: str) -> bool:
@@ -291,11 +318,10 @@ def _build_event_lead_sentence(
 
     if _is_attack_or_impersonation_text(lead_message):
         attack_clause = _phrase_to_natural_clause(lead_message)
+        ending_clause = _ending_outcome_clause(ending_name, ending_meaning)
 
-        if ending_name and ending_meaning:
-            return _sentence(
-                f"{attack_clause}, but the ending {ending_name} points to {ending_meaning}"
-            )
+        if ending_clause:
+            return _sentence(f"{attack_clause}, but {ending_clause}")
 
         return _sentence(attack_clause)
 
@@ -502,7 +528,8 @@ def _build_ending_sentence(
     )
 
     if ending_name and ending_meaning:
-        text = f"The ending is important: {ending_name} points to {ending_meaning}"
+        ending_clause = _ending_outcome_clause(ending_name, ending_meaning)
+        text = f"The ending is important: {ending_clause}"
         if ending_action:
             text += f", so the response is to {ending_action}"
         return _sentence(text)
@@ -641,7 +668,8 @@ def build_ai_prompt_payload(
 
     instruction = (
         "Rewrite the supplied doctrine findings into natural, clear, spiritually serious language. "
-        "Follow this order: action first, subject second, place third, ending last. "
+        "Follow this order: action first, subject second, place third, then use the ending to qualify and finalize the outcome. "
+        "If the ending changes or resolves the threat, make that resolution explicit and do not let the earlier threat read as the final outcome. "
         "Do not add new meanings, symbols, warnings, or instructions. "
         "Do not contradict the doctrine facts. "
         "Do not speak with absolute certainty beyond what is supplied."

@@ -339,7 +339,20 @@ def _build_guidance_sentence(event_context: Dict[str, Any], interpretation: Dict
     place_guidance = _phrase_to_natural_clause(_event_value(event_context, "primary_place", "action"))
     ending_guidance = _phrase_to_natural_clause(_event_value(event_context, "primary_ending", "action"))
     doctrine_guidance = _phrase_to_natural_clause(_safe_text((interpretation or {}).get("what_to_do")))
-    guidance_items = _normalize_list([ending_guidance, action_guidance, place_guidance, doctrine_guidance], max_items=4, display=False)
+
+    # Avoid mechanically repeating "pray" when the action guidance already
+    # contains the prayer instruction and the ending says "keep praying".
+    if action_guidance and ending_guidance:
+        action_n = normalize_text(action_guidance)
+        ending_n = normalize_text(ending_guidance)
+        if "pray" in action_n and ending_n.startswith("keep praying and "):
+            ending_guidance = ending_guidance[len("keep praying and "):].strip()
+
+    guidance_items = _normalize_list(
+        [action_guidance, ending_guidance, place_guidance, doctrine_guidance],
+        max_items=4,
+        display=False,
+    )
     if not guidance_items:
         return ""
     selected: List[str] = []

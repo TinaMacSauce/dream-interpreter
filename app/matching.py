@@ -55,6 +55,29 @@ def _normalize_keyword_list(raw_keywords: str) -> List[str]:
     return keywords
 
 
+def _span_is_explicitly_negated(dream_norm: str, token: str, span: Tuple[int, int]) -> bool:
+    """Suppress Blood only when the dream explicitly says blood is absent."""
+    token_n = normalize_text(token)
+    if token_n not in {"blood", "bleeding"}:
+        return False
+
+    start, end = span
+    window = dream_norm[max(0, start - 36):min(len(dream_norm), end + 24)]
+    negative_phrases = (
+        "no blood",
+        "without blood",
+        "there was no blood",
+        "was no blood",
+        "no sign of blood",
+        "not bleeding",
+        "no bleeding",
+        "did not bleed",
+        "didnt bleed",
+        "never bled",
+    )
+    return any(contains_phrase(window, phrase) for phrase in negative_phrases)
+
+
 def _row_identity_key(row: Dict[str, Any]) -> str:
     symbol = normalize_text(get_base_symbol_input(row))
     if symbol:
@@ -375,6 +398,13 @@ def _build_candidate_hit(
         if not spans:
             continue
 
+        valid_spans = [
+            span for span in spans
+            if not _span_is_explicitly_negated(dream_norm, token, span)
+        ]
+        if not valid_spans:
+            continue
+
         ending_bonus = ending_bonus_for_symbol(row, ending_text)
         score = score_base_candidate(
             row=row,
@@ -391,7 +421,7 @@ def _build_candidate_hit(
             {
                 "type": match_type,
                 "token": token,
-                "span": spans[0],
+                "span": valid_spans[0],
                 "token_len": len(token.split()),
                 "token_chars": len(token),
                 "ending_bonus": ending_bonus,

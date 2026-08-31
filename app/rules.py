@@ -244,6 +244,34 @@ def _contextual_behavior_token(dream_norm: str, name: str) -> str:
     return ""
 
 
+def _suppress_generic_teeth_falling_overlap(
+    dream_norm: str,
+    hits: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Keep specific teeth-fallout doctrine from also inheriting generic body-falling doctrine."""
+    names = {normalize_text(hit.get("name", "")) for hit in hits}
+    if "teeth falling out" not in names or "falling" not in names:
+        return hits
+
+    separate_body_fall_cues = (
+        "i fell",
+        "i was falling",
+        "fell down",
+        "falling down",
+        "fell from",
+        "falling from",
+        "fell off",
+        "falling off",
+    )
+    if any(contains_phrase(dream_norm, cue) for cue in separate_body_fall_cues):
+        return hits
+
+    return [
+        hit for hit in hits
+        if normalize_text(hit.get("name", "")) != "falling"
+    ]
+
+
 def detect_rule_hits(
     dream: str,
     rows: List[Dict[str, Any]],
@@ -332,5 +360,8 @@ def detect_rule_hits(
             x.get("name", "").lower(),
         )
     )
+
+    if kind == "behavior":
+        hits = _suppress_generic_teeth_falling_overlap(dream_norm, hits)
 
     return select_non_conflicting_rule_hits(hits, max_hits)

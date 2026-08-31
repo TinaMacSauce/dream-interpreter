@@ -110,8 +110,6 @@ def _override_text(override_hit: Optional[Dict[str, Any]]) -> str:
 
 def _has_death_omen_signal(base_symbol_names: set, override_text: str) -> bool:
     death_terms = {
-        "teeth",
-        "teeth falling out",
         "dead person",
         "dead people",
         "deceased",

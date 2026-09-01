@@ -238,7 +238,7 @@ def _find_phrase_starts(words: List[str], phrase: List[str]) -> List[int]:
 
 
 def _affirmative_teeth_fallout_token(dream_norm: str) -> str:
-    """Match Teeth Falling Out only when a nearby fallout event is not locally negated."""
+    """Match Teeth Falling Out only when the nearby fallout event actually occurred."""
     words = [word for word in dream_norm.split() if word]
     if not words:
         return ""
@@ -251,6 +251,7 @@ def _affirmative_teeth_fallout_token(dream_norm: str) -> str:
         ["coming", "out"],
     )
     negators = {"not", "never", "no", "none", "neither", "didn", "wasn", "weren"}
+    hypothetical_markers = {"would", "might", "could", "may", "will", "gonna", "almost", "nearly"}
     tooth_tokens = {"tooth", "teeth"}
 
     for phrase in fallout_phrases:
@@ -260,8 +261,19 @@ def _affirmative_teeth_fallout_token(dream_norm: str) -> str:
             if not any(token in tooth_tokens for token in local):
                 continue
 
-            negation_window = words[max(0, start - 5):start]
-            if any(token in negators for token in negation_window):
+            preceding_window = words[max(0, start - 5):start]
+            if any(token in negators for token in preceding_window):
+                continue
+
+            # Modal/future and near-miss language describes a possible event,
+            # not an occurred Teeth Falling Out event. Doctrine must not be
+            # activated from anticipation alone.
+            if any(token in hypothetical_markers for token in preceding_window):
+                continue
+
+            # "going to fall out" is normalized as separate words and should
+            # be treated as anticipated rather than completed fallout.
+            if len(preceding_window) >= 2 and preceding_window[-2:] == ["going", "to"]:
                 continue
 
             return "teeth " + " ".join(phrase)

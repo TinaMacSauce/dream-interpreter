@@ -56,8 +56,17 @@ def _extract_count(words: List[str]) -> str:
         return "unknown"
 
     joined = " ".join(words)
-    if "one of my teeth" in joined or "one of the teeth" in joined or "one of their teeth" in joined:
-        return "one"
+
+    # Handle "one of my front teeth", "one of her lower teeth", etc. Position
+    # words may sit between the possessive phrase and the Teeth token, so an
+    # exact phrase check such as "one of my teeth" is too narrow.
+    for idx, token in enumerate(words):
+        if token not in TEETH_TOKENS:
+            continue
+        window = words[max(0, idx - 6):idx]
+        if "one" in window and "of" in window and window.index("one") < window.index("of"):
+            return "one"
+
     if "single tooth" in joined or "one tooth" in joined or "a tooth" in joined:
         return "one"
 

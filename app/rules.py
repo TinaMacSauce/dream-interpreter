@@ -237,6 +237,32 @@ def _find_phrase_starts(words: List[str], phrase: List[str]) -> List[int]:
     ]
 
 
+def _affirmative_state_keyword_token(dream_norm: str, rule_keywords: List[str]) -> str:
+    """Return the first state keyword occurrence that is not locally negated."""
+    words = [word for word in dream_norm.split() if word]
+    if not words:
+        return ""
+
+    negators = {
+        "not", "never", "no", "none", "neither",
+        "isn", "wasn", "weren", "aren", "didn", "doesn", "don",
+    }
+
+    for kw in sorted(rule_keywords, key=lambda x: (-len(normalize_text(x)), x)):
+        kw_n = normalize_text(kw)
+        if not kw_n:
+            continue
+
+        phrase = [word for word in kw_n.split() if word]
+        for start in _find_phrase_starts(words, phrase):
+            preceding_window = words[max(0, start - 4):start]
+            if any(token in negators for token in preceding_window):
+                continue
+            return kw_n
+
+    return ""
+
+
 def _affirmative_teeth_fallout_token(dream_norm: str) -> str:
     """Match Teeth Falling Out only when the nearby fallout event actually occurred."""
     words = [word for word in dream_norm.split() if word]
@@ -265,14 +291,9 @@ def _affirmative_teeth_fallout_token(dream_norm: str) -> str:
             if any(token in negators for token in preceding_window):
                 continue
 
-            # Modal/future and near-miss language describes a possible event,
-            # not an occurred Teeth Falling Out event. Doctrine must not be
-            # activated from anticipation alone.
             if any(token in hypothetical_markers for token in preceding_window):
                 continue
 
-            # "going to fall out" is normalized as separate words and should
-            # be treated as anticipated rather than completed fallout.
             if len(preceding_window) >= 2 and preceding_window[-2:] == ["going", "to"]:
                 continue
 
@@ -315,9 +336,6 @@ def _suppress_generic_teeth_falling_overlap(
         "",
     )
     if matched_body_fall:
-        # The generic Falling row may have originally matched the word "fell"
-        # inside "teeth fell out". Rebind that hit to the independent body-fall
-        # cue so final token conflict resolution preserves both real events.
         rebound: List[Dict[str, Any]] = []
         for hit in hits:
             if normalize_text(hit.get("name", "")) == "falling":
@@ -359,8 +377,6 @@ def detect_rule_hits(
         token_len = 0
         matched_in_ending = False
 
-        # Teeth Falling Out needs contextual matching so negated phrases cannot
-        # activate an affirmative doctrine rule through a generic keyword.
         if kind == "behavior" and normalize_text(name) == "teeth falling out":
             matched_token = _contextual_behavior_token(dream_norm, name)
             if matched_token:
@@ -377,16 +393,22 @@ def detect_rule_hits(
                 else:
                     continue
 
-            for kw in sorted(rule_keywords, key=lambda x: (-len(normalize_text(x)), x)):
-                kw_n = normalize_text(kw)
-                if not kw_n:
-                    continue
+            if kind == "state":
+                matched_token = _affirmative_state_keyword_token(dream_norm, rule_keywords)
+                if matched_token:
+                    token_len = len(matched_token)
+                    matched_in_ending = bool(_affirmative_state_keyword_token(ending_norm, rule_keywords))
+            else:
+                for kw in sorted(rule_keywords, key=lambda x: (-len(normalize_text(x)), x)):
+                    kw_n = normalize_text(kw)
+                    if not kw_n:
+                        continue
 
-                if contains_phrase(dream_norm, kw_n):
-                    matched_token = kw_n
-                    token_len = len(kw_n)
-                    matched_in_ending = contains_phrase(ending_norm, kw_n)
-                    break
+                    if contains_phrase(dream_norm, kw_n):
+                        matched_token = kw_n
+                        token_len = len(kw_n)
+                        matched_in_ending = contains_phrase(ending_norm, kw_n)
+                        break
 
             if not matched_token and kind == "behavior":
                 matched_token = _contextual_behavior_token(dream_norm, name)

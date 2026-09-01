@@ -35,15 +35,18 @@ def _extract_owner(words: List[str]) -> Dict[str, str]:
             continue
 
         window = words[max(0, idx - 4):idx]
-        if any(value in window for value in ("my", "mine")):
-            return {"owner": "dreamer", "owner_relationship": ""}
 
+        # A named relationship must outrank a nearby first-person possessive.
+        # For example, "my sister's tooth" belongs to the sister, not the dreamer.
         for relationship in RELATIONSHIP_TERMS:
             if relationship in window:
                 return {"owner": "other", "owner_relationship": relationship}
 
         if any(value in window for value in ("his", "her", "their", "someone", "stranger")):
             return {"owner": "other", "owner_relationship": ""}
+
+        if any(value in window for value in ("my", "mine")):
+            return {"owner": "dreamer", "owner_relationship": ""}
 
     return {"owner": "unknown", "owner_relationship": ""}
 

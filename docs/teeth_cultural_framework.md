@@ -13,17 +13,25 @@ Do not present these meanings as scientifically proven predictions or guaranteed
 ### Teeth generally
 Teeth dreams belong to a death-omen / family-warning cluster in Caribbean cultural tradition.
 
+### Dreamer's own teeth
+When the dream involves the dreamer's own tooth or teeth, the warning concerns someone related to the dreamer or a close friend.
+
 ### One tooth falls out
-A warning associated with the possible death of one person close to the dreamer or a family member, unless the omen is cancelled.
+A one-person death omen/warning concerning someone related to the dreamer or a close friend, unless the omen is cancelled.
 
 ### Multiple teeth fall out
-A multiple-person death warning. Multiple lost teeth can correspond to warnings concerning multiple people.
+A multiple-person death warning. Multiple lost teeth correspond to warnings concerning multiple people, preserving the one-tooth/one-person distinction.
+
+### Pain proximity modifier
+Pain accompanying tooth loss is an approved proximity modifier. Painful tooth loss points toward a close relative or person very close to the dreamer. Painless tooth loss points toward a friend, acquaintance, or more distant person.
+
+Do not use pain to change the one-tooth/one-person or multiple-teeth/multiple-person count. Pain modifies proximity only.
 
 ### Loose or wobbly tooth
 A sickness warning concerning someone.
 
 ### Bleeding gums
-A warning around the omen and a prompt to begin praying. Treat this as an escalation/warning modifier, not as a separate invented death count.
+A warning that an omen is approaching and a prompt to begin praying. Treat bleeding gums as a warning/escalation state, not as a separate invented death count and not as proof of a blood-relative relationship.
 
 ### Cancellation
 A teeth death omen is not to be narrated as inevitable. The framework includes the possibility that an omen can be cancelled. Exact cancellation mechanisms/rules must come from approved source material before they are encoded.
@@ -36,11 +44,12 @@ The interpreter must detect these independently even when their final cultural m
 - back tooth / back teeth / molars
 - upper teeth
 - lower teeth
-- one tooth versus multiple teeth
-- dreamer ownership versus another person's teeth
+- dreamer ownership versus another person's teeth beyond the approved dreamer-own-teeth rule
 - broken or cracked teeth
 - blood around a tooth/teeth versus bleeding gums
-- combinations of falling, looseness, bleeding, breakage, and position
+- combinations of falling, looseness, bleeding, breakage, position, pain, and ownership
+
+Front/back and upper/lower may be captured as structural modifiers but must not be assigned an unverified relationship class. Do not import cross-cultural positional mappings into the Caribbean doctrine layer without approved Caribbean evidence.
 
 Do not fabricate meanings for these pending distinctions. Mark unresolved mappings as needing doctrine confirmation.
 
@@ -68,7 +77,8 @@ The cultural framework should be preserved accurately without converting traditi
 
 ## Continuation point
 
-1. Complete structural extraction for front/back, upper/lower, single/multiple, and ownership.
-2. Reconcile the user's earlier Teeth source material when available.
-3. Wire only confirmed mappings into doctrine data and narration.
-4. Add end-to-end regression tests for combinations and cancellation behavior.
+1. Implement and regression-test dreamer ownership, single versus multiple tooth count, and pain proximity in the interpretation pipeline.
+2. Capture front/back and upper/lower as structural modifiers only, without assigning unverified kinship classes.
+3. Reconcile the user's earlier Teeth source material when available.
+4. Add end-to-end regression tests for mixed Teeth states, proximity, ownership, count, and cancellation behavior.
+5. After implementation passes regression tests, run the user's 10-dream manual acceptance test before declaring the Teeth cluster substantially complete.

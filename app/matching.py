@@ -364,6 +364,19 @@ def _drop_action_symbols_when_concrete_exists(selected: List[MatchTuple]) -> Lis
     return concrete if concrete else action_like
 
 
+def _drop_generic_mouth_when_teeth_selected(selected: List[MatchTuple]) -> List[MatchTuple]:
+    """Prefer the specific Teeth subject over the broader Mouth container."""
+    if not selected:
+        return selected
+
+    selected_symbols = {_row_identity_key(item[0]) for item in selected}
+    teeth_symbols = {"teeth", "tooth", "teeth falling out"}
+    if not selected_symbols.intersection(teeth_symbols):
+        return selected
+
+    return [item for item in selected if _row_identity_key(item[0]) != "mouth"]
+
+
 def _build_candidate_hit(
     dream_norm: str,
     row: Dict[str, Any],
@@ -584,6 +597,7 @@ def match_base_symbols_doctrine(
 
     selected = _select_non_overlapping_candidates(candidates, top_k=top_k)
     selected = _drop_action_symbols_when_concrete_exists(selected)
+    selected = _drop_generic_mouth_when_teeth_selected(selected)
     selected = selected[:top_k]
     selected.sort(key=_selected_output_sort_key)
 

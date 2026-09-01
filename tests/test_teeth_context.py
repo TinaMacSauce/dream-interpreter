@@ -32,10 +32,9 @@ class TeethContextExtractionTests(unittest.TestCase):
 
     def test_molar_is_structural_back_position_only(self):
         context = extract_teeth_context("A molar was loose.")
-        self.assertTrue(context["has_teeth"] is False)
-        # Molar alone is intentionally not promoted into the Teeth family yet.
-        # This protects the extractor from silently expanding aliases without
-        # an explicit integration decision.
+        self.assertTrue(context["has_teeth"])
+        self.assertEqual("one", context["count"])
+        self.assertIn("back", context["positions"])
 
     def test_upper_lower_are_captured_without_kinship_mapping(self):
         context = extract_teeth_context("My upper tooth and lower tooth were loose.")

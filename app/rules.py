@@ -225,21 +225,56 @@ def _get_rule_name(row: Dict[str, Any], kind: str) -> str:
     return ""
 
 
+def _find_phrase_starts(words: List[str], phrase: List[str]) -> List[int]:
+    """Return token indexes where an exact normalized token phrase starts."""
+    if not phrase or len(phrase) > len(words):
+        return []
+    width = len(phrase)
+    return [
+        idx
+        for idx in range(len(words) - width + 1)
+        if words[idx:idx + width] == phrase
+    ]
+
+
+def _affirmative_teeth_fallout_token(dream_norm: str) -> str:
+    """Match Teeth Falling Out only when a nearby fallout event is not locally negated."""
+    words = [word for word in dream_norm.split() if word]
+    if not words:
+        return ""
+
+    fallout_phrases = (
+        ["fell", "out"],
+        ["fall", "out"],
+        ["falling", "out"],
+        ["came", "out"],
+        ["coming", "out"],
+    )
+    negators = {"not", "never", "no", "none", "neither", "didn", "wasn", "weren"}
+    tooth_tokens = {"tooth", "teeth"}
+
+    for phrase in fallout_phrases:
+        for start in _find_phrase_starts(words, phrase):
+            context_start = max(0, start - 8)
+            local = words[context_start:start]
+            if not any(token in tooth_tokens for token in local):
+                continue
+
+            negation_window = words[max(0, start - 5):start]
+            if any(token in negators for token in negation_window):
+                continue
+
+            return "teeth " + " ".join(phrase)
+
+    return ""
+
+
 def _contextual_behavior_token(dream_norm: str, name: str) -> str:
     """Return a canonical token for narrow behavior patterns whose words may be separated."""
     n = normalize_text(name)
 
     if n == "teeth falling out":
-        has_teeth = any(
-            contains_phrase(dream_norm, token)
-            for token in ("tooth", "teeth")
-        )
-        has_fallout = any(
-            contains_phrase(dream_norm, token)
-            for token in ("fell out", "falling out", "fall out", "came out", "coming out")
-        )
-        if has_teeth and has_fallout:
-            return "teeth fell out"
+        return _affirmative_teeth_fallout_token(dream_norm)
 
     return ""
 
@@ -293,37 +328,44 @@ def detect_rule_hits(
         if not name:
             continue
 
-        rule_keywords = get_rule_keywords(row)
-        if not rule_keywords:
-            fallback = normalize_text(name)
-            if fallback:
-                rule_keywords = [fallback]
-            else:
-                continue
-
         matched_token = ""
         token_len = 0
         matched_in_ending = False
 
-        for kw in sorted(rule_keywords, key=lambda x: (-len(normalize_text(x)), x)):
-            kw_n = normalize_text(kw)
-            if not kw_n:
-                continue
-
-            if contains_phrase(dream_norm, kw_n):
-                matched_token = kw_n
-                token_len = len(kw_n)
-                matched_in_ending = contains_phrase(ending_norm, kw_n)
-                break
-
-        if not matched_token and kind == "behavior":
+        # Teeth Falling Out needs contextual matching so negated phrases cannot
+        # activate an affirmative doctrine rule through a generic keyword.
+        if kind == "behavior" and normalize_text(name) == "teeth falling out":
             matched_token = _contextual_behavior_token(dream_norm, name)
             if matched_token:
                 token_len = len(matched_token)
-                matched_in_ending = any(
-                    contains_phrase(ending_norm, token)
-                    for token in ("fell out", "falling out", "fall out", "came out", "coming out")
-                )
+                matched_in_ending = bool(_contextual_behavior_token(ending_norm, name))
+            else:
+                continue
+        else:
+            rule_keywords = get_rule_keywords(row)
+            if not rule_keywords:
+                fallback = normalize_text(name)
+                if fallback:
+                    rule_keywords = [fallback]
+                else:
+                    continue
+
+            for kw in sorted(rule_keywords, key=lambda x: (-len(normalize_text(x)), x)):
+                kw_n = normalize_text(kw)
+                if not kw_n:
+                    continue
+
+                if contains_phrase(dream_norm, kw_n):
+                    matched_token = kw_n
+                    token_len = len(kw_n)
+                    matched_in_ending = contains_phrase(ending_norm, kw_n)
+                    break
+
+            if not matched_token and kind == "behavior":
+                matched_token = _contextual_behavior_token(dream_norm, name)
+                if matched_token:
+                    token_len = len(matched_token)
+                    matched_in_ending = bool(_contextual_behavior_token(ending_norm, name))
 
         if not matched_token:
             continue

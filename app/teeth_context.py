@@ -1,4 +1,3 @@
-import re
 from typing import Any, Dict, List
 
 from app.utils import normalize_text
@@ -16,13 +15,15 @@ MULTIPLE_WORDS = {
     "several", "many", "multiple", "all", "both",
 }
 
+TEETH_TOKENS = {"tooth", "teeth", "molar", "molars"}
+
 
 def _tokens(text: str) -> List[str]:
     return [token for token in normalize_text(text).split() if token]
 
 
 def _has_teeth(words: List[str]) -> bool:
-    return "tooth" in words or "teeth" in words
+    return any(token in TEETH_TOKENS for token in words)
 
 
 def _extract_owner(words: List[str]) -> Dict[str, str]:
@@ -30,7 +31,7 @@ def _extract_owner(words: List[str]) -> Dict[str, str]:
         return {"owner": "unknown", "owner_relationship": ""}
 
     for idx, token in enumerate(words):
-        if token not in {"tooth", "teeth"}:
+        if token not in TEETH_TOKENS:
             continue
 
         window = words[max(0, idx - 4):idx]
@@ -51,26 +52,23 @@ def _extract_count(words: List[str]) -> str:
     if not _has_teeth(words):
         return "unknown"
 
-    if "teeth" in words:
-        for idx, token in enumerate(words):
-            if token != "teeth":
-                continue
-            window = words[max(0, idx - 3):idx + 1]
-            if any(value in window for value in MULTIPLE_WORDS):
-                return "multiple"
-        # Plural teeth is structurally multiple unless a construction explicitly
-        # narrows to one tooth elsewhere.
-        if "one" not in words and "single" not in words:
-            return "multiple"
+    joined = " ".join(words)
+    if "one of my teeth" in joined or "one of the teeth" in joined or "one of their teeth" in joined:
+        return "one"
+    if "single tooth" in joined or "one tooth" in joined or "a tooth" in joined:
+        return "one"
 
     for idx, token in enumerate(words):
-        if token != "tooth":
+        if token not in TEETH_TOKENS:
             continue
         window = words[max(0, idx - 3):idx + 1]
         if any(value in window for value in MULTIPLE_WORDS):
             return "multiple"
-        if any(value in window for value in ("one", "single", "a", "my")):
-            return "one"
+
+    if "teeth" in words or "molars" in words:
+        return "multiple"
+    if "tooth" in words or "molar" in words:
+        return "one"
 
     return "unknown"
 

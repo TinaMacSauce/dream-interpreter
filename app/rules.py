@@ -298,8 +298,23 @@ def _suppress_generic_teeth_falling_overlap(
         "fell off",
         "falling off",
     )
-    if any(contains_phrase(dream_norm, cue) for cue in separate_body_fall_cues):
-        return hits
+    matched_body_fall = next(
+        (cue for cue in separate_body_fall_cues if contains_phrase(dream_norm, cue)),
+        "",
+    )
+    if matched_body_fall:
+        # The generic Falling row may have originally matched the word "fell"
+        # inside "teeth fell out". Rebind that hit to the independent body-fall
+        # cue so final token conflict resolution preserves both real events.
+        rebound: List[Dict[str, Any]] = []
+        for hit in hits:
+            if normalize_text(hit.get("name", "")) == "falling":
+                hit = dict(hit)
+                hit["matched_token"] = matched_body_fall
+                hit["token_len"] = len(matched_body_fall)
+                hit["score"] = _score_hit(hit)
+            rebound.append(hit)
+        return rebound
 
     return [
         hit for hit in hits
@@ -405,5 +420,13 @@ def detect_rule_hits(
 
     if kind == "behavior":
         hits = _suppress_generic_teeth_falling_overlap(dream_norm, hits)
+        hits.sort(
+            key=lambda x: (
+                -int(x.get("score", 0)),
+                -int(x.get("token_len", 0)),
+                -int(x.get("priority", 0)),
+                x.get("name", "").lower(),
+            )
+        )
 
     return select_non_conflicting_rule_hits(hits, max_hits)

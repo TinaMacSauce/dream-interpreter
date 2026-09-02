@@ -5,6 +5,45 @@ from app.teeth_context import extract_teeth_context
 from app.utils import normalize_text
 
 
+def _event_status(context: Dict[str, Any], actual_fallout: bool) -> str:
+    """Return a factual Teeth event class without assigning an unapproved meaning."""
+    if actual_fallout:
+        return "completed_loss"
+    if context.get("near_miss_loss"):
+        return "near_miss_loss"
+    if context.get("hypothetical_loss"):
+        return "hypothetical_loss"
+    if context.get("loose_or_wobbly") and context.get("restorative_state"):
+        return "loose_restored"
+    if context.get("loose_or_wobbly"):
+        return "loose_only"
+    if context.get("broken_or_cracked"):
+        return "broken_or_cracked"
+    if context.get("gum_bleeding"):
+        return "bleeding_gums"
+    if context.get("gold_teeth"):
+        return "gold_without_loss"
+    if context.get("has_teeth"):
+        return "teeth_present"
+    if context.get("has_teeth_cluster"):
+        return "gums_only"
+    return ""
+
+
+def _pending_distinctions(context: Dict[str, Any]) -> List[str]:
+    """Expose detected variants whose cultural meaning is not approved yet."""
+    pending: List[str] = []
+    if context.get("broken_or_cracked"):
+        pending.append("broken_or_cracked_teeth")
+    if context.get("rotten_or_decayed"):
+        pending.append("rotten_or_decayed_teeth")
+    if context.get("gold_teeth"):
+        pending.append("gold_teeth")
+    if context.get("replacement_growth"):
+        pending.append("replacement_growth_meaning")
+    return pending
+
+
 def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
     """Map approved Teeth facts into doctrine-safe structured output.
 
@@ -12,6 +51,8 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
     positions and does not infer blood-relative status. Fallout doctrine only
     activates when the guarded Teeth-fallout detector confirms that the event
     actually occurred, protecting negated, hypothetical, and near-miss language.
+    Unapproved structural variants are exposed as pending distinctions instead
+    of being silently converted into doctrine.
     """
     context = extract_teeth_context(dream)
     actual_fallout = bool(_affirmative_teeth_fallout_token(normalize_text(dream)))
@@ -34,6 +75,7 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "active_warning": bool(warning_kind),
         "warning_kind": warning_kind,
+        "event_status": _event_status(context, actual_fallout),
         "active_fallout": bool(actual_fallout),
         "owner": context.get("owner", "unknown"),
         "owner_relationship": context.get("owner_relationship", ""),
@@ -50,6 +92,13 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
         "severity_modifier": "",
         "bleeding_physical_cause": bool(context.get("bleeding_physical_cause")),
         "restorative_state": bool(context.get("restorative_state")),
+        "broken_or_cracked": bool(context.get("broken_or_cracked")),
+        "rotten_or_decayed": bool(context.get("rotten_or_decayed")),
+        "gold_teeth": bool(context.get("gold_teeth")),
+        "near_miss_loss": bool(context.get("near_miss_loss")),
+        "hypothetical_loss": bool(context.get("hypothetical_loss")),
+        "replacement_growth": bool(context.get("replacement_growth")),
+        "pending_distinctions": _pending_distinctions(context),
     }
 
     if not context.get("has_teeth_cluster"):
@@ -90,6 +139,7 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "active": bool(doctrine.get("active_warning")),
         "warning_kind": doctrine.get("warning_kind", ""),
+        "event_status": doctrine.get("event_status", ""),
         "lead": "",
         "details": [],
         "relationship_scope": doctrine.get("relationship_scope", ""),
@@ -100,6 +150,13 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
         "positions": list(doctrine.get("positions", [])),
         "restorative_state": bool(doctrine.get("restorative_state")),
         "bleeding_physical_cause": bool(doctrine.get("bleeding_physical_cause")),
+        "broken_or_cracked": bool(doctrine.get("broken_or_cracked")),
+        "rotten_or_decayed": bool(doctrine.get("rotten_or_decayed")),
+        "gold_teeth": bool(doctrine.get("gold_teeth")),
+        "near_miss_loss": bool(doctrine.get("near_miss_loss")),
+        "hypothetical_loss": bool(doctrine.get("hypothetical_loss")),
+        "replacement_growth": bool(doctrine.get("replacement_growth")),
+        "pending_distinctions": list(doctrine.get("pending_distinctions", [])),
     }
 
     if not result["active"]:

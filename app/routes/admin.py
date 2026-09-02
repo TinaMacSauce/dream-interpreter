@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 import time
 from typing import Any, Dict
 
@@ -10,11 +11,17 @@ from flask import (
     request,
 )
 
+from app.access import (
+    get_dream_pack_status,
+    mark_dream_pack_purchase,
+    set_buyer_session,
+)
 from app.admin import (
     admin_upsert_to_sheet,
     require_admin,
 )
 from app.config import Config
+from app.utils import normalize_email, validate_email
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -71,6 +78,15 @@ def _debug_enabled() -> bool:
     return bool(Config.DEBUG_MATCH)
 
 
+def _bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+
+    return max(minimum, min(maximum, parsed))
+
+
 # ============================================================
 # ADMIN UPSERT
 # ============================================================
@@ -116,6 +132,117 @@ def admin_upsert():
             },
             500,
         )
+
+
+# ============================================================
+# TEMPORARY QA ACCESS
+# ============================================================
+
+QA_EMAIL_DOMAIN = "qa.jamaicantruestories.com"
+QA_DEFAULT_USES = 25
+QA_MAX_USES = 50
+QA_DEFAULT_HOURS = 2
+QA_MAX_HOURS = 6
+
+
+@admin_bp.route("/admin/qa-grant", methods=["POST", "OPTIONS"])
+def admin_qa_grant():
+    """
+    Issue a short-lived, non-billable test allowance for live regression QA.
+
+    The grant reuses the existing Dream Pack access machinery so the normal
+    interpretation path, doctrine engine, narration, and post-success access
+    deduction are exercised exactly as they are for production requests.
+    Only reserved QA aliases are accepted, and every grant is bounded by both
+    use count and expiry time.
+    """
+    if request.method == "OPTIONS":
+        return make_response("", 204)
+
+    auth_fail = require_admin()
+
+    if auth_fail:
+        return _auth_failed()
+
+    payload = _sanitize_payload(_safe_json())
+    email = normalize_email(payload.get("email") or "")
+
+    if not validate_email(email):
+        return _json_response(
+            {
+                "ok": False,
+                "error": "A valid QA email is required.",
+            },
+            400,
+        )
+
+    if not email.endswith(f"@{QA_EMAIL_DOMAIN}"):
+        return _json_response(
+            {
+                "ok": False,
+                "error": (
+                    "QA grants are restricted to reserved "
+                    f"@{QA_EMAIL_DOMAIN} aliases."
+                ),
+            },
+            400,
+        )
+
+    uses = _bounded_int(
+        payload.get("uses"),
+        default=QA_DEFAULT_USES,
+        minimum=1,
+        maximum=QA_MAX_USES,
+    )
+    hours = _bounded_int(
+        payload.get("hours"),
+        default=QA_DEFAULT_HOURS,
+        minimum=1,
+        maximum=QA_MAX_HOURS,
+    )
+
+    grant_id = (
+        f"qa:{int(time.time())}:"
+        f"{secrets.token_hex(6)}"
+    )
+
+    granted = mark_dream_pack_purchase(
+        email=email,
+        uses=uses,
+        hours=hours,
+        stripe_checkout_session_id=grant_id,
+    )
+
+    if not granted:
+        return _json_response(
+            {
+                "ok": False,
+                "error": "QA access grant could not be created.",
+            },
+            409,
+        )
+
+    # Bind the reserved QA alias to the current browser/session so the tester
+    # can immediately exercise the normal /interpret route without repeatedly
+    # supplying an email address.
+    set_buyer_session(email)
+    status = get_dream_pack_status(email)
+
+    return _json_response(
+        {
+            "ok": True,
+            "qa": True,
+            "access_type": "temporary_qa",
+            "email": email,
+            "uses_remaining": status.get("uses_remaining", 0),
+            "expires_at": status.get("expires_at", ""),
+            "hard_limits": {
+                "max_uses_per_grant": QA_MAX_USES,
+                "max_hours_per_grant": QA_MAX_HOURS,
+            },
+            "timestamp": int(time.time()),
+        }
+    )
 
 
 # ============================================================

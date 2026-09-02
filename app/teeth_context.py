@@ -185,7 +185,7 @@ def _extract_gum_bleeding(words: List[str]) -> bool:
 
     joined = " ".join(words)
     patterns = (
-        r"\bgums? (?:was|were|is|are)? ?(?:bleeding|bled)\b",
+        r"\bgums? (?:(?:was|were|is|are|started|starts|began) )?(?:bleeding|bled)\b",
         r"\b(?:bleeding|bloody) gums?\b",
         r"\bblood (?:was )?(?:from|on|around) (?:my |the )?gums?\b",
     )

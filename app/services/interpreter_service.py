@@ -51,6 +51,7 @@ from app.services.admob_ssv_service import (
     reward_is_available,
 )
 from app.services.narration_service import build_narration_result
+from app.teeth_integration import attach_teeth_narration_facts
 from app.sheets import (
     doctrine_available,
     get_or_create_worksheet,
@@ -908,6 +909,10 @@ def run_interpretation():
             doctrine_facts["top_symbols"] = _canonical_top_symbols(
                 doctrine_facts.get("top_symbols")
                 or built.get("top_symbols", [])
+            )
+            doctrine_facts = attach_teeth_narration_facts(
+                dream,
+                doctrine_facts,
             )
 
             narration = build_narration_result(

@@ -1,4 +1,5 @@
 import unittest
+from contextlib import ExitStack
 from unittest.mock import patch
 
 from flask import Flask
@@ -47,35 +48,38 @@ class TeethLivePathTests(unittest.TestCase):
             },
         }
 
-        patches = (
+        patchers = (
             patch.object(service.Config, "DOCTRINE_MODE", True),
             patch.object(service, "validate_dream_text", return_value=None),
             patch.object(service, "has_active_access", return_value=(True, {"type": "subscription"})),
             patch.object(service, "get_session_email", return_value="test@example.com"),
-            patch.object(service, "persist_email_to_session", return_value=None),
             patch.object(service, "get_dream_pack_status", return_value={}),
             patch.object(service, "doctrine_available", return_value=True),
             patch.object(service, "load_doctrine_sheets", return_value={}),
             patch.object(service, "_load_layered_combinations", return_value=[]),
             patch.object(service, "detect_rule_hits", return_value=[]),
+            patch.object(service, "_detect_contexts", return_value=[]),
+            patch.object(service, "_detect_endings", return_value=[]),
+            patch.object(service, "_detect_old_place", return_value=None),
             patch.object(service, "match_base_symbols_doctrine", return_value=[]),
             patch.object(service, "apply_override_rules", return_value=None),
             patch.object(service, "compute_doctrine_seal", return_value={}),
             patch.object(service, "build_doctrine_interpretation", return_value=built),
+            patch.object(service, "_canonical_top_symbols", return_value=["Teeth"]),
+            patch.object(service, "_build_receipt", return_value=[]),
             patch.object(service, "attach_teeth_narration_facts", return_value=enriched),
             patch.object(service, "build_narration_result", return_value={"mode": "deterministic_event"}),
         )
 
         with self.app.test_request_context("/interpret", method="POST", json={"dream": dream}):
-            managers = [item.start() for item in patches]
-            try:
+            with ExitStack() as stack:
+                mocks = [stack.enter_context(item) for item in patchers]
                 response = service.run_interpretation()
-                payload = response.get_json()
-                attach_mock = managers[-2]
-                narration_mock = managers[-1]
-            finally:
-                for item in reversed(patches):
-                    item.stop()
+
+        self.assertFalse(isinstance(response, tuple), response)
+        payload = response.get_json()
+        attach_mock = mocks[-2]
+        narration_mock = mocks[-1]
 
         attach_mock.assert_called_once()
         self.assertEqual(attach_mock.call_args.args[0], dream)

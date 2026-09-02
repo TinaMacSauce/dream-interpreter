@@ -2394,6 +2394,10 @@ function resultCard(label, text, icon, emerald, delay){
 function renderResultCards(mapped, dreamText, entryId){
   if(!result) return;
   const now = new Date().toISOString();
+  const savedEntry = entryId
+    ? readJournal().find(entry => entry.id === entryId)
+    : null;
+  const isFavorite = Boolean(savedEntry?.favorite);
   result.classList.add("show");
   result.innerHTML = `
     <div class="card decode-card">
@@ -2404,7 +2408,7 @@ function renderResultCards(mapped, dreamText, entryId){
         </div>
         <div class="result-actions">
           <button class="small-btn" type="button" id="editDreamBtn">Edit</button>
-          ${entryId ? `<button class="small-btn" type="button" id="favResultBtn">★</button>` : ""}
+          ${entryId ? `<button class="small-btn" type="button" id="favResultBtn" aria-label="${isFavorite ? "Remove from favorites" : "Add to favorites"}" title="${isFavorite ? "Remove from favorites" : "Add to favorites"}">${isFavorite ? "★" : "☆"}</button>` : ""}
         </div>
       </div>
 
@@ -2445,7 +2449,19 @@ function renderResultCards(mapped, dreamText, entryId){
   const editDreamBtn = byId("editDreamBtn");
   if(editDreamBtn && dreamEl){ editDreamBtn.onclick = () => dreamEl.focus(); }
   const favBtn = byId("favResultBtn");
-  if(favBtn && entryId){ favBtn.onclick = () => toggleFavorite(entryId, true); }
+  if(favBtn && entryId){
+    favBtn.onclick = () => {
+      toggleFavorite(entryId, true);
+      const updatedEntry = readJournal().find(entry => entry.id === entryId);
+      const updatedFavorite = Boolean(updatedEntry?.favorite);
+      const favoriteLabel = updatedFavorite
+        ? "Remove from favorites"
+        : "Add to favorites";
+      favBtn.textContent = updatedFavorite ? "★" : "☆";
+      favBtn.setAttribute("aria-label", favoriteLabel);
+      favBtn.setAttribute("title", favoriteLabel);
+    };
+  }
   result.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
@@ -2484,19 +2500,26 @@ function renderJournal(){
       String(e.metadata?.emotion || "").toLowerCase().includes(q));
   }
   if(!entries.length){
-    journalList.innerHTML = `<div class="card empty"><div class="empty-ico"><svg viewBox="0 0 24 24"><path d="M12 3c4 4 6 7 6 11a6 6 0 0 1-12 0c0-4 2-7 6-11z"/><path d="M9 15c2 2 4 2 6 0"/></svg></div>No saved dreams yet. Decode a dream and it will appear here.</div>`;
+    const emptyMessage = q
+      ? "No saved dreams match your search."
+      : journalFilter === "favorites"
+        ? "No favorite dreams yet."
+        : journalFilter === "month"
+          ? "No dreams saved this month."
+          : "No saved dreams yet. Decode a dream and it will appear here.";
+    journalList.innerHTML = `<div class="card empty"><div class="empty-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3c4 4 6 7 6 11a6 6 0 0 1-12 0c0-4 2-7 6-11z"/><path d="M9 15c2 2 4 2 6 0"/></svg></div>${esc(emptyMessage)}</div>`;
     return;
   }
   journalList.innerHTML = entries.map(entry => `
     <div class="journal-item" data-entry-id="${esc(entry.id)}">
-      <div class="journal-icon">${symbolSvgByName((entry.matchedSymbols || [])[0] || "")}</div>
+      <div class="journal-icon" aria-hidden="true">${symbolSvgByName((entry.matchedSymbols || [])[0] || "")}</div>
       <button type="button" style="all:unset;cursor:pointer;" data-open-entry="${esc(entry.id)}">
         <div class="journal-title">${esc(shortText(entry.dreamText, 72))}</div>
         <div class="journal-date">${esc(formatDate(entry.createdAt))}${entry.metadata?.emotion ? " • " + esc(entry.metadata.emotion) : ""}</div>
       </button>
       <div class="entry-actions">
-        <button class="icon-mini" type="button" data-favorite-entry="${esc(entry.id)}">${entry.favorite ? "★" : "☆"}</button>
-        <button class="icon-mini danger" type="button" data-delete-entry="${esc(entry.id)}">×</button>
+        <button class="icon-mini" type="button" data-favorite-entry="${esc(entry.id)}" aria-label="${entry.favorite ? "Remove from favorites" : "Add to favorites"}" title="${entry.favorite ? "Remove from favorites" : "Add to favorites"}">${entry.favorite ? "★" : "☆"}</button>
+        <button class="icon-mini danger" type="button" data-delete-entry="${esc(entry.id)}" aria-label="Delete saved dream" title="Delete saved dream">×</button>
       </div>
     </div>`).join("");
   document.querySelectorAll("[data-open-entry]").forEach(item => { item.onclick = () => openJournalEntry(item.dataset.openEntry); });

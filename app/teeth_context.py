@@ -18,11 +18,19 @@ MULTIPLE_WORDS = {
 
 TEETH_TOKENS = {"tooth", "teeth", "molar", "molars"}
 GUM_TOKENS = {"gum", "gums"}
+NEGATORS = {
+    "not", "never", "no", "none", "neither",
+    "isn", "wasn", "weren", "aren", "didn", "doesn", "don",
+}
 
 BLEEDING_CAUSE_TERMS = {
     "brush", "brushed", "brushing", "floss", "flossed", "flossing",
     "injury", "injured", "cut", "accident", "dentist", "dental",
 }
+
+BREAKAGE_TERMS = {"broken", "cracked", "chipped"}
+DECAY_TERMS = {"rotten", "decayed", "decaying"}
+GOLD_TERMS = {"gold", "golden"}
 
 RESTORATION_PATTERNS = (
     "became firm again",
@@ -37,6 +45,36 @@ RESTORATION_PATTERNS = (
     "tightened up",
 )
 
+NEAR_MISS_FALLOUT_PATTERNS = (
+    ("almost", "fell", "out"),
+    ("nearly", "fell", "out"),
+    ("almost", "came", "out"),
+    ("nearly", "came", "out"),
+    ("almost", "falling", "out"),
+)
+
+HYPOTHETICAL_FALLOUT_PATTERNS = (
+    ("might", "fall", "out"),
+    ("may", "fall", "out"),
+    ("could", "fall", "out"),
+    ("would", "fall", "out"),
+    ("will", "fall", "out"),
+    ("gonna", "fall", "out"),
+    ("going", "to", "fall", "out"),
+    ("might", "come", "out"),
+    ("could", "come", "out"),
+)
+
+REPLACEMENT_GROWTH_PATTERNS = (
+    "healthy tooth grew",
+    "healthy tooth grew back",
+    "new healthy tooth grew",
+    "new healthy tooth grew back",
+    "new tooth grew",
+    "new tooth grew back",
+    "tooth grew back",
+)
+
 
 def _tokens(text: str) -> List[str]:
     return [token for token in normalize_text(text).split() if token]
@@ -48,6 +86,42 @@ def _has_teeth(words: List[str]) -> bool:
 
 def _has_gums(words: List[str]) -> bool:
     return any(token in GUM_TOKENS for token in words)
+
+
+def _find_phrase_starts(words: List[str], phrase: tuple) -> List[int]:
+    if not phrase or len(phrase) > len(words):
+        return []
+    width = len(phrase)
+    return [
+        idx
+        for idx in range(len(words) - width + 1)
+        if tuple(words[idx:idx + width]) == phrase
+    ]
+
+
+def _nearby_tooth_before(words: List[str], start: int, window: int = 8) -> bool:
+    return any(token in TEETH_TOKENS for token in words[max(0, start - window):start])
+
+
+def _affirmative_local_tooth_state(words: List[str], terms: set) -> bool:
+    if not _has_teeth(words):
+        return False
+
+    for tooth_idx, token in enumerate(words):
+        if token not in TEETH_TOKENS:
+            continue
+
+        start = max(0, tooth_idx - 5)
+        end = min(len(words), tooth_idx + 6)
+        for idx in range(start, end):
+            if words[idx] not in terms:
+                continue
+            preceding = words[max(start, idx - 3):idx]
+            if any(value in NEGATORS for value in preceding):
+                continue
+            return True
+
+    return False
 
 
 def _extract_owner(words: List[str]) -> Dict[str, str]:
@@ -216,6 +290,40 @@ def _extract_restorative_state(words: List[str]) -> bool:
     return any(pattern in joined for pattern in RESTORATION_PATTERNS)
 
 
+def _extract_near_miss_loss(words: List[str]) -> bool:
+    for phrase in NEAR_MISS_FALLOUT_PATTERNS:
+        for start in _find_phrase_starts(words, phrase):
+            if _nearby_tooth_before(words, start):
+                return True
+    return False
+
+
+def _extract_hypothetical_loss(words: List[str]) -> bool:
+    for phrase in HYPOTHETICAL_FALLOUT_PATTERNS:
+        for start in _find_phrase_starts(words, phrase):
+            if _nearby_tooth_before(words, start):
+                return True
+    return False
+
+
+def _extract_replacement_growth(words: List[str]) -> bool:
+    joined = " ".join(words)
+    growth_indexes = [joined.find(pattern) for pattern in REPLACEMENT_GROWTH_PATTERNS if pattern in joined]
+    if not growth_indexes:
+        return False
+
+    fallout_indexes = [
+        joined.find(pattern)
+        for pattern in ("fell out", "came out")
+        if pattern in joined
+    ]
+    if not fallout_indexes:
+        return False
+
+    earliest_fallout = min(index for index in fallout_indexes if index >= 0)
+    return any(index > earliest_fallout for index in growth_indexes if index >= 0)
+
+
 def extract_teeth_context(dream: str) -> Dict[str, Any]:
     """Extract factual Teeth modifiers without assigning cultural meanings.
 
@@ -235,8 +343,14 @@ def extract_teeth_context(dream: str) -> Dict[str, Any]:
         "pain": _extract_pain(words),
         "positions": _extract_positions(words),
         "loose_or_wobbly": _extract_loose_state(words),
+        "broken_or_cracked": _affirmative_local_tooth_state(words, BREAKAGE_TERMS),
+        "rotten_or_decayed": _affirmative_local_tooth_state(words, DECAY_TERMS),
+        "gold_teeth": _affirmative_local_tooth_state(words, GOLD_TERMS),
+        "near_miss_loss": _extract_near_miss_loss(words),
+        "hypothetical_loss": _extract_hypothetical_loss(words),
         "gum_bleeding": gum_bleeding,
         "blood_on_tooth": _extract_blood_on_tooth(words),
         "bleeding_physical_cause": _extract_bleeding_physical_cause(words, gum_bleeding),
         "restorative_state": _extract_restorative_state(words),
+        "replacement_growth": _extract_replacement_growth(words),
     }

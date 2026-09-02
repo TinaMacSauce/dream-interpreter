@@ -1,6 +1,6 @@
 import unittest
 
-from app.teeth_doctrine import build_teeth_doctrine_context
+from app.teeth_doctrine import build_teeth_doctrine_context, build_teeth_narration_facts
 
 
 class TeethDoctrineContextTests(unittest.TestCase):
@@ -51,6 +51,31 @@ class TeethDoctrineContextTests(unittest.TestCase):
         self.assertNotIn("child", str(facts).lower())
         self.assertNotIn("younger", str(facts).lower())
         self.assertNotIn("blood", str(facts).lower())
+
+    def test_narration_one_painful_own_tooth_is_doctrine_safe(self):
+        facts = build_teeth_narration_facts("One of my front teeth fell out with pain.")
+        self.assertTrue(facts["active"])
+        self.assertIn("one fallen tooth", facts["lead"].lower())
+        self.assertIn("relative or close friend", " ".join(facts["details"]).lower())
+        self.assertIn("very close", " ".join(facts["details"]).lower())
+        self.assertNotIn("blood", str(facts).lower())
+        self.assertNotIn("front", facts["lead"].lower())
+
+    def test_narration_multiple_painless_own_teeth_maps_approved_distinction(self):
+        facts = build_teeth_narration_facts("Several of my lower teeth fell out without pain.")
+        self.assertTrue(facts["active"])
+        self.assertIn("multiple fallen teeth", facts["lead"].lower())
+        detail_text = " ".join(facts["details"]).lower()
+        self.assertIn("relative or close friend", detail_text)
+        self.assertIn("friend, acquaintance", detail_text)
+        self.assertNotIn("younger", str(facts).lower())
+        self.assertNotIn("child", str(facts).lower())
+
+    def test_narration_stays_inactive_for_negated_fallout(self):
+        facts = build_teeth_narration_facts("My tooth did not fall out with pain.")
+        self.assertFalse(facts["active"])
+        self.assertEqual(facts["lead"], "")
+        self.assertEqual(facts["details"], [])
 
 
 if __name__ == "__main__":

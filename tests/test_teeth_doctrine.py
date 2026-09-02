@@ -50,7 +50,9 @@ class TeethDoctrineContextTests(unittest.TestCase):
         self.assertIn("lower", facts["positions"])
         self.assertNotIn("child", str(facts).lower())
         self.assertNotIn("younger", str(facts).lower())
-        self.assertNotIn("blood", str(facts).lower())
+        self.assertFalse(facts["blood_on_fallen_tooth"])
+        self.assertEqual(facts["severity_modifier"], "")
+        self.assertNotIn("blood_relative", str(facts).lower())
 
     def test_narration_one_painful_own_tooth_is_doctrine_safe(self):
         facts = build_teeth_narration_facts("One of my front teeth fell out with pain.")

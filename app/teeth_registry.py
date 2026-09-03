@@ -141,8 +141,10 @@ def validate_registry_values(
 
         rules[key] = {
             "rule_id": row["rule_id"],
+            "implementation_key": key,
             "status": row["status"],
             "active": active,
+            "safety_boundary": row["safety_boundary"],
         }
 
     active_rule_ids = sorted(
@@ -172,7 +174,16 @@ def validate_registry_values(
 
 def _test_manifest_snapshot() -> Dict[str, Any]:
     rules = {
-        key: {"rule_id": value[0], "status": value[1], "active": value[2]}
+        key: {
+            "rule_id": value[0],
+            "implementation_key": key,
+            "status": value[1],
+            "active": value[2],
+            "safety_boundary": (
+                "Cultural guidance only; no guaranteed outcome, diagnosis, "
+                "culprit identification, or factual causation."
+            ),
+        }
         for key, value in EXPECTED_RULES.items()
     }
     return {

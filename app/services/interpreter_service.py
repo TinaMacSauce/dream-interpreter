@@ -57,7 +57,10 @@ from app.services.admob_ssv_service import (
     reward_is_available,
 )
 from app.services.narration_service import build_narration_result
-from app.teeth_integration import attach_teeth_narration_facts
+from app.teeth_integration import (
+    attach_teeth_narration_facts,
+    bind_teeth_output_contract,
+)
 from app.sheets import (
     doctrine_available,
     get_or_create_worksheet,
@@ -951,9 +954,18 @@ def run_interpretation():
                 doctrine_facts,
             )
 
+            doctrine_seal, bound_interpretation, bound_full_interpretation = (
+                bind_teeth_output_contract(
+                    doctrine_facts=doctrine_facts,
+                    seal=doctrine_seal,
+                    interpretation=built.get("interpretation", {}),
+                    full_interpretation=built.get("full_interpretation", ""),
+                )
+            )
+
             narration = build_narration_result(
                 doctrine_facts=doctrine_facts,
-                interpretation=built.get("interpretation", {}),
+                interpretation=bound_interpretation,
                 ai_enabled=Config.AI_NARRATION_ENABLED,
             )
 
@@ -987,8 +999,8 @@ def run_interpretation():
                     "contexts": _safe_names(contexts),
                     "endings": _safe_names(endings),
                 },
-                "interpretation": built["interpretation"],
-                "full_interpretation": built["full_interpretation"],
+                "interpretation": bound_interpretation,
+                "full_interpretation": bound_full_interpretation,
                 "receipt": _build_receipt(built.get("top_symbols", [])),
                 "doctrine_facts": doctrine_facts,
                 "narration": narration,

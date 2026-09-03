@@ -2,6 +2,7 @@ import re
 from typing import Any, Dict, List, Set
 
 from app.config import Config
+from app.teeth_integration import build_teeth_output_summary
 from app.utils import compress_phrase_list, human_join, normalize_text
 
 
@@ -387,6 +388,10 @@ def _fallback_from_interpretation(interpretation: Dict[str, str]) -> str:
 def build_doctrine_bound_summary(doctrine_facts: Dict[str, Any], interpretation: Dict[str, str]) -> str:
     facts = doctrine_facts or {}
     interp = interpretation or {}
+    teeth = facts.get("teeth_narration")
+    if isinstance(teeth, dict) and teeth.get("active") is True:
+        return build_teeth_output_summary(teeth)
+
     event_context = _get_event_context(facts)
     max_symbols = max(1, Config.NARRATION_MAX_SYMBOLS)
     lead_sentence = _build_event_lead_sentence(

@@ -12,6 +12,7 @@ from app.teeth_doctrine import (
     build_teeth_doctrine_context,
     build_teeth_narration_facts,
 )
+from scripts.verify_production_teeth_contract import validate as validate_production_contract
 
 
 CASE_DREAMS = dict(TEETH_QA_CASES)
@@ -34,6 +35,13 @@ class TeethQAReleaseGateTests(unittest.TestCase):
         self.assertEqual("multiple_people", multiple["warning_count"])
         self.assertIn("TEETH-FALLOUT-MULTIPLE", multiple["applied_rule_ids"])
         self.assertNotIn("TEETH-FALLOUT-ONE", multiple["applied_rule_ids"])
+
+        one_detail = " ".join(self.narration("quantity_one")["details"])
+        multiple_detail = " ".join(self.narration("quantity_multiple")["details"])
+        self.assertIn("this was your own tooth", one_detail.lower())
+        self.assertNotIn("these were your own teeth", one_detail.lower())
+        self.assertIn("these were your own teeth", multiple_detail.lower())
+        self.assertNotIn("this was your own tooth", multiple_detail.lower())
 
     def test_ownership_is_bound_to_tooth_not_nearby_actor(self):
         other = self.doctrine("ownership_other")
@@ -142,6 +150,28 @@ class TeethQAReleaseGateTests(unittest.TestCase):
         self.assertEqual(6, payload["doctrine_registry"]["unresolved_rule_count"])
         self.assertEqual("no-store", response.headers["Cache-Control"])
         self.assertNotIn("Set-Cookie", response.headers)
+        payload["doctrine_registry"]["loaded_from"] = "canonical_sheet"
+        evidence = validate_production_contract(payload, expected_commit="qa-route-sha")
+        self.assertTrue(evidence["verified"], evidence["errors"])
+
+    def test_production_verifier_rejects_singular_plural_narration_drift(self):
+        app = Flask(__name__)
+        app.register_blueprint(qa_bp)
+
+        with patch.dict(os.environ, {"RENDER_GIT_COMMIT": "qa-route-sha"}, clear=False):
+            payload = app.test_client().get("/qa/teeth-regression").get_json()
+
+        payload["doctrine_registry"]["loaded_from"] = "canonical_sheet"
+        one = next(item for item in payload["cases"] if item["case_id"] == "quantity_one")
+        one["narration"]["details"] = [
+            "Because these were your own teeth, the warning concerns the relationship circle."
+        ]
+        evidence = validate_production_contract(payload, expected_commit="qa-route-sha")
+        self.assertFalse(evidence["verified"])
+        self.assertTrue(
+            any("quantity_one: narration" in error for error in evidence["errors"]),
+            evidence["errors"],
+        )
 
     def test_qa_status_exposes_protected_non_billable_access_contract(self):
         app = Flask(__name__)

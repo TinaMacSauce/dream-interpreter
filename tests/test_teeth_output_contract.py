@@ -225,6 +225,8 @@ class TeethOutputContractTests(unittest.TestCase):
             ]
         ).lower()
         self.assertIn("one fallen tooth", combined)
+        self.assertIn("this was your own tooth", combined)
+        self.assertNotIn("these were your own teeth", combined)
         self.assertNotIn("as this may", combined)
         self.assertNotIn("low risk", combined)
         self.assertTrue(payload["qa_access"]["non_billable"])

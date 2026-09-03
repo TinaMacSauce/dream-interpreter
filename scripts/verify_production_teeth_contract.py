@@ -22,6 +22,8 @@ EXPECTED: Dict[str, Dict[str, Any]] = {
         "subject_scope": "relative_close_friend_or_relationship_circle",
         "include": ["TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE"],
         "exclude": ["TEETH-FALLOUT-MULTIPLE"],
+        "narration_contains": ["because this was your own tooth"],
+        "narration_excludes": ["because these were your own teeth"],
     },
     "quantity_multiple": {
         "owner": "dreamer",
@@ -30,6 +32,8 @@ EXPECTED: Dict[str, Dict[str, Any]] = {
         "subject_scope": "relative_close_friend_or_relationship_circle",
         "include": ["TEETH-FALLOUT-OWN", "TEETH-FALLOUT-MULTIPLE"],
         "exclude": ["TEETH-FALLOUT-ONE"],
+        "narration_contains": ["because these were your own teeth"],
+        "narration_excludes": ["because this was your own tooth"],
     },
     "ownership_other": {
         "owner": "other",
@@ -201,7 +205,7 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
         for field, value in expected.items():
             if field in {
                 "include", "exclude", "exact_rules", "unresolved_include",
-                "narration_contains",
+                "narration_contains", "narration_excludes",
             }:
                 continue
             if doctrine.get(field) != value:
@@ -250,6 +254,11 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
             if phrase not in narration_text:
                 case_errors.append(
                     f"{case_id}: narration must contain {phrase!r}"
+                )
+        for phrase in expected.get("narration_excludes", []):
+            if phrase in narration_text:
+                case_errors.append(
+                    f"{case_id}: narration must exclude {phrase!r}"
                 )
         for phrase in forbidden:
             if phrase in narration_text:

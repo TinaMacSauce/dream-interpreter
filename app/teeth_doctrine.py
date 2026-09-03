@@ -296,9 +296,22 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
             )
 
         if doctrine.get("relationship_scope") == "relative_or_close_friend":
-            details.append(
-                "Because these were your own teeth, the warning concerns a relative or close friend, or someone in your relationship circle."
-            )
+            if count == "one_person":
+                owner_detail = (
+                    "Because this was your own tooth, the warning concerns a relative or close friend, "
+                    "or someone in your relationship circle."
+                )
+            elif count == "multiple_people":
+                owner_detail = (
+                    "Because these were your own teeth, the warning concerns a relative or close friend, "
+                    "or someone in your relationship circle."
+                )
+            else:
+                owner_detail = (
+                    "Because the fallen tooth or teeth were your own, the warning concerns a relative or close friend, "
+                    "or someone in your relationship circle."
+                )
+            details.append(owner_detail)
         elif doctrine.get("subject_scope"):
             relationship = doctrine.get("owner_relationship")
             if relationship:

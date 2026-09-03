@@ -247,6 +247,7 @@ def create_app() -> Flask:
     from app.routes.home import home_bp
     from app.routes.interpreter import interpreter_bp
     from app.routes.journal import journal_bp
+    from app.routes.qa import qa_bp
     from app.routes.tracking import tracking_bp
 
     blueprints = [
@@ -255,6 +256,7 @@ def create_app() -> Flask:
         interpreter_bp,
         billing_bp,
         journal_bp,
+        qa_bp,
         admin_bp,
         tracking_bp,
         admob_bp,

@@ -46,3 +46,10 @@ jobs:
           --expected-commit "$EXPECTED_COMMIT"
           --attempts 40
           --delay 15
+      - name: Verify deployed Teeth QA contract
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit || github.event.workflow_run.head_sha || github.sha }}
+        run: >-
+          python scripts/verify_production_teeth_contract.py
+          --base-url https://interpreter.jamaicantruestories.com
+          --expected-commit "$EXPECTED_COMMIT"

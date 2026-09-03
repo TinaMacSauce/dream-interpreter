@@ -1,3 +1,4 @@
+import secrets
 from typing import Any, Dict, List, Optional
 
 import gspread
@@ -20,7 +21,7 @@ def require_admin() -> Optional[Response]:
         return make_response("Admin is not configured.", 403)
 
     provided = get_admin_key_from_request()
-    if not provided or provided != Config.ADMIN_KEY:
+    if not provided or not secrets.compare_digest(provided, Config.ADMIN_KEY):
         return make_response("Forbidden", 403)
 
     return None

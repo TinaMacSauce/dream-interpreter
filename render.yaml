@@ -98,6 +98,24 @@ services:
       - key: SHADOW_WINDOW_HOURS
         value: "72"
 
+      - key: QA_GRANTS_FILE
+        value: /data/qa_grants.json
+
+      - key: QA_EMAIL_DOMAIN
+        value: qa.jamaicantruestories.com
+
+      - key: QA_DEFAULT_USES
+        value: "25"
+
+      - key: QA_MAX_USES
+        value: "50"
+
+      - key: QA_DEFAULT_HOURS
+        value: "2"
+
+      - key: QA_MAX_HOURS
+        value: "6"
+
       - key: DREAM_PACK_USES
         value: "3"
 

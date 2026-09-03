@@ -1,9 +1,12 @@
 import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
 from flask import Flask
 
+from app.config import Config
 from app.routes.qa import TEETH_QA_CASES, qa_bp
 from app.teeth_doctrine import (
     build_teeth_doctrine_context,
@@ -137,6 +140,55 @@ class TeethQAReleaseGateTests(unittest.TestCase):
         self.assertEqual(23, payload["doctrine_registry"]["rule_count"])
         self.assertEqual(17, payload["doctrine_registry"]["active_rule_count"])
         self.assertEqual(6, payload["doctrine_registry"]["unresolved_rule_count"])
+        self.assertEqual("no-store", response.headers["Cache-Control"])
+        self.assertNotIn("Set-Cookie", response.headers)
+
+    def test_qa_status_exposes_protected_non_billable_access_contract(self):
+        app = Flask(__name__)
+        app.register_blueprint(qa_bp)
+
+        with TemporaryDirectory() as data_dir:
+            qa_grants = str(Path(data_dir) / "qa_grants.json")
+            with (
+                patch.dict(
+                    os.environ,
+                    {"RENDER_GIT_COMMIT": "qa-status-sha"},
+                    clear=False,
+                ),
+                patch.object(Config, "ADMIN_KEY", "configured-secret"),
+                patch.object(Config, "QA_GRANTS_FILE", qa_grants),
+            ):
+                response = app.test_client().get("/qa/status")
+
+        payload = response.get_json()
+        access = payload["qa_access"]
+        self.assertEqual(200, response.status_code)
+        self.assertTrue(payload["ready"])
+        self.assertEqual("qa-status-sha", payload["release"]["build_commit"])
+        self.assertTrue(access["configured"])
+        self.assertTrue(access["storage_ready"])
+        self.assertEqual("/qa/interpret", access["interpret_route"])
+        self.assertEqual("/interpret", access["application_route"])
+        self.assertTrue(access["non_billable"])
+        self.assertFalse(access["customer_credits_consumed"])
+        self.assertFalse(access["customer_entitlement_store_used"])
+        self.assertEqual("sha256_hash_only", access["token_storage"])
+        self.assertTrue(access["revocable"])
+        self.assertEqual("no-store", response.headers["Cache-Control"])
+
+    def test_qa_interpret_route_requires_an_active_token(self):
+        app = Flask(__name__)
+        app.register_blueprint(qa_bp)
+
+        response = app.test_client().post(
+            "/qa/interpret",
+            json={"dream": "My tooth fell out."},
+        )
+
+        payload = response.get_json()
+        self.assertEqual(403, response.status_code)
+        self.assertTrue(payload["blocked"])
+        self.assertEqual("missing_token", payload["reason"])
         self.assertEqual("no-store", response.headers["Cache-Control"])
         self.assertNotIn("Set-Cookie", response.headers)
 

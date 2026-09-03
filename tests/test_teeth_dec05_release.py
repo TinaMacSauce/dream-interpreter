@@ -96,6 +96,14 @@ class TeethDecisionFiveReleaseTests(unittest.TestCase):
             metadata = release_metadata()
 
         self.assertEqual("abc123", metadata["build_commit"])
+        self.assertEqual(
+            "https://github.com/TinaMacSauce/dream-interpreter/commit/abc123",
+            metadata["commit_url"],
+        )
+        self.assertEqual(
+            "https://interpreter.jamaicantruestories.com/version",
+            metadata["version_endpoint"],
+        )
         self.assertEqual("DEC-TEETH-2026-09-03-05", metadata["teeth_doctrine_version"])
         self.assertEqual("teeth-context-v2", metadata["teeth_context_version"])
 
@@ -122,6 +130,33 @@ class TeethDecisionFiveReleaseTests(unittest.TestCase):
         self.assertEqual("route-sha", release["build_commit"])
         self.assertEqual("teeth-registry-v1", release["release_id"])
         self.assertEqual("6134", release["teeth_registry_sheet_revision"])
+
+    def test_version_endpoint_exposes_accessible_commit_identity(self):
+        with TemporaryDirectory() as data_dir:
+            data_path = Path(data_dir)
+            with (
+                patch.dict(
+                    os.environ,
+                    {"RENDER_GIT_COMMIT": "version-route-sha"},
+                    clear=False,
+                ),
+                patch.multiple(
+                    Config,
+                    COUNTS_FILE=str(data_path / "usage_counts.json"),
+                    SUBSCRIBERS_FILE=str(data_path / "subscribers.json"),
+                    DREAM_PACKS_FILE=str(data_path / "dream_packs.json"),
+                    QA_GRANTS_FILE=str(data_path / "qa_grants.json"),
+                ),
+            ):
+                response = create_app().test_client().get("/version")
+
+        self.assertEqual(200, response.status_code)
+        payload = response.get_json()
+        self.assertEqual("version-route-sha", payload["release"]["build_commit"])
+        self.assertEqual(
+            "https://github.com/TinaMacSauce/dream-interpreter/commit/version-route-sha",
+            payload["release"]["commit_url"],
+        )
 
 
 if __name__ == "__main__":

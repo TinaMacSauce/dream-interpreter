@@ -184,3 +184,16 @@ def live():
         },
         status=200,
     )
+
+
+@health_bp.route("/version", methods=["GET"])
+def version():
+    """Expose an immutable, dependency-light deployment identity contract."""
+    return _build_response(
+        {
+            "service": "dream-interpreter",
+            "production_url": Config.FRONTEND_URL,
+            "release": release_metadata(),
+        },
+        status=200,
+    )

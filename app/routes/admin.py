@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import secrets
 import time
 from typing import Any, Dict
 
@@ -11,16 +10,12 @@ from flask import (
     request,
 )
 
-from app.access import (
-    get_dream_pack_status,
-    mark_dream_pack_purchase,
-    set_buyer_session,
-)
 from app.admin import (
     admin_upsert_to_sheet,
     require_admin,
 )
 from app.config import Config
+from app.qa_access import issue_qa_grant, revoke_qa_grant
 from app.utils import normalize_email, validate_email
 
 admin_bp = Blueprint("admin", __name__)
@@ -138,23 +133,15 @@ def admin_upsert():
 # TEMPORARY QA ACCESS
 # ============================================================
 
-QA_EMAIL_DOMAIN = "qa.jamaicantruestories.com"
-QA_DEFAULT_USES = 25
-QA_MAX_USES = 50
-QA_DEFAULT_HOURS = 2
-QA_MAX_HOURS = 6
-
-
 @admin_bp.route("/admin/qa-grant", methods=["POST", "OPTIONS"])
 def admin_qa_grant():
     """
-    Issue a short-lived, non-billable test allowance for live regression QA.
+    Issue an isolated, short-lived entitlement for live regression QA.
 
-    The grant reuses the existing Dream Pack access machinery so the normal
-    interpretation path, doctrine engine, narration, and post-success access
-    deduction are exercised exactly as they are for production requests.
+    QA grants use their own token store and never create, read, or consume a
+    customer subscription, Dream Pack, rewarded-ad grant, or anonymous try.
     Only reserved QA aliases are accepted, and every grant is bounded by both
-    use count and expiry time.
+    use count and expiry time. The returned bearer token is shown once.
     """
     if request.method == "OPTIONS":
         return make_response("", 204)
@@ -176,13 +163,13 @@ def admin_qa_grant():
             400,
         )
 
-    if not email.endswith(f"@{QA_EMAIL_DOMAIN}"):
+    if not email.endswith(f"@{Config.QA_EMAIL_DOMAIN}"):
         return _json_response(
             {
                 "ok": False,
                 "error": (
                     "QA grants are restricted to reserved "
-                    f"@{QA_EMAIL_DOMAIN} aliases."
+                    f"@{Config.QA_EMAIL_DOMAIN} aliases."
                 ),
             },
             400,
@@ -190,56 +177,75 @@ def admin_qa_grant():
 
     uses = _bounded_int(
         payload.get("uses"),
-        default=QA_DEFAULT_USES,
+        default=Config.QA_DEFAULT_USES,
         minimum=1,
-        maximum=QA_MAX_USES,
+        maximum=Config.QA_MAX_USES,
     )
     hours = _bounded_int(
         payload.get("hours"),
-        default=QA_DEFAULT_HOURS,
+        default=Config.QA_DEFAULT_HOURS,
         minimum=1,
-        maximum=QA_MAX_HOURS,
+        maximum=Config.QA_MAX_HOURS,
     )
 
-    grant_id = (
-        f"qa:{int(time.time())}:"
-        f"{secrets.token_hex(6)}"
-    )
-
-    granted = mark_dream_pack_purchase(
+    grant = issue_qa_grant(
         email=email,
         uses=uses,
         hours=hours,
-        stripe_checkout_session_id=grant_id,
     )
-
-    if not granted:
-        return _json_response(
-            {
-                "ok": False,
-                "error": "QA access grant could not be created.",
-            },
-            409,
-        )
-
-    # Bind the reserved QA alias to the current browser/session so the tester
-    # can immediately exercise the normal /interpret route without repeatedly
-    # supplying an email address.
-    set_buyer_session(email)
-    status = get_dream_pack_status(email)
 
     return _json_response(
         {
             "ok": True,
             "qa": True,
             "access_type": "temporary_qa",
-            "email": email,
-            "uses_remaining": status.get("uses_remaining", 0),
-            "expires_at": status.get("expires_at", ""),
+            "grant_id": grant["grant_id"],
+            "email": grant["email"],
+            "token": grant["token"],
+            "uses_remaining": grant["uses_remaining"],
+            "expires_at": grant["expires_at"],
+            "interpret_authentication": (
+                "Send the token through X-QA-Token or Authorization Bearer."
+            ),
+            "non_billable": True,
+            "customer_credits_consumed": False,
             "hard_limits": {
-                "max_uses_per_grant": QA_MAX_USES,
-                "max_hours_per_grant": QA_MAX_HOURS,
+                "max_uses_per_grant": Config.QA_MAX_USES,
+                "max_hours_per_grant": Config.QA_MAX_HOURS,
             },
+            "timestamp": int(time.time()),
+        }
+    )
+
+
+@admin_bp.route("/admin/qa-revoke", methods=["POST", "OPTIONS"])
+def admin_qa_revoke():
+    if request.method == "OPTIONS":
+        return make_response("", 204)
+
+    auth_fail = require_admin()
+    if auth_fail:
+        return _auth_failed()
+
+    grant_id = str(_safe_json().get("grant_id") or "").strip()
+    if not grant_id:
+        return _json_response(
+            {"ok": False, "error": "grant_id is required."},
+            400,
+        )
+
+    if not revoke_qa_grant(grant_id):
+        return _json_response(
+            {"ok": False, "error": "Grant was not found or already revoked."},
+            404,
+        )
+
+    return _json_response(
+        {
+            "ok": True,
+            "qa": True,
+            "grant_id": grant_id,
+            "revoked": True,
             "timestamp": int(time.time()),
         }
     )

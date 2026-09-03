@@ -500,6 +500,36 @@ class Config:
         or os.getenv("JTS_ADMIN", "").strip()
     )
 
+    QA_EMAIL_DOMAIN = os.getenv(
+        "QA_EMAIL_DOMAIN",
+        "qa.jamaicantruestories.com",
+    ).strip().lower()
+
+    QA_DEFAULT_USES = _env_int(
+        "QA_DEFAULT_USES",
+        25,
+    )
+
+    QA_MAX_USES = _env_int(
+        "QA_MAX_USES",
+        50,
+    )
+
+    QA_DEFAULT_HOURS = _env_int(
+        "QA_DEFAULT_HOURS",
+        2,
+    )
+
+    QA_MAX_HOURS = _env_int(
+        "QA_MAX_HOURS",
+        6,
+    )
+
+    QA_GRANTS_FILE = os.getenv(
+        "QA_GRANTS_FILE",
+        "/data/qa_grants.json",
+    ).strip()
+
     # ============================================================
     # Free Access / Hybrid Gate
     # ============================================================

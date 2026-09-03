@@ -41,6 +41,11 @@ from app.matching import (
     match_symbols_legacy,
 )
 from app.overrides import apply_override_rules
+from app.qa_access import (
+    consume_qa_grant,
+    get_qa_grant_status,
+    qa_token_from_request,
+)
 from app.release_info import release_metadata
 from app.rules import detect_rule_hits
 from app.seal import (
@@ -74,7 +79,10 @@ def _access_label(
     is_paid: bool,
     has_dream_pack: bool,
     has_rewarded_access: bool = False,
+    has_qa_access: bool = False,
 ) -> str:
+    if has_qa_access:
+        return "temporary_qa"
     if is_paid:
         return "paid"
     if has_dream_pack:
@@ -686,19 +694,39 @@ def run_interpretation():
     if validation_error:
         return jsonify({"error": validation_error}), 400
 
-    request_email = _get_request_email(data)
+    qa_token = qa_token_from_request()
+    qa_grant = get_qa_grant_status(qa_token) if qa_token else {}
+    has_qa_access = bool(qa_grant.get("active") is True)
 
-    if request_email:
-        persist_email_to_session(request_email)
+    if qa_token and not has_qa_access:
+        return jsonify(
+            {
+                "blocked": True,
+                "reason": qa_grant.get("reason") or "invalid_qa_token",
+                "message": "The QA access token is invalid or no longer active.",
+                "access": "blocked",
+            }
+        ), 403
 
-    session_email = get_session_email()
+    if has_qa_access:
+        session_email = str(qa_grant.get("email") or "")
+    else:
+        request_email = _get_request_email(data)
+
+        if request_email:
+            persist_email_to_session(request_email)
+
+        session_email = get_session_email()
 
     # =====================================================
     # ACCESS
     # =====================================================
 
     try:
-        access_ok, access_meta = has_active_access(session_email)
+        if has_qa_access:
+            access_ok, access_meta = False, {"type": "temporary_qa"}
+        else:
+            access_ok, access_meta = has_active_access(session_email)
 
         access_type = access_meta.get("type", "")
 
@@ -718,14 +746,21 @@ def run_interpretation():
         used_free_try = False
 
         free_uses_left = 0
-        dream_pack_status = get_dream_pack_status(session_email)
+        dream_pack_status = (
+            {"active": False, "uses_remaining": 0, "expires_at": ""}
+            if has_qa_access
+            else get_dream_pack_status(session_email)
+        )
 
         # Check access now, but do not deduct anything until the
         # interpretation has been created successfully.
         free_try_ip = ""
+        should_consume_qa_grant = has_qa_access
         should_consume_dream_pack = False
 
-        if not access_ok and not has_rewarded_access:
+        if has_qa_access:
+            pass
+        elif not access_ok and not has_rewarded_access:
             free_try_ip = get_client_ip()
             cookie_used = get_cookie_tries_used()
             ip_used = shadow_count(free_try_ip)
@@ -924,7 +959,12 @@ def run_interpretation():
 
             payload = {
                 "engine_mode": "doctrine_event",
-                "access": _access_label(is_paid, has_dream_pack, has_rewarded_access),
+                "access": _access_label(
+                    is_paid,
+                    has_dream_pack,
+                    has_rewarded_access,
+                    has_qa_access,
+                ),
                 "is_rewarded": bool(has_rewarded_access),
                 "is_paid": bool(is_paid),
                 "email": session_email,
@@ -976,7 +1016,12 @@ def run_interpretation():
 
             payload = {
                 "engine_mode": "legacy",
-                "access": _access_label(is_paid, has_dream_pack, has_rewarded_access),
+                "access": _access_label(
+                    is_paid,
+                    has_dream_pack,
+                    has_rewarded_access,
+                    has_qa_access,
+                ),
                 "is_rewarded": bool(has_rewarded_access),
                 "is_paid": bool(is_paid),
                 "email": session_email,
@@ -1029,10 +1074,23 @@ def run_interpretation():
     # RESPONSE
     # =====================================================
 
-    # Deduct free or Dream Pack access only after the interpretation
-    # payload has been created successfully.
+    # Deduct the relevant bounded access only after the interpretation payload
+    # has been created successfully. QA uses are isolated from every customer
+    # entitlement and anonymous-use counter.
     try:
-        if used_free_try:
+        if should_consume_qa_grant:
+            qa_grant = consume_qa_grant(qa_token)
+            if qa_grant.get("consumed") is not True:
+                raise RuntimeError("QA grant could not be consumed safely.")
+            payload["qa_access"] = {
+                "active": bool(qa_grant.get("active")),
+                "grant_id": qa_grant.get("grant_id") or "",
+                "uses_remaining": int(qa_grant.get("uses_remaining") or 0),
+                "expires_at": qa_grant.get("expires_at") or "",
+                "non_billable": True,
+                "customer_credits_consumed": False,
+            }
+        elif used_free_try:
             shadow_increment(free_try_ip)
             payload["free_uses_left"] = free_uses_left
         elif should_consume_dream_pack:

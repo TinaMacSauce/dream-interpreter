@@ -36,7 +36,7 @@ jobs:
           cache: pip
       - name: Install application dependencies
         run: pip install -r requirements.txt
-      - name: Verify exact Render release
+      - name: Verify exact Render release and access contract
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit || github.event.workflow_run.head_sha || github.sha }}
         run: >-

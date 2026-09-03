@@ -8,7 +8,6 @@ from app.qa_access import (
     qa_token_from_request,
 )
 from app.release_info import release_metadata
-from app.services.interpreter_service import run_interpretation
 from app.teeth_doctrine import (
     build_teeth_doctrine_context,
     build_teeth_narration_facts,
@@ -38,6 +37,8 @@ def qa_interpret():
         response.status_code = 403
         response.headers["Cache-Control"] = "no-store"
         return response
+    from app.services.interpreter_service import run_interpretation
+
     return run_interpretation()
 
 

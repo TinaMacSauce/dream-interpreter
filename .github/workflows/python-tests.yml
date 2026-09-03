@@ -21,5 +21,9 @@ jobs:
           APP_ENV: test
           FLASK_SECRET_KEY: ci-test-secret-key
           SPREADSHEET_ID: ci-test-spreadsheet
+          COUNTS_FILE: ${{ runner.temp }}/usage_counts.json
+          SUBSCRIBERS_FILE: ${{ runner.temp }}/subscribers.json
+          DREAM_PACKS_FILE: ${{ runner.temp }}/dream_packs.json
+          QA_GRANTS_FILE: ${{ runner.temp }}/qa_grants.json
           PYTHONPATH: ${{ github.workspace }}
         run: python -m unittest discover -s tests -p 'test_teeth_*.py' -v

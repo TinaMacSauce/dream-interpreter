@@ -269,15 +269,7 @@ def _extract_positions(words: List[str]) -> List[str]:
 
 
 def _extract_loose_state(words: List[str]) -> bool:
-    if not _has_teeth(words):
-        return False
-
-    joined = " ".join(words)
-    patterns = (
-        r"\b(?:loose|wobbly) (?:tooth|teeth|molar|molars)\b",
-        r"\b(?:tooth|teeth|molar|molars) (?:was|were|felt|became|is|are)? ?(?:loose|wobbly)\b",
-    )
-    return any(re.search(pattern, joined) for pattern in patterns)
+    return _affirmative_local_tooth_state(words, {"loose", "wobbly"})
 
 
 def _extract_gum_bleeding(words: List[str]) -> bool:
@@ -299,7 +291,7 @@ def _extract_blood_on_tooth(words: List[str]) -> bool:
 
     joined = " ".join(words)
     patterns = (
-        r"\bblood (?:was )?(?:on|covering) (?:my |the |a |one )?(?:tooth|teeth|molar|molars)\b",
+        r"\bblood (?:was )?(?:on|covering) (?:my |the |a |one )?(?:fallen )?(?:tooth|teeth|molar|molars)\b",
         r"\b(?:tooth|teeth|molar|molars) (?:was|were)? ?(?:covered in blood|bloody|bleeding)\b",
         r"\b(?:bloody) (?:tooth|teeth|molar|molars)\b",
     )

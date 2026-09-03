@@ -1,8 +1,11 @@
 import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
 from app import create_app
+from app.config import Config
 from app.release_info import release_metadata
 from app.teeth_context import extract_teeth_context
 from app.teeth_doctrine import build_teeth_doctrine_context, build_teeth_narration_facts
@@ -97,8 +100,22 @@ class TeethDecisionFiveReleaseTests(unittest.TestCase):
         self.assertEqual("teeth-context-v2", metadata["teeth_context_version"])
 
     def test_live_endpoint_exposes_release_contract(self):
-        with patch.dict(os.environ, {"RENDER_GIT_COMMIT": "route-sha"}, clear=False):
-            response = create_app().test_client().get("/live")
+        with TemporaryDirectory() as data_dir:
+            data_path = Path(data_dir)
+            with (
+                patch.dict(
+                    os.environ,
+                    {"RENDER_GIT_COMMIT": "route-sha"},
+                    clear=False,
+                ),
+                patch.multiple(
+                    Config,
+                    COUNTS_FILE=str(data_path / "usage_counts.json"),
+                    SUBSCRIBERS_FILE=str(data_path / "subscribers.json"),
+                    DREAM_PACKS_FILE=str(data_path / "dream_packs.json"),
+                ),
+            ):
+                response = create_app().test_client().get("/live")
 
         self.assertEqual(200, response.status_code)
         release = response.get_json()["release"]

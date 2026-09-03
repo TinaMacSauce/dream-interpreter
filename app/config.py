@@ -345,6 +345,11 @@ class Config:
         "OutputTemplates",
     ).strip()
 
+    SHEET_DOCTRINE_REGISTRY = os.getenv(
+        "SHEET_DOCTRINE_REGISTRY",
+        "DoctrineRegistry",
+    ).strip()
+
     SHEET_DREAM_JOURNAL = os.getenv(
         "SHEET_DREAM_JOURNAL",
         "DreamJournal",

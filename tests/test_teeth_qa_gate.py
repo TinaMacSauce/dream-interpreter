@@ -133,6 +133,10 @@ class TeethQAReleaseGateTests(unittest.TestCase):
         self.assertEqual("teeth-qa-contract-v1", payload["contract_version"])
         self.assertEqual(len(TEETH_QA_CASES), payload["case_count"])
         self.assertEqual("qa-route-sha", payload["release"]["build_commit"])
+        self.assertTrue(payload["doctrine_registry"]["verified"])
+        self.assertEqual(23, payload["doctrine_registry"]["rule_count"])
+        self.assertEqual(17, payload["doctrine_registry"]["active_rule_count"])
+        self.assertEqual(6, payload["doctrine_registry"]["unresolved_rule_count"])
         self.assertEqual("no-store", response.headers["Cache-Control"])
         self.assertNotIn("Set-Cookie", response.headers)
 

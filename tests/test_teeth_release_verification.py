@@ -10,10 +10,25 @@ from app.release_verification import (
 COMMIT = "3f37f1085421d04ede2420cae63c4abb63a2202d"
 RELEASE = {
     "build_commit": COMMIT,
-    "release_id": "teeth-dec05-v1",
+    "release_id": "teeth-registry-v1",
     "teeth_doctrine_version": "DEC-TEETH-2026-09-03-05",
     "teeth_context_version": "teeth-context-v2",
     "doctrine_registry": "Dream Symbol Dictionary!DoctrineRegistry",
+    "teeth_registry_sheet_revision": "6134",
+    "teeth_registry_content_revision": "fnv1a64:c51447de5d35bd59",
+    "teeth_registry_contract_version": "teeth-doctrine-registry-v1",
+}
+
+REGISTRY = {
+    "verified": True,
+    "contract_version": "teeth-doctrine-registry-v1",
+    "sheet_revision": "6134",
+    "content_revision": "fnv1a64:c51447de5d35bd59",
+    "doctrine_version": "DEC-TEETH-2026-09-03-05",
+    "rule_count": 23,
+    "active_rule_count": 17,
+    "unresolved_rule_count": 6,
+    "loaded_from": "canonical_sheet",
 }
 
 
@@ -58,6 +73,7 @@ class TeethProductionReleaseVerificationTests(unittest.TestCase):
             "status": "healthy",
             "spreadsheet_connected": True,
             "doctrine_sheets_available": True,
+            "teeth_registry": REGISTRY,
             "release": RELEASE,
         }
 
@@ -69,12 +85,27 @@ class TeethProductionReleaseVerificationTests(unittest.TestCase):
             "status": "degraded",
             "spreadsheet_connected": False,
             "doctrine_sheets_available": False,
+            "teeth_registry": REGISTRY,
             "release": RELEASE,
         }
 
         errors = validate_health_payload(payload, expected_commit=COMMIT)
 
         self.assertEqual(3, len(errors))
+
+    def test_health_payload_rejects_unverified_registry(self):
+        payload = {
+            "service": "dream-interpreter",
+            "status": "degraded",
+            "spreadsheet_connected": True,
+            "doctrine_sheets_available": True,
+            "teeth_registry": dict(REGISTRY, verified=False),
+            "release": RELEASE,
+        }
+
+        errors = validate_health_payload(payload, expected_commit=COMMIT)
+
+        self.assertIn("teeth_registry.verified", " ".join(errors))
 
 
 if __name__ == "__main__":

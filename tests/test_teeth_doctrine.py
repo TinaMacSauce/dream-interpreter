@@ -60,7 +60,8 @@ class TeethDoctrineContextTests(unittest.TestCase):
         self.assertIn("one fallen tooth", facts["lead"].lower())
         self.assertIn("relative or close friend", " ".join(facts["details"]).lower())
         self.assertIn("very close", " ".join(facts["details"]).lower())
-        self.assertNotIn("blood", str(facts).lower())
+        user_text = " ".join([facts["lead"], *facts["details"]]).lower()
+        self.assertNotIn("blood", user_text)
         self.assertNotIn("front", facts["lead"].lower())
 
     def test_narration_multiple_painless_own_teeth_maps_approved_distinction(self):

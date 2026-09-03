@@ -71,7 +71,8 @@ class TeethDecisionFiveReleaseTests(unittest.TestCase):
         self.assertTrue(facts["ending_precedence"])
         self.assertEqual("same_tooth_returned_firm", facts["terminal_ending"])
         self.assertEqual("unresolved", facts["outcome_resolution"])
-        self.assertEqual(["TEETH-END-TERMINAL"], facts["applied_rule_ids"])
+        self.assertEqual(["TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE"], facts["applied_rule_ids"])
+        self.assertEqual(["TEETH-END-TERMINAL"], facts["structural_rule_ids"])
         self.assertIn("no outcome is asserted", facts["lead"].lower())
         self.assertIn("TEETH-END-RETURNED-SAME", facts["unresolved_rule_ids"])
 

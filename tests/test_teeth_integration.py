@@ -33,7 +33,8 @@ class TeethIntegrationTests(unittest.TestCase):
         self.assertEqual(teeth["warning_count"], "one_person")
         self.assertEqual(teeth["relationship_scope"], "relative_or_close_friend")
         self.assertEqual(teeth["proximity"], "very_close_or_close_relative")
-        self.assertNotIn("blood", str(teeth).lower())
+        user_text = " ".join([teeth["lead"], *teeth["details"]]).lower()
+        self.assertNotIn("blood", user_text)
         self.assertNotIn("older", str(teeth).lower())
         self.assertNotIn("younger", str(teeth).lower())
 

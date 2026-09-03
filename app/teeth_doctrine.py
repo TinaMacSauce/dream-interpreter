@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 from app.release_info import DOCTRINE_REGISTRY, TEETH_DOCTRINE_VERSION
 from app.rules import _affirmative_teeth_fallout_token
 from app.teeth_context import TEETH_CONTEXT_VERSION, extract_teeth_context
+from app.teeth_provenance import build_teeth_rule_provenance
 from app.teeth_registry import (
     get_teeth_registry_snapshot,
     public_registry_metadata,
@@ -163,14 +164,27 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
         "pending_distinctions": pending,
         "unresolved_rule_ids": _unresolved_rule_ids(pending, registry),
         "applied_rule_ids": [],
+        "structural_rule_ids": [],
         "doctrine_version": registry.get("doctrine_version") or TEETH_DOCTRINE_VERSION,
         "context_version": TEETH_CONTEXT_VERSION,
         "doctrine_source": DOCTRINE_REGISTRY,
         "doctrine_registry": public_registry_metadata(registry),
     }
 
-    if not context.get("has_teeth_cluster") or not supported_subject:
+    def finalize() -> Dict[str, Any]:
+        result["rule_provenance"] = build_teeth_rule_provenance(
+            dream=dream,
+            context=context,
+            registry=registry,
+            applied_rule_ids=result["applied_rule_ids"],
+            unresolved_rule_ids=result["unresolved_rule_ids"],
+            active_warning=bool(result["active_warning"]),
+            warning_count=str(result["warning_count"] or ""),
+        )
         return result
+
+    if not context.get("has_teeth_cluster") or not supported_subject:
+        return finalize()
 
     applied: List[str] = []
 
@@ -180,9 +194,24 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
             applied.append(rule_id)
 
     if terminal_return:
-        apply_rule("terminal_ending")
+        # Keep the experienced loss provenance while sealing its warning at the
+        # genuine later ending. The approved terminal rule is structural; the
+        # returned-same-tooth consequence remains unresolved and inactive.
+        if context.get("owner") == "dreamer":
+            apply_rule("own_fallout")
+        elif context.get("owner") == "other":
+            apply_rule("other_fallout")
+        if context.get("count") == "one":
+            apply_rule("one_fallout")
+        elif context.get("count") == "multiple":
+            apply_rule("multiple_fallout")
+        result["structural_rule_ids"] = [
+            rule_id
+            for rule_id in [rule_id_for(registry, "terminal_ending")]
+            if rule_id
+        ]
         result["applied_rule_ids"] = applied
-        return result
+        return finalize()
 
     if actual_fallout:
         if context.get("owner") == "dreamer":
@@ -234,7 +263,7 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
         apply_rule("repetition")
 
     result["applied_rule_ids"] = applied
-    return result
+    return finalize()
 
 
 def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
@@ -249,6 +278,8 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
         "gold_teeth", "near_miss_loss", "hypothetical_loss", "replacement_growth",
         "repetition", "doctrine_version", "context_version", "doctrine_source",
         "doctrine_registry",
+        "rule_provenance",
+        "structural_rule_ids",
     )
     result: Dict[str, Any] = {
         "active": bool(doctrine.get("active_doctrine")),

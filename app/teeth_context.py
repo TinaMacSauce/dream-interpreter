@@ -381,7 +381,6 @@ def _extract_returned_same_tooth_firm(words: List[str]) -> bool:
     joined = " ".join(words)
     return_patterns = (
         r"\b(?:the )?same tooth (?:came|went|was put|was fitted|fit|fitted|returned) back\b",
-        r"\b(?:the )?same tooth returned firmly to (?:the )?same socket\b",
         r"\b(?:i )?put (?:the )?same tooth back\b",
         r"\b(?:the )?tooth (?:came|went|was put|was fitted|fit|fitted|returned) back into (?:the )?same socket\b",
         r"\b(?:the )?tooth (?:came|went|was put|was fitted|fit|fitted|returned) firmly back\b",

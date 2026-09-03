@@ -1,0 +1,45 @@
+name: Production release smoke
+
+on:
+  workflow_run:
+    workflows: ["Python tests"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Main commit Render must be serving
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-release-smoke
+  cancel-in-progress: true
+
+jobs:
+  verify-production:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify exact Render release
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit || github.event.workflow_run.head_sha || github.sha }}
+        run: >-
+          PYTHONPATH=.
+          python scripts/verify_production_release.py
+          --base-url https://interpreter.jamaicantruestories.com
+          --expected-commit "$EXPECTED_COMMIT"
+          --attempts 40
+          --delay 15

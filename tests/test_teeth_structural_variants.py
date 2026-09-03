@@ -5,15 +5,16 @@ from app.teeth_doctrine import build_teeth_doctrine_context, build_teeth_narrati
 
 
 class TeethStructuralVariantRegressionTests(unittest.TestCase):
-    def test_broken_tooth_is_structured_but_not_given_unapproved_warning(self):
+    def test_broken_tooth_uses_approved_sickness_warning(self):
         context = extract_teeth_context("My tooth was broken.")
         doctrine = build_teeth_doctrine_context("My tooth was broken.")
 
         self.assertTrue(context["broken_or_cracked"])
         self.assertEqual("broken_or_cracked", doctrine["event_status"])
-        self.assertFalse(doctrine["active_warning"])
-        self.assertEqual("", doctrine["warning_kind"])
-        self.assertIn("broken_or_cracked_teeth", doctrine["pending_distinctions"])
+        self.assertTrue(doctrine["active_warning"])
+        self.assertEqual("broken_sickness", doctrine["warning_kind"])
+        self.assertIn("TEETH-STATE-BROKEN", doctrine["applied_rule_ids"])
+        self.assertNotIn("broken_or_cracked_teeth", doctrine["pending_distinctions"])
 
     def test_negated_broken_tooth_does_not_create_pending_breakage(self):
         context = extract_teeth_context("My tooth was not broken.")
@@ -40,16 +41,18 @@ class TeethStructuralVariantRegressionTests(unittest.TestCase):
         self.assertFalse(doctrine["active_fallout"])
         self.assertFalse(doctrine["active_warning"])
 
-    def test_gold_teeth_without_loss_stays_pending_not_doctrine(self):
+    def test_gold_teeth_without_loss_uses_limited_favorable_modifier(self):
         doctrine = build_teeth_doctrine_context("I dreamed I had gold teeth and none fell out.")
         narration = build_teeth_narration_facts("I dreamed I had gold teeth and none fell out.")
 
         self.assertTrue(doctrine["gold_teeth"])
         self.assertEqual("gold_without_loss", doctrine["event_status"])
         self.assertFalse(doctrine["active_warning"])
-        self.assertIn("gold_teeth", doctrine["pending_distinctions"])
-        self.assertFalse(narration["active"])
-        self.assertEqual("", narration["lead"])
+        self.assertTrue(doctrine["active_doctrine"])
+        self.assertEqual("outwardly_favorable", doctrine["favorable_modifier"])
+        self.assertIn("TEETH-MOD-GOLD", doctrine["applied_rule_ids"])
+        self.assertTrue(narration["active"])
+        self.assertIn("favorable in outward appearance", narration["lead"])
 
     def test_rotten_tooth_loss_with_later_healthy_growth_preserves_both_events(self):
         dream = "My rotten tooth fell out and later a new healthy tooth grew back."
@@ -61,7 +64,7 @@ class TeethStructuralVariantRegressionTests(unittest.TestCase):
         self.assertEqual("one_person", doctrine["warning_count"])
         self.assertTrue(doctrine["rotten_or_decayed"])
         self.assertTrue(doctrine["replacement_growth"])
-        self.assertIn("rotten_or_decayed_teeth", doctrine["pending_distinctions"])
+        self.assertIn("tooth_state_with_fallout_precedence", doctrine["pending_distinctions"])
         self.assertIn("replacement_growth_meaning", doctrine["pending_distinctions"])
         self.assertTrue(narration["active"])
         self.assertTrue(narration["replacement_growth"])

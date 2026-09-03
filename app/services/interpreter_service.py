@@ -41,6 +41,7 @@ from app.matching import (
     match_symbols_legacy,
 )
 from app.overrides import apply_override_rules
+from app.release_info import release_metadata
 from app.rules import detect_rule_hits
 from app.seal import (
     compute_doctrine_seal,
@@ -1090,6 +1091,7 @@ def run_interpretation():
                 }
             ), 409
 
+    payload["release"] = release_metadata()
     response = make_response(jsonify(payload))
 
     if used_free_try:

@@ -12,6 +12,7 @@ from app.access import (
 )
 from app.billing import stripe_config_ok
 from app.config import Config
+from app.release_info import release_metadata
 from app.sheets import (
     doctrine_available,
     get_spreadsheet,
@@ -61,6 +62,7 @@ def _system_snapshot() -> Dict[str, Any]:
     return {
         "timestamp": int(time.time()),
         "service": "dream-interpreter",
+        "release": release_metadata(),
         "status": "healthy" if spreadsheet_ok else "degraded",
         "spreadsheet_connected": spreadsheet_ok,
         "spreadsheet_error": spreadsheet_error,
@@ -157,6 +159,7 @@ def ready():
             "ready": ready_state,
             "status": snapshot["status"],
             "service": snapshot["service"],
+            "release": snapshot["release"],
         },
         status=200 if ready_state else 503,
     )
@@ -172,6 +175,7 @@ def live():
         {
             "alive": True,
             "service": "dream-interpreter",
+            "release": release_metadata(),
         },
         status=200,
     )

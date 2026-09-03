@@ -11,6 +11,8 @@ RELATIONSHIP_TERMS = (
     "cousin", "niece", "nephew",
 )
 
+TEETH_CONTEXT_VERSION = "teeth-context-v2"
+
 MULTIPLE_WORDS = {
     "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
     "several", "many", "multiple", "all", "both",
@@ -31,6 +33,25 @@ BLEEDING_CAUSE_TERMS = {
 BREAKAGE_TERMS = {"broken", "cracked", "chipped"}
 DECAY_TERMS = {"rotten", "decayed", "decaying"}
 GOLD_TERMS = {"gold", "golden"}
+
+NON_HUMAN_TERMS = {
+    "animal", "bird", "cat", "cow", "dog", "goat", "horse", "lion",
+    "monkey", "pig", "snake", "tiger", "wolf",
+}
+
+ARTIFICIAL_TEETH_TERMS = {
+    "denture", "dentures", "implant", "implants", "prosthetic", "prosthetics",
+}
+
+REPETITION_PATTERNS = (
+    "again and again",
+    "over and over",
+    "kept happening",
+    "keeps happening",
+    "repeatedly",
+    "recurring dream",
+    "same dream again",
+)
 
 RESTORATION_PATTERNS = (
     "became firm again",
@@ -132,19 +153,25 @@ def _extract_owner(words: List[str]) -> Dict[str, str]:
         if token not in TEETH_TOKENS:
             continue
 
-        window = words[max(0, idx - 4):idx]
+        window_start = max(0, idx - 7)
+        window = words[window_start:idx]
 
-        # A named relationship must outrank a nearby first-person possessive.
-        # For example, "my sister's tooth" belongs to the sister, not the dreamer.
-        for relationship in RELATIONSHIP_TERMS:
-            if relationship in window:
-                return {"owner": "other", "owner_relationship": relationship}
+        # Use the closest ownership marker. This keeps "my sister's tooth" tied
+        # to the sister while correctly treating "my sister pulled my tooth" as
+        # the dreamer's tooth.
+        markers: List[tuple] = []
+        for offset, value in enumerate(window):
+            absolute = window_start + offset
+            if value in ("my", "mine"):
+                markers.append((absolute, "dreamer", ""))
+            elif value in ("his", "her", "their", "someone", "stranger"):
+                markers.append((absolute, "other", ""))
+            elif value in RELATIONSHIP_TERMS:
+                markers.append((absolute, "other", value))
 
-        if any(value in window for value in ("his", "her", "their", "someone", "stranger")):
-            return {"owner": "other", "owner_relationship": ""}
-
-        if any(value in window for value in ("my", "mine")):
-            return {"owner": "dreamer", "owner_relationship": ""}
+        if markers:
+            _position, owner, relationship = max(markers, key=lambda marker: marker[0])
+            return {"owner": owner, "owner_relationship": relationship}
 
     return {"owner": "unknown", "owner_relationship": ""}
 
@@ -324,6 +351,83 @@ def _extract_replacement_growth(words: List[str]) -> bool:
     return any(index > earliest_fallout for index in growth_indexes if index >= 0)
 
 
+def _extract_removal_actor(words: List[str]) -> str:
+    """Return the explicit actor for a completed tooth-removal event."""
+    if not _has_teeth(words):
+        return ""
+
+    joined = " ".join(words)
+    tooth = r"(?:tooth|teeth|molar|molars)"
+    self_patterns = (
+        rf"\bi (?:pulled|yanked|removed|extracted|took) (?:out )?(?:one of )?(?:my )?{tooth}(?: out)?\b",
+        rf"\bi (?:pulled|yanked) (?:one of )?(?:my )?{tooth} out\b",
+    )
+    if any(re.search(pattern, joined) for pattern in self_patterns):
+        return "self"
+
+    actor = (
+        r"(?:someone|somebody|stranger|dentist|doctor|man|woman|he|she|they|"
+        r"my (?:mother|father|mom|mum|dad|sister|brother|son|daughter|child|"
+        r"husband|wife|spouse|friend|aunt|uncle|grandmother|grandfather|"
+        r"grandma|grandpa|cousin|niece|nephew))"
+    )
+    external_patterns = (
+        rf"\b{actor} (?:pulled|yanked|removed|extracted|took) (?:out )?(?:one of )?(?:my )?{tooth}(?: out)?\b",
+        rf"\b(?:my )?{tooth} (?:was|were) (?:pulled|yanked|removed|extracted|taken) (?:out )?by {actor}\b",
+    )
+    if any(re.search(pattern, joined) for pattern in external_patterns):
+        return "other"
+
+    return ""
+
+
+def _extract_returned_same_tooth_firm(words: List[str]) -> bool:
+    """Detect a narrow, factual same-tooth terminal restoration state."""
+    if not _has_teeth(words):
+        return False
+
+    joined = " ".join(words)
+    return_patterns = (
+        r"\b(?:the )?same tooth (?:came|went|was put|was fitted|fit|fitted|returned) back\b",
+        r"\b(?:i )?put (?:the )?same tooth back\b",
+        r"\b(?:the )?tooth (?:came|went|was put|was fitted|fit|fitted|returned) back into (?:the )?same socket\b",
+        r"\b(?:the )?tooth (?:came|went|was put|was fitted|fit|fitted|returned) firmly back\b",
+    )
+    firm_patterns = (
+        r"\bfirm\b",
+        r"\bfirmly\b",
+        r"\bsecure\b",
+        r"\bsecurely\b",
+        r"\btight\b",
+        r"\bstayed in place\b",
+        r"\bfitted perfectly\b",
+    )
+    return (
+        any(re.search(pattern, joined) for pattern in return_patterns)
+        and any(re.search(pattern, joined) for pattern in firm_patterns)
+    )
+
+
+def _extract_repetition(words: List[str]) -> bool:
+    if not (_has_teeth(words) or _has_gums(words)):
+        return False
+    joined = " ".join(words)
+    return any(pattern in joined for pattern in REPETITION_PATTERNS)
+
+
+def _extract_subject_class(words: List[str]) -> str:
+    if any(token in ARTIFICIAL_TEETH_TERMS for token in words):
+        return "artificial"
+
+    for idx, token in enumerate(words):
+        if token not in TEETH_TOKENS:
+            continue
+        if any(value in NON_HUMAN_TERMS for value in words[max(0, idx - 5):idx]):
+            return "non_human"
+
+    return "human_or_unspecified"
+
+
 def extract_teeth_context(dream: str) -> Dict[str, Any]:
     """Extract factual Teeth modifiers without assigning cultural meanings.
 
@@ -333,6 +437,7 @@ def extract_teeth_context(dream: str) -> Dict[str, Any]:
     words = _tokens(dream)
     owner = _extract_owner(words)
     gum_bleeding = _extract_gum_bleeding(words)
+    removal_actor = _extract_removal_actor(words)
 
     return {
         "has_teeth": _has_teeth(words),
@@ -353,4 +458,10 @@ def extract_teeth_context(dream: str) -> Dict[str, Any]:
         "bleeding_physical_cause": _extract_bleeding_physical_cause(words, gum_bleeding),
         "restorative_state": _extract_restorative_state(words),
         "replacement_growth": _extract_replacement_growth(words),
+        "removal_actor": removal_actor,
+        "explicit_pull_removal": bool(removal_actor),
+        "returned_same_tooth_firm": _extract_returned_same_tooth_firm(words),
+        "repetition": _extract_repetition(words),
+        "subject_class": _extract_subject_class(words),
+        "context_version": TEETH_CONTEXT_VERSION,
     }

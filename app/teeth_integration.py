@@ -9,27 +9,7 @@ TEETH_ENDING_NAMES = {"tooth", "teeth", "molar", "molars"}
 
 def _live_teeth_lead(teeth: Dict[str, Any]) -> str:
     """Build a narration-first sentence from approved Teeth doctrine only."""
-    warning_kind = teeth.get("warning_kind", "")
-
-    if warning_kind == "loose_sickness":
-        lead = (
-            "This dream is read in Jamaican True Stories doctrine as a sickness warning, "
-            "not a medical diagnosis or a guaranteed illness."
-        )
-    elif warning_kind == "bleeding_gums":
-        lead = (
-            "This dream is read in Jamaican True Stories doctrine as a warning that a bad omen may be approaching, "
-            "not as a guaranteed outcome."
-        )
-    else:
-        warning_count = teeth.get("warning_count", "")
-        if warning_count == "one_person":
-            lead = "This dream is read in Jamaican True Stories doctrine as a warning concerning one person."
-        elif warning_count == "multiple_people":
-            lead = "This dream is read in Jamaican True Stories doctrine as a warning concerning multiple people."
-        else:
-            lead = "This dream is read in Jamaican True Stories doctrine as a serious teeth-loss warning."
-
+    lead = str(teeth.get("lead", "") or "").strip()
     details = [str(item).strip() for item in teeth.get("details", []) if str(item).strip()]
     return " ".join([lead, *details]).strip()
 
@@ -63,7 +43,7 @@ def attach_teeth_narration_facts(
 ) -> Dict[str, Any]:
     """Attach approved Teeth facts and bind them into the live narration path.
 
-    Active Teeth warnings outrank generic fallback narration. Fallout receives
+    Active Teeth doctrine outranks generic fallback narration. Fallout receives
     the stricter event sanitizer because count-specific loss doctrine has already
     been bound. Loose-tooth and standalone bleeding-gum warnings keep unrelated
     event context intact while replacing generic risk/state wording with the
@@ -81,11 +61,13 @@ def attach_teeth_narration_facts(
     output["relationship_meaning"] = ""
 
     warning_kind = teeth.get("warning_kind", "")
-    if warning_kind == "tooth_loss":
+    if warning_kind == "tooth_loss" or teeth.get("ending_precedence"):
         output["behavior_meaning"] = ""
         output["state_meaning"] = ""
         output["event_context"] = _sanitize_event_context_for_teeth(output.get("event_context"))
-    elif warning_kind in {"loose_sickness", "bleeding_gums"}:
+    elif warning_kind in {
+        "loose_sickness", "broken_sickness", "rotten_sickness", "bleeding_gums"
+    } or teeth.get("gold_teeth"):
         output["state_meaning"] = ""
 
     return output

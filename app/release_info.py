@@ -7,6 +7,9 @@ from app.teeth_context import TEETH_CONTEXT_VERSION
 
 
 RELEASE_ID = "teeth-registry-v1"
+REPOSITORY = "TinaMacSauce/dream-interpreter"
+REPOSITORY_URL = "https://github.com/TinaMacSauce/dream-interpreter"
+PRODUCTION_URL = "https://interpreter.jamaicantruestories.com"
 TEETH_DOCTRINE_VERSION = "DEC-TEETH-2026-09-03-05"
 DOCTRINE_REGISTRY = "Dream Symbol Dictionary!DoctrineRegistry"
 TEETH_REGISTRY_SHEET_REVISION = "6134"
@@ -24,6 +27,16 @@ def release_metadata() -> Dict[str, str]:
     return {
         "release_id": RELEASE_ID,
         "build_commit": build_commit,
+        "repository": REPOSITORY,
+        "repository_url": REPOSITORY_URL,
+        "commit_url": (
+            f"{REPOSITORY_URL}/commit/{build_commit}"
+            if build_commit != "unknown"
+            else ""
+        ),
+        "production_url": PRODUCTION_URL,
+        "version_endpoint": f"{PRODUCTION_URL}/version",
+        "qa_status_endpoint": f"{PRODUCTION_URL}/qa/status",
         "teeth_doctrine_version": TEETH_DOCTRINE_VERSION,
         "teeth_context_version": TEETH_CONTEXT_VERSION,
         "doctrine_registry": DOCTRINE_REGISTRY,

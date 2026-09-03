@@ -22,16 +22,33 @@ _VALIDATOR_MODULE = importlib.util.module_from_spec(_VALIDATOR_SPEC)
 _VALIDATOR_SPEC.loader.exec_module(_VALIDATOR_MODULE)
 validate_health_payload = _VALIDATOR_MODULE.validate_health_payload
 validate_live_payload = _VALIDATOR_MODULE.validate_live_payload
+validate_qa_status_payload = _VALIDATOR_MODULE.validate_qa_status_payload
+validate_version_payload = _VALIDATOR_MODULE.validate_version_payload
 
 
 Validator = Callable[..., List[str]]
 
 
-def fetch_json(url: str, timeout: float) -> Tuple[int, Dict[str, Any]]:
-    request = Request(url, headers={"Accept": "application/json"})
-    with urlopen(request, timeout=timeout) as response:
-        payload = json.loads(response.read().decode("utf-8"))
-        return response.status, payload
+def fetch_json(
+    url: str,
+    timeout: float,
+    *,
+    method: str = "GET",
+    body: Dict[str, Any] | None = None,
+) -> Tuple[int, Dict[str, Any]]:
+    data = None
+    headers = {"Accept": "application/json"}
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = Request(url, headers=headers, data=data, method=method)
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            return response.status, payload
+    except HTTPError as error:
+        payload = json.loads(error.read().decode("utf-8"))
+        return error.code, payload
 
 
 def probe(
@@ -48,6 +65,8 @@ def probe(
     checks: Tuple[Tuple[str, Validator], ...] = (
         ("live", validate_live_payload),
         ("health", validate_health_payload),
+        ("version", validate_version_payload),
+        ("qa/status", validate_qa_status_payload),
     )
     all_errors: List[str] = []
 
@@ -65,10 +84,58 @@ def probe(
                 "errors": errors,
             }
             all_errors.extend(f"{path}: {error}" for error in errors)
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except (URLError, TimeoutError, json.JSONDecodeError) as exc:
             error = f"{type(exc).__name__}: {exc}"
             evidence["probes"][path] = {"url": url, "errors": [error]}
             all_errors.append(f"{path}: {error}")
+
+    denial_checks = (
+        (
+            "qa/grant-denied",
+            "admin/qa-grant",
+            {"email": "release-probe@qa.jamaicantruestories.com"},
+            lambda payload: (
+                payload.get("ok") is False and payload.get("error") == "Forbidden"
+            ),
+        ),
+        (
+            "qa/interpret-denied",
+            "qa/interpret",
+            {"dream": "My tooth fell out."},
+            lambda payload: (
+                payload.get("blocked") is True
+                and payload.get("reason") == "missing_token"
+            ),
+        ),
+    )
+    for label, path, body, payload_is_denied in denial_checks:
+        denied_url = f"{base_url.rstrip('/')}/{path}"
+        try:
+            status, payload = fetch_json(
+                denied_url,
+                timeout,
+                method="POST",
+                body=body,
+            )
+            errors = []
+            if status != 403:
+                errors.append(f"HTTP status expected 403, got {status}")
+            if not payload_is_denied(payload):
+                errors.append("unauthenticated request was not rejected safely")
+            evidence["probes"][label] = {
+                "url": denied_url,
+                "http_status": status,
+                "payload": payload,
+                "errors": errors,
+            }
+            all_errors.extend(f"{label}: {error}" for error in errors)
+        except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+            error = f"{type(exc).__name__}: {exc}"
+            evidence["probes"][label] = {
+                "url": denied_url,
+                "errors": [error],
+            }
+            all_errors.append(f"{label}: {error}")
 
     evidence["errors"] = all_errors
     evidence["verified"] = not all_errors

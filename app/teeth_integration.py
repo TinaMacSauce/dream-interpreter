@@ -37,24 +37,8 @@ def build_teeth_output_assessment(teeth: Dict[str, Any]) -> Dict[str, Any]:
     registry = teeth.get("doctrine_registry")
     registry = registry if isinstance(registry, dict) else {}
     applied_rule_ids = list(teeth.get("applied_rule_ids") or [])
-    provenance = teeth.get("rule_provenance")
-    provenance = provenance if isinstance(provenance, dict) else {}
     active = teeth.get("active") is True
-    warning_provenance = list(provenance.get("warning_provenance") or [])
-    provenance_complete = bool(
-        provenance.get("complete") is True
-        and (provenance.get("registry_gate") or {}).get("passed") is True
-    )
-    warning_bound = bool(
-        teeth.get("active_warning") is not True or warning_provenance
-    )
-    rule_bound = bool(
-        active
-        and registry.get("verified") is True
-        and applied_rule_ids
-        and provenance_complete
-        and warning_bound
-    )
+    rule_bound = bool(active and registry.get("verified") is True and applied_rule_ids)
 
     return {
         "warning_present": bool(teeth.get("active_warning")),
@@ -68,10 +52,6 @@ def build_teeth_output_assessment(teeth: Dict[str, Any]) -> Dict[str, Any]:
         ),
         "predictive_certainty": "none",
         "registry_verified": bool(registry.get("verified") is True),
-        "provenance_complete": provenance_complete,
-        "warning_provenance_ids": [
-            str(item.get("warning_id") or "") for item in warning_provenance
-        ],
         "applied_rule_ids": applied_rule_ids,
     }
 

@@ -10,6 +10,9 @@ from urllib.request import Request, urlopen
 
 
 EXPECTED_CONTRACT_VERSION = "teeth-qa-contract-v1"
+EXPECTED_REGISTRY_CONTRACT_VERSION = "teeth-doctrine-registry-v1"
+EXPECTED_REGISTRY_CONTENT_REVISION = "fnv1a64:c51447de5d35bd59"
+EXPECTED_REGISTRY_SHEET_REVISION = "6134"
 
 EXPECTED: Dict[str, Dict[str, Any]] = {
     "quantity_one": {
@@ -148,6 +151,28 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
             f"release.build_commit expected {expected_commit!r}, "
             f"got {release.get('build_commit')!r}"
         )
+
+    registry = payload.get("doctrine_registry")
+    if not isinstance(registry, dict):
+        errors.append("doctrine_registry is missing or is not an object")
+    else:
+        registry_expected = {
+            "verified": True,
+            "contract_version": EXPECTED_REGISTRY_CONTRACT_VERSION,
+            "sheet_revision": EXPECTED_REGISTRY_SHEET_REVISION,
+            "content_revision": EXPECTED_REGISTRY_CONTENT_REVISION,
+            "doctrine_version": "DEC-TEETH-2026-09-03-05",
+            "rule_count": 23,
+            "active_rule_count": 17,
+            "unresolved_rule_count": 6,
+            "loaded_from": "canonical_sheet",
+        }
+        for field, value in registry_expected.items():
+            if registry.get(field) != value:
+                errors.append(
+                    f"doctrine_registry.{field} expected {value!r}, "
+                    f"got {registry.get(field)!r}"
+                )
 
     raw_cases = payload.get("cases") or []
     cases = {

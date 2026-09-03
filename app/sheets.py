@@ -11,6 +11,7 @@ from google.oauth2.service_account import Credentials
 from app.cache import (
     DOCTRINE_CACHE,
     LEGACY_CACHE,
+    TEETH_REGISTRY_CACHE,
 )
 from app.config import Config
 from app.utils import (
@@ -425,3 +426,6 @@ def clear_sheet_caches() -> None:
     DOCTRINE_CACHE["headers"] = {}
     DOCTRINE_CACHE["errors"] = {}
     DOCTRINE_CACHE["loaded_at"] = 0
+
+    TEETH_REGISTRY_CACHE["snapshot"] = None
+    TEETH_REGISTRY_CACHE["loaded_at"] = 0

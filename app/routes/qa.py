@@ -7,6 +7,7 @@ from app.teeth_doctrine import (
     build_teeth_doctrine_context,
     build_teeth_narration_facts,
 )
+from app.teeth_registry import get_teeth_registry_snapshot, public_registry_metadata
 
 
 qa_bp = Blueprint("qa", __name__)
@@ -45,6 +46,7 @@ TEETH_QA_CASES = (
 
 @qa_bp.get("/qa/teeth-regression")
 def teeth_regression_contract():
+    registry = get_teeth_registry_snapshot()
     cases = []
     for case_id, dream in TEETH_QA_CASES:
         cases.append(
@@ -60,6 +62,10 @@ def teeth_regression_contract():
         {
             "contract_version": TEETH_QA_CONTRACT_VERSION,
             "release": release_metadata(),
+            "doctrine_registry": public_registry_metadata(
+                registry,
+                include_rule_ids=True,
+            ),
             "case_count": len(cases),
             "cases": cases,
         }

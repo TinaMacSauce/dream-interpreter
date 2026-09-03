@@ -17,6 +17,7 @@ from app.sheets import (
     doctrine_available,
     get_spreadsheet,
 )
+from app.teeth_registry import get_teeth_registry_snapshot, public_registry_metadata
 
 health_bp = Blueprint("health", __name__)
 
@@ -46,6 +47,7 @@ def _system_snapshot() -> Dict[str, Any]:
     doctrine_ok = False
     journal_ok = False
     spreadsheet_error = ""
+    teeth_registry = get_teeth_registry_snapshot()
 
     try:
         get_spreadsheet()
@@ -63,10 +65,11 @@ def _system_snapshot() -> Dict[str, Any]:
         "timestamp": int(time.time()),
         "service": "dream-interpreter",
         "release": release_metadata(),
-        "status": "healthy" if spreadsheet_ok else "degraded",
+        "status": "healthy" if spreadsheet_ok and teeth_registry.get("verified") is True else "degraded",
         "spreadsheet_connected": spreadsheet_ok,
         "spreadsheet_error": spreadsheet_error,
         "doctrine_sheets_available": doctrine_ok,
+        "teeth_registry": public_registry_metadata(teeth_registry),
         "dream_journal_available": journal_ok,
         "stripe_configured": _safe_bool(stripe_config_ok()),
         "doctrine_mode_enabled": _safe_bool(Config.DOCTRINE_MODE),
@@ -79,6 +82,7 @@ def _system_snapshot() -> Dict[str, Any]:
         "spreadsheet_id_present": bool(Config.SPREADSHEET_ID),
         "allowed_origins": Config.ALLOWED_ORIGINS,
         "doctrine_sheet_names": Config.DOCTRINE_SHEET_NAMES,
+        "doctrine_registry_sheet": Config.SHEET_DOCTRINE_REGISTRY,
         "dream_journal_sheet": Config.SHEET_DREAM_JOURNAL,
         "template_index": Config.TEMPLATE_INDEX,
         "template_upgrade": Config.TEMPLATE_UPGRADE,
@@ -152,6 +156,7 @@ def ready():
     ready_state = (
         snapshot["spreadsheet_connected"]
         and snapshot["doctrine_mode_enabled"]
+        and snapshot["teeth_registry"].get("verified") is True
     )
 
     return _build_response(

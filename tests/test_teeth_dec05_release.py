@@ -120,7 +120,8 @@ class TeethDecisionFiveReleaseTests(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         release = response.get_json()["release"]
         self.assertEqual("route-sha", release["build_commit"])
-        self.assertEqual("teeth-dec05-v1", release["release_id"])
+        self.assertEqual("teeth-registry-v1", release["release_id"])
+        self.assertEqual("6134", release["teeth_registry_sheet_revision"])
 
 
 if __name__ == "__main__":

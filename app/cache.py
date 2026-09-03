@@ -13,6 +13,11 @@ DOCTRINE_CACHE: Dict[str, Any] = {
     "headers": {},
 }
 
+TEETH_REGISTRY_CACHE: Dict[str, Any] = {
+    "loaded_at": 0.0,
+    "snapshot": None,
+}
+
 
 def invalidate_all_caches() -> None:
     LEGACY_CACHE["loaded_at"] = 0.0
@@ -22,3 +27,6 @@ def invalidate_all_caches() -> None:
     DOCTRINE_CACHE["loaded_at"] = 0.0
     DOCTRINE_CACHE["sheets"] = {}
     DOCTRINE_CACHE["headers"] = {}
+
+    TEETH_REGISTRY_CACHE["loaded_at"] = 0.0
+    TEETH_REGISTRY_CACHE["snapshot"] = None

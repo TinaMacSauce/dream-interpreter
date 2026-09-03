@@ -3,35 +3,13 @@ from typing import Any, Dict, List
 from app.release_info import DOCTRINE_REGISTRY, TEETH_DOCTRINE_VERSION
 from app.rules import _affirmative_teeth_fallout_token
 from app.teeth_context import TEETH_CONTEXT_VERSION, extract_teeth_context
+from app.teeth_registry import (
+    get_teeth_registry_snapshot,
+    public_registry_metadata,
+    rule_id_for,
+    unresolved_rule_id_for,
+)
 from app.utils import normalize_text
-
-
-RULE_IDS = {
-    "own_fallout": "TEETH-FALLOUT-OWN",
-    "one_fallout": "TEETH-FALLOUT-ONE",
-    "multiple_fallout": "TEETH-FALLOUT-MULTIPLE",
-    "other_fallout": "TEETH-FALLOUT-OTHER",
-    "self_pull": "TEETH-PULL-SELF",
-    "external_pull": "TEETH-PULL-EXTERNAL",
-    "loose": "TEETH-STATE-LOOSE",
-    "broken": "TEETH-STATE-BROKEN",
-    "rotten": "TEETH-STATE-ROTTEN",
-    "pain": "TEETH-MOD-PAIN",
-    "painless": "TEETH-MOD-PAINLESS",
-    "gum_blood": "TEETH-OMEN-GUM-BLOOD",
-    "tooth_blood": "TEETH-MOD-BLOOD",
-    "gold": "TEETH-MOD-GOLD",
-    "repetition": "TEETH-MOD-REPETITION",
-    "terminal": "TEETH-END-TERMINAL",
-}
-
-UNRESOLVED_RULE_IDS = {
-    "returned_same_tooth": "TEETH-END-RETURNED-SAME",
-    "position": "TEETH-POSITION-MAP",
-    "state_fallout_combo": "TEETH-COMBO-STATE-FALLOUT",
-    "non_human": "TEETH-NONHUMAN",
-    "replacement_growth": "TEETH-REPLACEMENT-GROWTH",
-}
 
 
 def _event_status(context: Dict[str, Any], actual_fallout: bool) -> str:
@@ -81,23 +59,37 @@ def _pending_distinctions(
     return pending
 
 
-def _unresolved_rule_ids(pending: List[str]) -> List[str]:
+def _unresolved_rule_ids(
+    pending: List[str],
+    registry: Dict[str, Any],
+) -> List[str]:
     mapping = {
-        "replacement_growth_meaning": UNRESOLVED_RULE_IDS["replacement_growth"],
-        "returned_same_tooth_consequence": UNRESOLVED_RULE_IDS["returned_same_tooth"],
-        "tooth_position_mapping": UNRESOLVED_RULE_IDS["position"],
-        "tooth_state_with_fallout_precedence": UNRESOLVED_RULE_IDS["state_fallout_combo"],
-        "non_human_or_artificial_teeth": UNRESOLVED_RULE_IDS["non_human"],
+        "replacement_growth_meaning": "pending_replacement_growth",
+        "returned_same_tooth_consequence": "pending_returned_same_tooth",
+        "tooth_position_mapping": "pending_position_mapping",
+        "tooth_state_with_fallout_precedence": "pending_state_fallout_precedence",
+        "non_human_or_artificial_teeth": "pending_non_human",
     }
-    return [mapping[item] for item in pending if item in mapping]
+    return [
+        rule_id
+        for item in pending
+        if item in mapping
+        for rule_id in [unresolved_rule_id_for(registry, mapping[item])]
+        if rule_id
+    ]
 
 
 def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
     """Map approved Teeth facts into versioned, doctrine-safe output."""
+    registry = get_teeth_registry_snapshot()
+    registry_verified = registry.get("verified") is True
     context = extract_teeth_context(dream)
     phrase_fallout = bool(_affirmative_teeth_fallout_token(normalize_text(dream)))
     actual_fallout = phrase_fallout or bool(context.get("explicit_pull_removal"))
-    supported_subject = context.get("subject_class") == "human_or_unspecified"
+    supported_subject = bool(
+        registry_verified
+        and context.get("subject_class") == "human_or_unspecified"
+    )
     terminal_return = bool(actual_fallout and context.get("returned_same_tooth_firm"))
 
     loose_warning = bool(context.get("loose_or_wobbly")) and not actual_fallout
@@ -169,11 +161,12 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
         "replacement_growth": bool(context.get("replacement_growth")),
         "repetition": bool(context.get("repetition")),
         "pending_distinctions": pending,
-        "unresolved_rule_ids": _unresolved_rule_ids(pending),
+        "unresolved_rule_ids": _unresolved_rule_ids(pending, registry),
         "applied_rule_ids": [],
-        "doctrine_version": TEETH_DOCTRINE_VERSION,
+        "doctrine_version": registry.get("doctrine_version") or TEETH_DOCTRINE_VERSION,
         "context_version": TEETH_CONTEXT_VERSION,
         "doctrine_source": DOCTRINE_REGISTRY,
+        "doctrine_registry": public_registry_metadata(registry),
     }
 
     if not context.get("has_teeth_cluster") or not supported_subject:
@@ -181,8 +174,13 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
 
     applied: List[str] = []
 
+    def apply_rule(implementation_key: str) -> None:
+        rule_id = rule_id_for(registry, implementation_key)
+        if rule_id:
+            applied.append(rule_id)
+
     if terminal_return:
-        applied.append(RULE_IDS["terminal"])
+        apply_rule("terminal_ending")
         result["applied_rule_ids"] = applied
         return result
 
@@ -190,50 +188,50 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
         if context.get("owner") == "dreamer":
             result["relationship_scope"] = "relative_or_close_friend"
             result["subject_scope"] = "relative_close_friend_or_relationship_circle"
-            applied.append(RULE_IDS["own_fallout"])
+            apply_rule("own_fallout")
         elif context.get("owner") == "other":
             result["subject_scope"] = context.get("owner_relationship") or "other_person"
-            applied.append(RULE_IDS["other_fallout"])
+            apply_rule("other_fallout")
 
         if context.get("count") == "one":
             result["warning_count"] = "one_person"
-            applied.append(RULE_IDS["one_fallout"])
+            apply_rule("one_fallout")
         elif context.get("count") == "multiple":
             result["warning_count"] = "multiple_people"
-            applied.append(RULE_IDS["multiple_fallout"])
+            apply_rule("multiple_fallout")
 
         if context.get("pain") == "painful":
             result["proximity"] = "very_close_or_close_relative"
             result["emotional_intensity"] = "heightened"
-            applied.append(RULE_IDS["pain"])
+            apply_rule("pain")
         elif context.get("pain") == "painless":
             result["proximity"] = "friend_acquaintance_or_more_distant"
-            applied.append(RULE_IDS["painless"])
+            apply_rule("painless")
 
         if result["blood_on_fallen_tooth"]:
             result["severity_modifier"] = "increased"
-            applied.append(RULE_IDS["tooth_blood"])
+            apply_rule("tooth_blood")
 
         if context.get("removal_actor") == "self":
             result["pull_modifier"] = "self_participation"
-            applied.append(RULE_IDS["self_pull"])
+            apply_rule("self_pull")
         elif context.get("removal_actor") == "other":
             result["pull_modifier"] = "external_interference"
-            applied.append(RULE_IDS["external_pull"])
+            apply_rule("external_pull")
 
     elif warning_kind == "loose_sickness":
-        applied.append(RULE_IDS["loose"])
+        apply_rule("loose")
     elif warning_kind == "broken_sickness":
-        applied.append(RULE_IDS["broken"])
+        apply_rule("broken")
     elif warning_kind == "rotten_sickness":
-        applied.append(RULE_IDS["rotten"])
+        apply_rule("rotten")
     elif warning_kind == "bleeding_gums":
-        applied.append(RULE_IDS["gum_blood"])
+        apply_rule("gum_blood")
 
     if context.get("gold_teeth"):
-        applied.append(RULE_IDS["gold"])
+        apply_rule("gold")
     if context.get("repetition") and active_doctrine:
-        applied.append(RULE_IDS["repetition"])
+        apply_rule("repetition")
 
     result["applied_rule_ids"] = applied
     return result
@@ -250,6 +248,7 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
         "bleeding_physical_cause", "broken_or_cracked", "rotten_or_decayed",
         "gold_teeth", "near_miss_loss", "hypothetical_loss", "replacement_growth",
         "repetition", "doctrine_version", "context_version", "doctrine_source",
+        "doctrine_registry",
     )
     result: Dict[str, Any] = {
         "active": bool(doctrine.get("active_doctrine")),

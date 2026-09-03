@@ -2,16 +2,26 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
+from pathlib import Path
 import time
 from typing import Any, Callable, Dict, List, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from app.release_verification import (
-    validate_health_payload,
-    validate_live_payload,
+
+_VALIDATOR_PATH = Path(__file__).resolve().parents[1] / "app" / "release_verification.py"
+_VALIDATOR_SPEC = importlib.util.spec_from_file_location(
+    "jts_release_verification",
+    _VALIDATOR_PATH,
 )
+if _VALIDATOR_SPEC is None or _VALIDATOR_SPEC.loader is None:
+    raise RuntimeError(f"Could not load release validator from {_VALIDATOR_PATH}")
+_VALIDATOR_MODULE = importlib.util.module_from_spec(_VALIDATOR_SPEC)
+_VALIDATOR_SPEC.loader.exec_module(_VALIDATOR_MODULE)
+validate_health_payload = _VALIDATOR_MODULE.validate_health_payload
+validate_live_payload = _VALIDATOR_MODULE.validate_live_payload
 
 
 Validator = Callable[..., List[str]]

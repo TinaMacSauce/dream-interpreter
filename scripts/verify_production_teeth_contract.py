@@ -99,16 +99,23 @@ EXPECTED: Dict[str, Dict[str, Any]] = {
     "genuine_terminal_ending": {
         "ending_precedence": True,
         "terminal_ending": "same_tooth_returned_firm",
+        "restoration_attempted": False,
         "outcome_resolution": "unresolved",
         "exact_rules": ["TEETH-END-TERMINAL"],
         "unresolved_include": ["TEETH-END-RETURNED-SAME"],
         "narration_contains": ["no outcome is asserted"],
+        "narration_excludes": ["attempt to put the tooth back"],
     },
     "attempted_ending": {
         "ending_precedence": False,
         "terminal_ending": "",
+        "restoration_attempted": True,
         "include": ["TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE"],
         "exclude": ["TEETH-END-TERMINAL"],
+        "narration_contains": [
+            "attempt to put the tooth back",
+            "not treated as a completed restoration or terminal ending",
+        ],
     },
 }
 

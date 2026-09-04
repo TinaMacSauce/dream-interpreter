@@ -110,11 +110,29 @@ class TeethQAReleaseGateTests(unittest.TestCase):
         self.assertTrue(genuine["ending_precedence"])
         self.assertEqual("same_tooth_returned_firm", genuine["terminal_ending"])
         self.assertEqual("unresolved", genuine["outcome_resolution"])
+        self.assertFalse(genuine["restoration_attempted"])
         self.assertEqual(["TEETH-END-TERMINAL"], genuine["applied_rule_ids"])
         self.assertIn("TEETH-END-RETURNED-SAME", genuine["unresolved_rule_ids"])
         self.assertFalse(attempted["ending_precedence"])
         self.assertEqual("", attempted["terminal_ending"])
+        self.assertTrue(attempted["restoration_attempted"])
         self.assertIn("TEETH-FALLOUT-ONE", attempted["applied_rule_ids"])
+        self.assertNotIn("TEETH-END-TERMINAL", attempted["applied_rule_ids"])
+
+        genuine_text = " ".join(self.narration("genuine_terminal_ending")["details"]).lower()
+        attempted_text = " ".join(self.narration("attempted_ending")["details"]).lower()
+        self.assertNotIn("attempt to put the tooth back", genuine_text)
+        self.assertIn("attempt to put the tooth back", attempted_text)
+        self.assertIn("not treated as a completed restoration or terminal ending", attempted_text)
+
+    def test_negated_reinsertion_attempt_is_not_recorded(self):
+        doctrine = build_teeth_doctrine_context(
+            "My tooth fell out, but I never tried to put it back."
+        )
+
+        self.assertTrue(doctrine["active_warning"])
+        self.assertFalse(doctrine["restoration_attempted"])
+        self.assertFalse(doctrine["ending_precedence"])
 
     def test_all_active_narration_is_culture_scoped_and_fear_safe(self):
         forbidden = ("will die", "is going to die", "will get sick", "definitely")
@@ -170,6 +188,25 @@ class TeethQAReleaseGateTests(unittest.TestCase):
         self.assertFalse(evidence["verified"])
         self.assertTrue(
             any("quantity_one: narration" in error for error in evidence["errors"]),
+            evidence["errors"],
+        )
+
+    def test_production_verifier_rejects_missing_attempt_acknowledgement(self):
+        app = Flask(__name__)
+        app.register_blueprint(qa_bp)
+
+        with patch.dict(os.environ, {"RENDER_GIT_COMMIT": "qa-route-sha"}, clear=False):
+            payload = app.test_client().get("/qa/teeth-regression").get_json()
+
+        payload["doctrine_registry"]["loaded_from"] = "canonical_sheet"
+        attempted = next(
+            item for item in payload["cases"] if item["case_id"] == "attempted_ending"
+        )
+        attempted["narration"]["details"] = []
+        evidence = validate_production_contract(payload, expected_commit="qa-route-sha")
+        self.assertFalse(evidence["verified"])
+        self.assertTrue(
+            any("attempted_ending: narration" in error for error in evidence["errors"]),
             evidence["errors"],
         )
 

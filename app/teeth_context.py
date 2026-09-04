@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.utils import normalize_text
 
@@ -12,6 +12,7 @@ RELATIONSHIP_TERMS = (
 )
 
 TEETH_CONTEXT_VERSION = "teeth-context-v2"
+RESTORATION_ATTEMPT_CONTRACT_VERSION = "restoration-attempt-binding/1.0"
 
 MULTIPLE_WORDS = {
     "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
@@ -309,26 +310,210 @@ def _extract_restorative_state(words: List[str]) -> bool:
     return any(pattern in joined for pattern in RESTORATION_PATTERNS)
 
 
-def _extract_restoration_attempt(words: List[str]) -> bool:
-    """Preserve an attempted reinsertion without promoting it to an ending."""
-    if not _has_teeth(words):
-        return False
+_ATTEMPT_PATTERN = re.compile(
+    r"\b(?P<actor>i|she|he|they|my\s+(?:sister|brother|mother|father|mom|mum|dad|"
+    r"aunt|uncle|friend)|the\s+dentist|a\s+dentist)\s+"
+    r"(?:(?P<modal>would|might|could)\s+)?(?:(?P<negator>never|did\s+not|didn't)\s+)?"
+    r"(?P<attempt>try|tried|attempt|attempted)\s+"
+    r"(?:to\s+)?(?P<action>put|place|fit|push|insert|putting|placing|fitting|pushing|inserting)\s+"
+    r"(?P<target>(?:(?:the|my|her|his)\s+)?(?:same\s+)?(?:left\s+|right\s+)?"
+    r"(?:tooth|teeth)|it)\s+back\b",
+    re.IGNORECASE,
+)
 
-    joined = " ".join(words)
-    patterns = (
-        r"\b(?:i )?(?:tried|attempted) to (?:put|place|fit|push|insert) "
-        r"(?:(?:the|my) )?(?:same )?(?:tooth|teeth|it) back\b",
-        r"\b(?:i )?tried (?:putting|placing|fitting|pushing|inserting) "
-        r"(?:(?:the|my) )?(?:same )?(?:tooth|teeth|it) back\b",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, joined)
-        if not match:
+
+def _quoted_ranges(text: str) -> List[Tuple[int, int]]:
+    ranges: List[Tuple[int, int]] = []
+    opened: Optional[int] = None
+    for index, char in enumerate(text):
+        if char not in {'"', "“", "”"}:
             continue
-        prefix = joined[:match.start()].split()[-3:]
-        if not any(token in NEGATORS for token in prefix):
-            return True
-    return False
+        if opened is None:
+            opened = index
+        else:
+            ranges.append((opened, index + 1))
+            opened = None
+    return ranges
+
+
+def _relationship_actor(actor_text: str, prefix: str) -> str:
+    actor = normalize_text(actor_text)
+    if actor == "i":
+        return "dreamer"
+    for relationship in RELATIONSHIP_TERMS:
+        if relationship in actor:
+            return relationship
+    if actor in {"she", "he", "they"}:
+        normalized_prefix = normalize_text(prefix)
+        candidates = [
+            (normalized_prefix.rfind(relationship), relationship)
+            for relationship in RELATIONSHIP_TERMS
+            if relationship in normalized_prefix
+        ]
+        if candidates:
+            return max(candidates)[1]
+    if "dentist" in actor:
+        return "dentist"
+    return "ambiguous"
+
+
+def _attempt_owner_and_target(
+    *,
+    dream: str,
+    match: re.Match,
+    actor: str,
+    channel: str,
+) -> Tuple[str, str, str]:
+    prefix = normalize_text(dream[:match.start()])
+    target_text = normalize_text(match.group("target"))
+
+    if channel == "quoted_speech" and target_text == "it":
+        return "ambiguous", "ambiguous", "low"
+
+    if "her tooth" in target_text and actor not in {"dreamer", "ambiguous"}:
+        owner = actor
+    elif "his tooth" in target_text and actor not in {"dreamer", "ambiguous"}:
+        owner = actor
+    elif re.search(r"my tooth and my (?:sister|brother|mother|father|aunt|uncle|friend) s tooth fell out", prefix):
+        return "ambiguous", "ambiguous", "low"
+    else:
+        dreamer_loss = max(prefix.rfind("my tooth fell out"), prefix.rfind("my left tooth fell out"))
+        other_losses = [
+            (prefix.rfind(f"my {relationship} s tooth fell out"), relationship)
+            for relationship in RELATIONSHIP_TERMS
+        ]
+        other_index, other_owner = max(other_losses)
+        if other_index > dreamer_loss:
+            owner = other_owner
+        elif dreamer_loss >= 0:
+            owner = "dreamer"
+        elif actor not in {"ambiguous", "dentist"}:
+            owner = actor
+        else:
+            return "ambiguous", "ambiguous", "low"
+
+    if "left" in target_text or "left tooth" in prefix[-80:]:
+        target = "left-tooth-1"
+    elif owner == "dreamer":
+        normalized_dream = normalize_text(dream)
+        multiple_owners = bool(
+            re.search(
+                r"my (?:sister|brother|mother|father|aunt|uncle|friend) s tooth fell out",
+                normalized_dream,
+            )
+        )
+        target = "dreamer-tooth-1" if multiple_owners else "tooth-1"
+    else:
+        target = f"{owner}-tooth-1"
+    return owner, target, "high"
+
+
+def _extract_restoration_attempt_records(dream: str) -> List[Dict[str, Any]]:
+    """Return every reinsertion attempt as a scoped structural event record."""
+    quote_ranges = _quoted_ranges(dream)
+    records: List[Dict[str, Any]] = []
+
+    for index, match in enumerate(_ATTEMPT_PATTERN.finditer(dream), start=1):
+        prefix = dream[:match.start()]
+        normalized_prefix = normalize_text(prefix)
+        matched_text = match.group(0)
+        in_quote = any(start <= match.start() < end for start, end in quote_ranges)
+        actor = _relationship_actor(match.group("actor"), prefix)
+        if in_quote:
+            speaker_candidates = [
+                (normalized_prefix.rfind(relationship), relationship)
+                for relationship in RELATIONSHIP_TERMS
+                if relationship in normalized_prefix
+            ]
+            if speaker_candidates:
+                actor = max(speaker_candidates)[1]
+        reported = bool(re.search(r"\b(?:told me(?: that)?|said that)\b", normalized_prefix[-120:]))
+        waking = bool(re.search(r"\bafter (?:i )?woke up\b|\bafter waking\b", normalized_prefix[-160:]))
+        imagined = "imagination" in normalize_text(dream[match.start():match.end() + 80])
+        conditional = bool(match.group("modal")) or bool(
+            re.search(r"(?:^|[.!?])\s*if\b", normalize_text(prefix)[-180:])
+        )
+        negated = bool(match.group("negator"))
+
+        if in_quote:
+            channel = "quoted_speech"
+            phase = "dream_speech_or_thought"
+            modality = "quoted"
+            actuality = "reported_nonactual"
+        elif reported:
+            channel = "reported_speech"
+            phase = "dream_speech_or_thought"
+            modality = "reported"
+            actuality = "reported_nonactual"
+        elif waking:
+            channel = "narrative"
+            phase = "waking"
+            modality = "imagined" if imagined else "waking_action"
+            actuality = "nonactual"
+        elif conditional:
+            channel = "thought_or_hypothetical"
+            phase = "dream_speech_or_thought"
+            modality = "conditional_hypothetical"
+            actuality = "nonactual"
+        elif negated:
+            channel = "narrative"
+            phase = "dream"
+            modality = "negated"
+            actuality = "not_actual"
+        else:
+            channel = "narrative"
+            phase = "dream"
+            modality = "experienced"
+            actuality = "actual_attempt"
+
+        owner, target, confidence = _attempt_owner_and_target(
+            dream=dream,
+            match=match,
+            actor=actor,
+            channel=channel,
+        )
+        reasons: List[str] = []
+        if negated:
+            reasons.append("negated_attempt")
+        if actuality != "actual_attempt":
+            reasons.append("nonactual_or_out_of_dream")
+        if channel != "narrative":
+            reasons.append("ineligible_channel")
+        if phase != "dream":
+            reasons.append("ineligible_phase")
+        if owner == "ambiguous" or target == "ambiguous":
+            reasons.append("ambiguous_binding")
+        eligible = not reasons
+        chain = None if channel in {"quoted_speech", "reported_speech"} or conditional else (
+            f"chain-{target}" if target != "ambiguous" else None
+        )
+
+        records.append(
+            {
+                "attempt_id": f"attempt-{index}",
+                "action": "manual_reinsertion_attempt",
+                "actor_id_or_ambiguous": actor,
+                "target_tooth_ids_or_ambiguous": [target] if target != "ambiguous" else "ambiguous",
+                "owner_id_or_ambiguous": owner,
+                "event_chain_id_or_null": chain,
+                "scene_id": "scene-1",
+                "phase": phase,
+                "channel": channel,
+                "polarity": "negated" if negated else "affirmed",
+                "modality": modality,
+                "actuality": actuality,
+                "completion": "attempted_only",
+                "source_span": {
+                    "start": match.start(),
+                    "end": match.end(),
+                    "text": matched_text,
+                },
+                "binding_confidence": confidence,
+                "narration_eligibility": eligible,
+                "ineligibility_reasons": reasons,
+            }
+        )
+    return records
 
 
 def _extract_near_miss_loss(words: List[str]) -> bool:
@@ -340,6 +525,9 @@ def _extract_near_miss_loss(words: List[str]) -> bool:
 
 
 def _extract_hypothetical_loss(words: List[str]) -> bool:
+    joined = " ".join(words)
+    if re.search(r"(?:^|\b)if\b[^.?!]{0,80}\b(?:tooth|teeth|molar|molars)\b[^.?!]{0,30}\b(?:fell|came) out\b", joined):
+        return True
     for phrase in HYPOTHETICAL_FALLOUT_PATTERNS:
         for start in _find_phrase_starts(words, phrase):
             if _nearby_tooth_before(words, start):
@@ -452,6 +640,12 @@ def extract_teeth_context(dream: str) -> Dict[str, Any]:
     owner = _extract_owner(words)
     gum_bleeding = _extract_gum_bleeding(words)
     removal_actor = _extract_removal_actor(words)
+    attempt_records = _extract_restoration_attempt_records(dream)
+    eligible_attempt_ids = [
+        record["attempt_id"]
+        for record in attempt_records
+        if record["narration_eligibility"]
+    ]
 
     return {
         "has_teeth": _has_teeth(words),
@@ -471,7 +665,10 @@ def extract_teeth_context(dream: str) -> Dict[str, Any]:
         "blood_on_tooth": _extract_blood_on_tooth(words),
         "bleeding_physical_cause": _extract_bleeding_physical_cause(words, gum_bleeding),
         "restorative_state": _extract_restorative_state(words),
-        "restoration_attempted": _extract_restoration_attempt(words),
+        "restoration_attempted": bool(eligible_attempt_ids),
+        "restoration_attempt_contract_version": RESTORATION_ATTEMPT_CONTRACT_VERSION,
+        "restoration_attempt_records": attempt_records,
+        "restoration_attempt_contributing_ids": eligible_attempt_ids,
         "replacement_growth": _extract_replacement_growth(words),
         "removal_actor": removal_actor,
         "explicit_pull_removal": bool(removal_actor),

@@ -159,7 +159,7 @@ class TeethQAReleaseGateTests(unittest.TestCase):
 
         payload = response.get_json()
         self.assertEqual(200, response.status_code)
-        self.assertEqual("teeth-qa-contract-v1", payload["contract_version"])
+        self.assertEqual("teeth-qa-contract-v2", payload["contract_version"])
         self.assertEqual(len(TEETH_QA_CASES), payload["case_count"])
         self.assertEqual("qa-route-sha", payload["release"]["build_commit"])
         self.assertTrue(payload["doctrine_registry"]["verified"])

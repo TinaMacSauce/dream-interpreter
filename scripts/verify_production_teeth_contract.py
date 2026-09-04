@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-EXPECTED_CONTRACT_VERSION = "teeth-qa-contract-v1"
+EXPECTED_CONTRACT_VERSION = "teeth-qa-contract-v2"
 EXPECTED_REGISTRY_CONTRACT_VERSION = "teeth-doctrine-registry-v1"
 EXPECTED_REGISTRY_CONTENT_REVISION = "fnv1a64:c51447de5d35bd59"
 EXPECTED_REGISTRY_SHEET_REVISION = "6134"
@@ -119,6 +119,93 @@ EXPECTED: Dict[str, Dict[str, Any]] = {
     },
 }
 
+ATTEMPT_BINDING_EXPECTED: Dict[str, Dict[str, Any]] = {
+    "CTX-001-ATTEMPT-BIND-DREAMER-001": {
+        "actor_id_or_ambiguous": "dreamer",
+        "owner_id_or_ambiguous": "dreamer",
+        "target_tooth_ids_or_ambiguous": ["tooth-1"],
+        "phase": "dream",
+        "channel": "narrative",
+        "actuality": "actual_attempt",
+        "narration_eligibility": True,
+    },
+    "CTX-001-ATTEMPT-BIND-NEGATED-001": {
+        "polarity": "negated",
+        "actuality": "not_actual",
+        "narration_eligibility": False,
+    },
+    "CTX-001-ATTEMPT-BIND-HYPOTHETICAL-001": {
+        "phase": "dream_speech_or_thought",
+        "channel": "thought_or_hypothetical",
+        "modality": "conditional_hypothetical",
+        "actuality": "nonactual",
+        "narration_eligibility": False,
+    },
+    "CTX-001-ATTEMPT-BIND-QUOTED-001": {
+        "actor_id_or_ambiguous": "aunt",
+        "owner_id_or_ambiguous": "ambiguous",
+        "target_tooth_ids_or_ambiguous": "ambiguous",
+        "channel": "quoted_speech",
+        "actuality": "reported_nonactual",
+        "narration_eligibility": False,
+    },
+    "CTX-001-ATTEMPT-BIND-WAKING-001": {
+        "phase": "waking",
+        "modality": "imagined",
+        "actuality": "nonactual",
+        "narration_eligibility": False,
+    },
+    "CTX-001-ATTEMPT-BIND-OTHER-OWNER-001": {
+        "actor_id_or_ambiguous": "sister",
+        "owner_id_or_ambiguous": "sister",
+        "target_tooth_ids_or_ambiguous": ["sister-tooth-1"],
+        "actuality": "actual_attempt",
+        "narration_eligibility": True,
+    },
+    "CTX-001-ATTEMPT-BIND-EXTERNAL-ACTOR-001": {
+        "actor_id_or_ambiguous": "sister",
+        "owner_id_or_ambiguous": "dreamer",
+        "target_tooth_ids_or_ambiguous": ["tooth-1"],
+        "actuality": "actual_attempt",
+        "narration_eligibility": True,
+    },
+    "CTX-001-ATTEMPT-BIND-MULTI-OWNER-001": {
+        "actor_id_or_ambiguous": "dreamer",
+        "owner_id_or_ambiguous": "dreamer",
+        "target_tooth_ids_or_ambiguous": ["dreamer-tooth-1"],
+        "actuality": "actual_attempt",
+        "narration_eligibility": True,
+    },
+    "CTX-001-ATTEMPT-BIND-AMBIGUOUS-TARGET-001": {
+        "owner_id_or_ambiguous": "ambiguous",
+        "target_tooth_ids_or_ambiguous": "ambiguous",
+        "binding_confidence": "low",
+        "narration_eligibility": False,
+    },
+    "CTX-001-ATTEMPT-BIND-THEN-FIRM-001": {
+        "actuality": "actual_attempt",
+        "completion": "attempted_only",
+        "narration_eligibility": True,
+    },
+    "CTX-001-ATTEMPT-BIND-THEN-SECOND-LOSS-001": {
+        "target_tooth_ids_or_ambiguous": ["left-tooth-1"],
+        "actuality": "actual_attempt",
+        "narration_eligibility": True,
+    },
+    "CTX-001-ATTEMPT-BIND-REPORTED-001": {
+        "actor_id_or_ambiguous": "sister",
+        "owner_id_or_ambiguous": "sister",
+        "target_tooth_ids_or_ambiguous": ["sister-tooth-1"],
+        "event_chain_id_or_null": None,
+        "channel": "reported_speech",
+        "actuality": "reported_nonactual",
+        "narration_eligibility": False,
+    },
+}
+
+for _case_id, _record in ATTEMPT_BINDING_EXPECTED.items():
+    EXPECTED[_case_id] = {"attempt_record": _record}
+
 
 def fetch_json(url: str, timeout: float) -> Tuple[int, Dict[str, Any]]:
     request = Request(url, headers={"Accept": "application/json"})
@@ -212,7 +299,7 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
         for field, value in expected.items():
             if field in {
                 "include", "exclude", "exact_rules", "unresolved_include",
-                "narration_contains", "narration_excludes",
+                "narration_contains", "narration_excludes", "attempt_record",
             }:
                 continue
             if doctrine.get(field) != value:
@@ -220,6 +307,44 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
                     f"{case_id}: doctrine.{field} expected {value!r}, "
                     f"got {doctrine.get(field)!r}"
                 )
+
+        expected_attempt = expected.get("attempt_record")
+        if expected_attempt is not None:
+            if doctrine.get("restoration_attempt_contract_version") != "restoration-attempt-binding/1.0":
+                case_errors.append(
+                    f"{case_id}: restoration attempt contract version is missing or stale"
+                )
+            records = doctrine.get("restoration_attempt_records") or []
+            if len(records) != 1:
+                case_errors.append(
+                    f"{case_id}: expected exactly one restoration attempt record, got {len(records)}"
+                )
+            else:
+                record = records[0]
+                for field, value in expected_attempt.items():
+                    if record.get(field) != value:
+                        case_errors.append(
+                            f"{case_id}: attempt.{field} expected {value!r}, "
+                            f"got {record.get(field)!r}"
+                        )
+                required = {
+                    "attempt_id", "action", "actor_id_or_ambiguous",
+                    "target_tooth_ids_or_ambiguous", "owner_id_or_ambiguous",
+                    "event_chain_id_or_null", "scene_id", "phase", "channel",
+                    "polarity", "modality", "actuality", "completion",
+                    "source_span", "binding_confidence", "narration_eligibility",
+                    "ineligibility_reasons",
+                }
+                if set(record) != required:
+                    case_errors.append(
+                        f"{case_id}: attempt record fields do not match the v1 contract"
+                    )
+                span = record.get("source_span") or {}
+                dream = item.get("dream", "")
+                if dream[span.get("start", 0):span.get("end", 0)] != span.get("text"):
+                    case_errors.append(
+                        f"{case_id}: attempt source span does not round-trip to dream text"
+                    )
 
         case_errors.extend(
             _check_members(

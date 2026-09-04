@@ -85,7 +85,10 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
     registry_verified = registry.get("verified") is True
     context = extract_teeth_context(dream)
     phrase_fallout = bool(_affirmative_teeth_fallout_token(normalize_text(dream)))
-    actual_fallout = phrase_fallout or bool(context.get("explicit_pull_removal"))
+    actual_fallout = bool(
+        (phrase_fallout or context.get("explicit_pull_removal"))
+        and not context.get("hypothetical_loss")
+    )
     supported_subject = bool(
         registry_verified
         and context.get("subject_class") == "human_or_unspecified"
@@ -153,7 +156,27 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
         "outcome_resolution": "unresolved" if terminal_return else "",
         "bleeding_physical_cause": bool(context.get("bleeding_physical_cause")),
         "restorative_state": bool(context.get("restorative_state")),
-        "restoration_attempted": bool(context.get("restoration_attempted") and actual_fallout),
+        "restoration_attempted": bool(
+            context.get("restoration_attempted")
+            and actual_fallout
+            and not terminal_return
+        ),
+        "restoration_attempt_contract_version": context.get(
+            "restoration_attempt_contract_version", ""
+        ),
+        "restoration_attempt_records": list(
+            context.get("restoration_attempt_records", [])
+        ),
+        "restoration_attempt_contributing_ids": list(
+            context.get("restoration_attempt_contributing_ids", [])
+            if actual_fallout and not terminal_return
+            else []
+        ),
+        "narration_consumed_attempt_ids": list(
+            context.get("restoration_attempt_contributing_ids", [])
+            if actual_fallout and not terminal_return
+            else []
+        ),
         "broken_or_cracked": bool(context.get("broken_or_cracked")),
         "rotten_or_decayed": bool(context.get("rotten_or_decayed")),
         "gold_teeth": bool(context.get("gold_teeth")),
@@ -247,6 +270,8 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
         "salience_modifier", "removal_actor", "pull_modifier", "terminal_ending",
         "ending_precedence", "outcome_resolution", "restorative_state",
         "restoration_attempted",
+        "restoration_attempt_contract_version", "restoration_attempt_records",
+        "restoration_attempt_contributing_ids", "narration_consumed_attempt_ids",
         "bleeding_physical_cause", "broken_or_cracked", "rotten_or_decayed",
         "gold_teeth", "near_miss_loss", "hypothetical_loss", "replacement_growth",
         "repetition", "doctrine_version", "context_version", "doctrine_source",

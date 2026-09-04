@@ -17,7 +17,7 @@ from app.teeth_registry import get_teeth_registry_snapshot, public_registry_meta
 
 qa_bp = Blueprint("qa", __name__)
 
-TEETH_QA_CONTRACT_VERSION = "teeth-qa-contract-v1"
+TEETH_QA_CONTRACT_VERSION = "teeth-qa-contract-v2"
 
 
 @qa_bp.post("/qa/interpret")
@@ -66,7 +66,7 @@ def qa_status():
 # This surface is intentionally bounded to synthetic, founder-approved
 # regression inputs. It cannot interpret arbitrary dreams and never touches
 # access counters, paid entitlements, AI narration, or customer data.
-TEETH_QA_CASES = (
+BASE_TEETH_QA_CASES = (
     ("quantity_one", "My tooth fell out."),
     ("quantity_multiple", "Three of my teeth fell out."),
     ("ownership_other", "My sister's tooth fell out."),
@@ -91,6 +91,23 @@ TEETH_QA_CASES = (
     ),
     ("attempted_ending", "My tooth fell out and I tried to put it back."),
 )
+
+ATTEMPT_BINDING_QA_CASES = (
+    ("CTX-001-ATTEMPT-BIND-DREAMER-001", "My tooth fell out and I tried to put it back."),
+    ("CTX-001-ATTEMPT-BIND-NEGATED-001", "My tooth fell out, but I never tried to put it back."),
+    ("CTX-001-ATTEMPT-BIND-HYPOTHETICAL-001", "If my tooth fell out, I would try to put it back."),
+    ("CTX-001-ATTEMPT-BIND-QUOTED-001", 'My tooth fell out. My aunt said, "I tried to put it back."'),
+    ("CTX-001-ATTEMPT-BIND-WAKING-001", "My tooth fell out. After I woke up, I tried to put it back in my imagination."),
+    ("CTX-001-ATTEMPT-BIND-OTHER-OWNER-001", "My sister's tooth fell out and she tried to put it back."),
+    ("CTX-001-ATTEMPT-BIND-EXTERNAL-ACTOR-001", "My tooth fell out and my sister tried to put it back."),
+    ("CTX-001-ATTEMPT-BIND-MULTI-OWNER-001", "My tooth fell out and I tried to put it back. My sister's tooth fell out and she left it there."),
+    ("CTX-001-ATTEMPT-BIND-AMBIGUOUS-TARGET-001", "My tooth and my sister's tooth fell out. I tried to put it back."),
+    ("CTX-001-ATTEMPT-BIND-THEN-FIRM-001", "My tooth fell out. I tried to put it back, and then the same tooth fitted firmly back into the same socket."),
+    ("CTX-001-ATTEMPT-BIND-THEN-SECOND-LOSS-001", "My left tooth fell out and I tried to put it back. Then another tooth fell out."),
+    ("CTX-001-ATTEMPT-BIND-REPORTED-001", "My tooth fell out. My sister told me that she tried to put her tooth back yesterday."),
+)
+
+TEETH_QA_CASES = BASE_TEETH_QA_CASES + ATTEMPT_BINDING_QA_CASES
 
 
 @qa_bp.get("/qa/teeth-regression")

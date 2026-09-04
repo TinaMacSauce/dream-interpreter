@@ -36,4 +36,5 @@ jobs:
           tests.test_teeth_qa_access
           tests.test_teeth_output_contract
           tests.test_teeth_release_verification
+          tests.test_teeth_ctx_001_attempt_binding
           -v

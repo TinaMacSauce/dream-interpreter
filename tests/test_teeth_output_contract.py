@@ -89,6 +89,23 @@ class TeethOutputContractTests(unittest.TestCase):
         self.assertNotIn("duplicated emotional loss", summary.lower())
         self.assertNotIn("low risk", summary.lower())
 
+    def test_attempted_reinsertion_is_acknowledged_without_ending_precedence(self):
+        facts = self._active_facts("My tooth fell out and I tried to put it back.")
+        narration = facts["teeth_narration"]
+
+        self.assertTrue(narration["active_warning"])
+        self.assertTrue(narration["restoration_attempted"])
+        self.assertFalse(narration["ending_precedence"])
+        self.assertEqual("", narration["terminal_ending"])
+        self.assertNotIn("TEETH-END-TERMINAL", narration["applied_rule_ids"])
+
+        summary = build_doctrine_bound_summary(facts, {})
+        self.assertIn("attempt to put the tooth back", summary.lower())
+        self.assertIn(
+            "not treated as a completed restoration or terminal ending",
+            summary.lower(),
+        )
+
     def test_inactive_teeth_does_not_rewrite_non_teeth_output(self):
         facts = attach_teeth_narration_facts(
             "My tooth did not fall out.",

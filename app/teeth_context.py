@@ -309,6 +309,28 @@ def _extract_restorative_state(words: List[str]) -> bool:
     return any(pattern in joined for pattern in RESTORATION_PATTERNS)
 
 
+def _extract_restoration_attempt(words: List[str]) -> bool:
+    """Preserve an attempted reinsertion without promoting it to an ending."""
+    if not _has_teeth(words):
+        return False
+
+    joined = " ".join(words)
+    patterns = (
+        r"\b(?:i )?(?:tried|attempted) to (?:put|place|fit|push|insert) "
+        r"(?:(?:the|my) )?(?:same )?(?:tooth|teeth|it) back\b",
+        r"\b(?:i )?tried (?:putting|placing|fitting|pushing|inserting) "
+        r"(?:(?:the|my) )?(?:same )?(?:tooth|teeth|it) back\b",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, joined)
+        if not match:
+            continue
+        prefix = joined[:match.start()].split()[-3:]
+        if not any(token in NEGATORS for token in prefix):
+            return True
+    return False
+
+
 def _extract_near_miss_loss(words: List[str]) -> bool:
     for phrase in NEAR_MISS_FALLOUT_PATTERNS:
         for start in _find_phrase_starts(words, phrase):
@@ -449,6 +471,7 @@ def extract_teeth_context(dream: str) -> Dict[str, Any]:
         "blood_on_tooth": _extract_blood_on_tooth(words),
         "bleeding_physical_cause": _extract_bleeding_physical_cause(words, gum_bleeding),
         "restorative_state": _extract_restorative_state(words),
+        "restoration_attempted": _extract_restoration_attempt(words),
         "replacement_growth": _extract_replacement_growth(words),
         "removal_actor": removal_actor,
         "explicit_pull_removal": bool(removal_actor),

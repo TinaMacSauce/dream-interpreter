@@ -153,6 +153,7 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
         "outcome_resolution": "unresolved" if terminal_return else "",
         "bleeding_physical_cause": bool(context.get("bleeding_physical_cause")),
         "restorative_state": bool(context.get("restorative_state")),
+        "restoration_attempted": bool(context.get("restoration_attempted") and actual_fallout),
         "broken_or_cracked": bool(context.get("broken_or_cracked")),
         "rotten_or_decayed": bool(context.get("rotten_or_decayed")),
         "gold_teeth": bool(context.get("gold_teeth")),
@@ -245,6 +246,7 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
         "proximity", "emotional_intensity", "severity_modifier", "favorable_modifier",
         "salience_modifier", "removal_actor", "pull_modifier", "terminal_ending",
         "ending_precedence", "outcome_resolution", "restorative_state",
+        "restoration_attempted",
         "bleeding_physical_cause", "broken_or_cracked", "rotten_or_decayed",
         "gold_teeth", "near_miss_loss", "hypothetical_loss", "replacement_growth",
         "repetition", "doctrine_version", "context_version", "doctrine_source",
@@ -337,6 +339,12 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
         elif doctrine.get("pull_modifier") == "external_interference":
             details.append(
                 "Another person pulling your tooth adds external interference, without identifying a real-world culprit or proving intent."
+            )
+
+        if doctrine.get("restoration_attempted"):
+            details.append(
+                "The attempt to put the tooth back is preserved as part of the dream, but it is not treated "
+                "as a completed restoration or terminal ending."
             )
 
     elif doctrine.get("warning_kind") in {"loose_sickness", "broken_sickness", "rotten_sickness"}:

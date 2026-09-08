@@ -12,7 +12,7 @@ from app.release_verification import (
 COMMIT = "3f37f1085421d04ede2420cae63c4abb63a2202d"
 RELEASE = {
     "build_commit": COMMIT,
-    "release_id": "snake-dec01-foundation-v1",
+    "release_id": "release-observability-v1",
     "repository": "TinaMacSauce/dream-interpreter",
     "repository_url": "https://github.com/TinaMacSauce/dream-interpreter",
     "commit_url": f"https://github.com/TinaMacSauce/dream-interpreter/commit/{COMMIT}",

@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: production-release-smoke
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   verify-production:
@@ -39,6 +39,7 @@ jobs:
       - name: Verify exact Render release and access contract
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit || github.event.workflow_run.head_sha || github.sha }}
+          DEPLOYMENT_STARTED_AT: ${{ github.event.workflow_run.created_at }}
         run: >-
           PYTHONPATH=.
           python scripts/verify_production_release.py
@@ -46,6 +47,8 @@ jobs:
           --expected-commit "$EXPECTED_COMMIT"
           --attempts 40
           --delay 15
+          --deployment-window 600
+          --deployment-started-at "$DEPLOYMENT_STARTED_AT"
       - name: Verify deployed Teeth QA contract
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit || github.event.workflow_run.head_sha || github.sha }}

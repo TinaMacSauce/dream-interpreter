@@ -1,0 +1,61 @@
+name: Record release evidence
+
+on:
+  workflow_run:
+    workflows: ["Production release smoke"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: record-release-evidence-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  append-verification-log:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install application dependencies
+        run: pip install -r requirements.txt
+      - name: Reverify exact production identity
+        run: >-
+          PYTHONPATH=.
+          python scripts/verify_production_release.py
+          --base-url https://interpreter.jamaicantruestories.com
+          --expected-commit "${{ github.event.workflow_run.head_sha }}"
+          --attempts 1
+          --delay 0
+          --deployment-window 600
+          --deployment-started-at "${{ github.event.workflow_run.created_at }}"
+      - name: Reverify deployed Teeth QA contract
+        run: >-
+          python scripts/verify_production_teeth_contract.py
+          --base-url https://interpreter.jamaicantruestories.com
+          --expected-commit "${{ github.event.workflow_run.head_sha }}"
+      - name: Reverify deployed Snake QA contract
+        run: >-
+          python scripts/verify_production_snake_contract.py
+          --base-url https://interpreter.jamaicantruestories.com
+          --expected-commit "${{ github.event.workflow_run.head_sha }}"
+      - name: Append canonical VerificationLog evidence
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          SPREADSHEET_ID: 1ToWPpJ_u-Z14eqL9U1oJppXX6f63h_eZcjUVglKr4Zk
+          PYTHONPATH: ${{ github.workspace }}
+        run: >-
+          python scripts/record_release_verification.py
+          --expected-commit "${{ github.event.workflow_run.head_sha }}"
+          --smoke-run-id "${{ github.event.workflow_run.id }}"

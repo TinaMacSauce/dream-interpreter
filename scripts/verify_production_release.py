@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 import time
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -24,6 +25,14 @@ validate_health_payload = _VALIDATOR_MODULE.validate_health_payload
 validate_live_payload = _VALIDATOR_MODULE.validate_live_payload
 validate_qa_status_payload = _VALIDATOR_MODULE.validate_qa_status_payload
 validate_version_payload = _VALIDATOR_MODULE.validate_version_payload
+
+_PARITY_PATH = Path(__file__).resolve().parents[1] / "app" / "release_evidence.py"
+_PARITY_SPEC = importlib.util.spec_from_file_location("jts_release_evidence", _PARITY_PATH)
+if _PARITY_SPEC is None or _PARITY_SPEC.loader is None:
+    raise RuntimeError(f"Could not load parity classifier from {_PARITY_PATH}")
+_PARITY_MODULE = importlib.util.module_from_spec(_PARITY_SPEC)
+_PARITY_SPEC.loader.exec_module(_PARITY_MODULE)
+classify_deployment_parity = _PARITY_MODULE.classify_deployment_parity
 
 
 Validator = Callable[..., List[str]]
@@ -56,6 +65,8 @@ def probe(
     base_url: str,
     expected_commit: str,
     timeout: float,
+    elapsed_seconds: float = 0.0,
+    deployment_window_seconds: float = 600.0,
 ) -> Tuple[bool, Dict[str, Any]]:
     evidence: Dict[str, Any] = {
         "base_url": base_url,
@@ -88,6 +99,26 @@ def probe(
             error = f"{type(exc).__name__}: {exc}"
             evidence["probes"][path] = {"url": url, "errors": [error]}
             all_errors.append(f"{path}: {error}")
+
+    version_release = evidence["probes"].get("version", {}).get("payload", {}).get("release", {})
+    reported_commit = (
+        version_release.get("build_commit", "")
+        if isinstance(version_release, dict)
+        else ""
+    )
+    parity_state = classify_deployment_parity(
+        expected_commit,
+        reported_commit,
+        elapsed_seconds=elapsed_seconds,
+        deployment_window_seconds=deployment_window_seconds,
+    )
+    evidence["deployment_parity"] = {
+        "state": parity_state,
+        "expected_commit": expected_commit,
+        "reported_commit": reported_commit,
+        "elapsed_seconds": round(max(0.0, elapsed_seconds), 3),
+        "deployment_window_seconds": deployment_window_seconds,
+    }
 
     denial_checks = (
         (
@@ -151,7 +182,26 @@ def main() -> int:
     parser.add_argument("--attempts", type=int, default=40)
     parser.add_argument("--delay", type=float, default=15.0)
     parser.add_argument("--timeout", type=float, default=20.0)
+    parser.add_argument(
+        "--deployment-window",
+        type=float,
+        default=600.0,
+        help="Normal Render deployment window in seconds; default 600 (10 minutes).",
+    )
+    parser.add_argument(
+        "--deployment-started-at",
+        help="UTC ISO-8601 timestamp for the release start; defaults to verifier start.",
+    )
     args = parser.parse_args()
+
+    verifier_started = datetime.now(timezone.utc)
+    deployment_started = verifier_started
+    if args.deployment_started_at:
+        deployment_started = datetime.fromisoformat(
+            args.deployment_started_at.replace("Z", "+00:00")
+        )
+        if deployment_started.tzinfo is None:
+            deployment_started = deployment_started.replace(tzinfo=timezone.utc)
 
     last_evidence: Dict[str, Any] = {}
     for attempt in range(1, args.attempts + 1):
@@ -159,6 +209,8 @@ def main() -> int:
             base_url=args.base_url,
             expected_commit=args.expected_commit,
             timeout=args.timeout,
+            elapsed_seconds=(datetime.now(timezone.utc) - deployment_started).total_seconds(),
+            deployment_window_seconds=args.deployment_window,
         )
         evidence["attempt"] = attempt
         evidence["attempts_allowed"] = args.attempts
@@ -166,6 +218,8 @@ def main() -> int:
         last_evidence = evidence
         if verified:
             return 0
+        if evidence.get("deployment_parity", {}).get("state") == "DRIFT":
+            break
         if attempt < args.attempts:
             time.sleep(args.delay)
 

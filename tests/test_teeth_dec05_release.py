@@ -128,7 +128,7 @@ class TeethDecisionFiveReleaseTests(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         release = response.get_json()["release"]
         self.assertEqual("route-sha", release["build_commit"])
-        self.assertEqual("snake-dec01-foundation-v1", release["release_id"])
+        self.assertEqual("release-observability-v1", release["release_id"])
         self.assertEqual("6138", release["teeth_registry_sheet_revision"])
 
     def test_version_endpoint_exposes_accessible_commit_identity(self):

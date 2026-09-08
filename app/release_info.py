@@ -7,7 +7,7 @@ from app.teeth_context import TEETH_CONTEXT_VERSION
 from app.snake_context import SNAKE_CONTEXT_VERSION
 
 
-RELEASE_ID = "snake-dec01-foundation-v1"
+RELEASE_ID = "release-observability-v1"
 REPOSITORY = "TinaMacSauce/dream-interpreter"
 REPOSITORY_URL = "https://github.com/TinaMacSauce/dream-interpreter"
 PRODUCTION_URL = "https://interpreter.jamaicantruestories.com"

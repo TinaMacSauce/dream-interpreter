@@ -9,6 +9,11 @@ from app.condition_provenance import (
     CONDITION_PROVENANCE_CONTRACT_VERSION,
     validate_condition_provenance,
 )
+from app.warning_claim_partition import (
+    WARNING_CLAIM_PARTITION_CONTRACT_VERSION,
+    WARNING_EVENT_FAMILIES,
+    validate_warning_claim_partition,
+)
 
 
 GRAPH_CONTRACT_VERSION = "context-graph-referential-integrity/1.0"
@@ -806,6 +811,10 @@ def build_context_graph(dream: str, context: Mapping[str, Any]) -> Dict[str, Any
         "condition_provenance_contract_version": CONDITION_PROVENANCE_CONTRACT_VERSION,
         "condition_transition_edges": condition_transition_edges,
         "condition_provenance_integrity": {"verified": False, "reason_codes": ["NOT_FINALIZED"]},
+        "warning_claim_partition_contract_version": WARNING_CLAIM_PARTITION_CONTRACT_VERSION,
+        "warning_claim_dispositions": [],
+        "warning_claim_partition_summary": {},
+        "warning_claim_partition_integrity": {"verified": False, "reason_codes": ["NOT_FINALIZED"]},
         "provenance_contract_version": "claim-provenance-reachability/1.0",
         "provenance_paths": [],
         "provenance_edges": [],
@@ -839,10 +848,22 @@ def apply_loss_projection(context: MutableMapping[str, Any], graph: Mapping[str,
 
 def _rule_record(rule_id: str, event_ids: Iterable[str], events: Mapping[str, Mapping[str, Any]]) -> Dict[str, Any]:
     source_ids = [event_id for event_id in event_ids if event_id in events]
+    record_suffix = "-".join(source_ids) or "none"
     return {
+        "rule_record_id": f"rule-record-{rule_id.lower()}-{record_suffix}",
         "rule_id": rule_id,
         "source_event_ids": source_ids,
         "source_span_ids": [events[event_id]["source_span"]["span_id"] for event_id in source_ids],
+        "owner_ids": list(dict.fromkeys(
+            events[event_id].get("owner_id_or_ambiguous")
+            for event_id in source_ids
+            if events[event_id].get("owner_id_or_ambiguous")
+        )),
+        "event_chain_ids": list(dict.fromkeys(
+            events[event_id].get("event_chain_id_or_null")
+            for event_id in source_ids
+            if events[event_id].get("event_chain_id_or_null")
+        )),
     }
 
 
@@ -852,9 +873,24 @@ def finalize_context_graph(
     registry: Mapping[str, Any],
 ) -> Dict[str, Any]:
     events = {event["event_id"]: event for event in graph["event_inventory"]}
+    suppressing_frontiers = {
+        frontier.get("event_chain_id")
+        for frontier in graph["terminal_frontiers"]
+        if events.get(frontier.get("terminal_event_id"), {}).get("event_type")
+        in {"tooth_loss", "firm_same_tooth_return"}
+    }
+    historical_warning_event_ids = {
+        event_id
+        for frontier in graph["terminal_frontiers"]
+        if frontier.get("event_chain_id") in suppressing_frontiers
+        for event_id in frontier.get("historical_event_ids", [])
+        if events.get(event_id, {}).get("event_type") in WARNING_EVENT_FAMILIES
+    }
     eligible_losses = [
         event for event in events.values()
-        if event["event_type"] == "tooth_loss" and event["doctrine_eligible"]
+        if event["event_type"] == "tooth_loss"
+        and event["doctrine_eligible"]
+        and event["event_id"] not in historical_warning_event_ids
     ]
     loss_ids = [event["event_id"] for event in eligible_losses]
     dreamer_loss_ids = [
@@ -895,32 +931,99 @@ def finalize_context_graph(
     }
 
     public_records: List[Dict[str, Any]] = []
+    warning_records: List[Dict[str, Any]] = []
+    seen_public: set[tuple[str, str]] = set()
+
+    def add_public(rule_id: str, event_id: str, *, warning: bool = True) -> None:
+        if not rule_id or event_id not in events:
+            return
+        key = (rule_id, event_id)
+        if key in seen_public:
+            return
+        seen_public.add(key)
+        record = _rule_record(rule_id, [event_id], events)
+        public_records.append(record)
+        if warning:
+            warning_records.append(record)
+
+    active_base_events = [
+        event for event in events.values()
+        if event.get("event_type") in WARNING_EVENT_FAMILIES
+        and event.get("doctrine_eligible") is True
+        and event.get("event_id") not in historical_warning_event_ids
+    ]
+    active_base_ids = {event["event_id"] for event in active_base_events}
+    count_rule_id = rule_id_for(
+        registry,
+        "multiple_fallout" if result.get("count") == "multiple" else "one_fallout",
+    )
+    for event in active_base_events:
+        event_id = event["event_id"]
+        event_type = event.get("event_type")
+        if event_type == "tooth_loss":
+            owner_key = (
+                "own_fallout"
+                if event.get("owner_id_or_ambiguous") == "dreamer"
+                else "other_fallout"
+            )
+            add_public(rule_id_for(registry, owner_key), event_id)
+            add_public(count_rule_id, event_id)
+            actor = event.get("actor_id_or_null")
+            if actor == "dreamer":
+                add_public(rule_id_for(registry, "self_pull"), event_id)
+            elif actor not in {None, "", "ambiguous", "unknown"}:
+                add_public(rule_id_for(registry, "external_pull"), event_id)
+        elif event_type == "loose_tooth_condition":
+            add_public(rule_id_for(registry, "loose"), event_id)
+        elif event_type == "gum_bleeding_condition":
+            add_public(rule_id_for(registry, "gum_blood"), event_id)
+
+    # Preserve approved same-chain modifiers and legacy approved structural
+    # rules, but split every source into its own event-scoped record.
     for rule_id in result.get("applied_rule_ids", []):
-        source_ids = rule_sources.get(rule_id, loss_ids)
+        if rule_id == rule_id_for(registry, "terminal_ending"):
+            for event_id in terminal_ids:
+                add_public(rule_id, event_id, warning=False)
+            continue
+        source_ids = list(rule_sources.get(rule_id, []))
         if not source_ids:
             source_ids = [
-                event["event_id"] for event in events.values()
-                if event.get("doctrine_eligible")
+                event["event_id"] for event in active_base_events
             ][:1]
-        public_records.append(_rule_record(rule_id, source_ids, events))
+        for event_id in source_ids:
+            event = events.get(event_id)
+            if (
+                event
+                and event.get("doctrine_eligible") is True
+                and event_id not in historical_warning_event_ids
+            ):
+                add_public(rule_id, event_id)
 
     historical: List[Dict[str, Any]] = []
-    if terminal_ids and loss_ids:
-        historical_ids: List[str] = []
-        if any(event["owner_id_or_ambiguous"] == "dreamer" for event in eligible_losses):
-            historical_ids.append(rule_id_for(registry, "own_fallout"))
-        if any(event["owner_id_or_ambiguous"] != "dreamer" for event in eligible_losses):
-            historical_ids.append(rule_id_for(registry, "other_fallout"))
-        historical_ids.append(
-            rule_id_for(
+    for event_id in historical_warning_event_ids:
+        event = events.get(event_id)
+        if not event or event.get("doctrine_eligible") is not True:
+            continue
+        rule_ids: List[str] = []
+        if event.get("event_type") == "loose_tooth_condition":
+            rule_ids.append(rule_id_for(registry, "loose"))
+        elif event.get("event_type") == "gum_bleeding_condition":
+            rule_ids.append(rule_id_for(registry, "gum_blood"))
+        elif event.get("event_type") == "tooth_loss":
+            rule_ids.append(rule_id_for(
+                registry,
+                "own_fallout"
+                if event.get("owner_id_or_ambiguous") == "dreamer"
+                else "other_fallout",
+            ))
+            rule_ids.append(rule_id_for(
                 registry,
                 "multiple_fallout" if result.get("count") == "multiple" else "one_fallout",
-            )
+            ))
+        historical.extend(
+            _rule_record(rule_id, [event_id], events)
+            for rule_id in rule_ids if rule_id
         )
-        historical = [
-            _rule_record(rule_id, loss_ids, events)
-            for rule_id in historical_ids if rule_id
-        ]
 
     unresolved = [
         _rule_record(rule_id, terminal_ids or loss_ids, events)
@@ -929,7 +1032,7 @@ def finalize_context_graph(
     graph["rule_sets"] = {
         "contract_version": RULE_SETS_CONTRACT_VERSION,
         "public_applied": public_records,
-        "warning_active": public_records if result.get("active_warning") else [],
+        "warning_active": warning_records,
         "matched_historical": historical,
         "structural": [record for record in public_records if record["rule_id"] == "TEETH-END-TERMINAL"],
         "withheld_unresolved": unresolved,
@@ -937,34 +1040,82 @@ def finalize_context_graph(
 
     claims: List[Dict[str, Any]] = []
     public_rule_ids = [record["rule_id"] for record in public_records]
-    if result.get("active_warning") and public_records:
+    for index, base_event in enumerate(
+        sorted(active_base_events, key=lambda item: item["source_span"]["start"]),
+        start=1,
+    ):
+        base_event_id = base_event["event_id"]
+        chain_id = base_event.get("event_chain_id_or_null")
+        matching_records = [
+            record for record in warning_records
+            if base_event_id in record.get("source_event_ids", [])
+            or (
+                base_event.get("event_type") == "tooth_loss"
+                and any(
+                    events[event_id].get("event_chain_id_or_null") == chain_id
+                    and events[event_id].get("event_type") in {
+                        "pain_modifier", "tooth_blood_modifier"
+                    }
+                    for event_id in record.get("source_event_ids", [])
+                    if event_id in events
+                )
+            )
+        ]
+        if not matching_records:
+            continue
         warning_event_ids = list(dict.fromkeys(
-            event_id for record in public_records for event_id in record["source_event_ids"]
+            [base_event_id]
+            + [
+                event_id
+                for record in matching_records
+                for event_id in record.get("source_event_ids", [])
+            ]
+        ))
+        claim_rule_ids = list(dict.fromkeys(
+            record["rule_id"] for record in matching_records
         ))
         claims.append(
             {
-                "claim_id": "claim-warning-1",
+                "claim_id": f"claim-warning-{index}",
                 "claim_type": "tradition_scoped_warning",
+                "claim_scope": "atomic_warning",
+                "warning_family": WARNING_EVENT_FAMILIES[base_event["event_type"]],
+                "owner_ids": [base_event.get("owner_id_or_ambiguous")],
+                "event_chain_ids": [chain_id],
+                "release_status": "released",
                 "released": True,
                 "consumed_event_ids": warning_event_ids,
                 "consumed_attempt_ids": [],
-                "consumed_rule_ids": public_rule_ids,
+                "consumed_rule_ids": claim_rule_ids,
                 "consumed_span_ids": [events[event_id]["source_span"]["span_id"] for event_id in warning_event_ids],
-                "comparison_scope": (
-                    "owner_and_event_bound_aggregate"
-                    if (
-                        len({events[event_id]["owner_id_or_ambiguous"] for event_id in warning_event_ids}) > 1
-                        or len({events[event_id]["event_chain_id_or_null"] for event_id in warning_event_ids}) > 1
-                    )
-                    else ""
-                ),
+                "comparison_scope": "",
             }
         )
+    atomic_claim_ids = [
+        claim["claim_id"] for claim in claims
+        if claim.get("claim_scope") == "atomic_warning"
+    ]
+    if len(atomic_claim_ids) > 1:
+        claims.append({
+            "claim_id": "claim-warning-compound-1",
+            "claim_type": "compound_warning_presentation",
+            "claim_scope": "compound_presentation",
+            "member_claim_ids": atomic_claim_ids,
+            "release_status": "released",
+            "released": True,
+            "consumed_event_ids": [],
+            "consumed_attempt_ids": [],
+            "consumed_rule_ids": [],
+            "consumed_span_ids": [],
+            "comparison_scope": "member_claims_only",
+        })
     if terminal_ids:
         claims.append(
             {
                 "claim_id": "claim-terminal-1",
                 "claim_type": "terminal_state_without_consequence",
+                "claim_scope": "structural_terminal",
+                "release_status": "released",
                 "released": True,
                 "consumed_event_ids": terminal_ids,
                 "consumed_attempt_ids": [],
@@ -978,6 +1129,8 @@ def finalize_context_graph(
             {
                 "claim_id": "claim-attempt-1",
                 "claim_type": "structural_attempt_narration",
+                "claim_scope": "structural_narration",
+                "release_status": "released",
                 "released": True,
                 "consumed_event_ids": consumed_attempts,
                 "consumed_attempt_ids": consumed_attempts,
@@ -986,6 +1139,47 @@ def finalize_context_graph(
             }
         )
     graph["claim_manifest"] = claims
+    graph["warning_claim_partition_contract_version"] = WARNING_CLAIM_PARTITION_CONTRACT_VERSION
+    graph["warning_claim_dispositions"] = [
+        {
+            "event_id": event_id,
+            "disposition": (
+                "gated"
+                if event.get("doctrine_eligible") is not True
+                else "historical"
+                if event_id in historical_warning_event_ids
+                else "released"
+                if event_id in active_base_ids and any(
+                    event_id in claim.get("consumed_event_ids", [])
+                    for claim in claims
+                    if claim.get("claim_scope") == "atomic_warning"
+                )
+                else "withheld"
+            ),
+        }
+        for event_id, event in events.items()
+        if event.get("event_type") in WARNING_EVENT_FAMILIES
+    ]
+    atomic_claims = [
+        claim for claim in claims if claim.get("claim_scope") == "atomic_warning"
+    ]
+    graph["warning_claim_partition_summary"] = {
+        "atomic_claim_count": len(atomic_claims),
+        "compound_claim_count": sum(
+            claim.get("claim_scope") == "compound_presentation" for claim in claims
+        ),
+        "released_warning_event_count": len(active_base_ids),
+        "owner_count": len({
+            owner for claim in atomic_claims for owner in claim.get("owner_ids", [])
+        }),
+        "chain_count": len({
+            chain for claim in atomic_claims for chain in claim.get("event_chain_ids", [])
+        }),
+        "gated_or_withheld_event_count": sum(
+            item["disposition"] in {"gated", "historical", "terminal", "withheld"}
+            for item in graph["warning_claim_dispositions"]
+        ),
+    }
     graph["provenance_rule_registry"] = {
         rule.get("rule_id"): {
             "rule_id": rule.get("rule_id"),
@@ -997,6 +1191,7 @@ def finalize_context_graph(
     }
     finalize_claim_provenance(graph, result, registry)
     graph["condition_provenance_integrity"] = validate_condition_provenance(graph)
+    graph["warning_claim_partition_integrity"] = validate_warning_claim_partition(graph)
     graph["integrity"] = validate_context_graph(graph)
     if not graph["provenance_integrity"]["verified"]:
         graph["integrity"]["verified"] = False
@@ -1008,6 +1203,12 @@ def finalize_context_graph(
         graph["integrity"]["reason_codes"] = list(dict.fromkeys(
             graph["integrity"]["reason_codes"]
             + graph["condition_provenance_integrity"]["reason_codes"]
+        ))
+    if not graph["warning_claim_partition_integrity"]["verified"]:
+        graph["integrity"]["verified"] = False
+        graph["integrity"]["reason_codes"] = list(dict.fromkeys(
+            graph["integrity"]["reason_codes"]
+            + graph["warning_claim_partition_integrity"]["reason_codes"]
         ))
     return dict(graph)
 
@@ -1214,6 +1415,11 @@ def validate_context_graph(graph: Mapping[str, Any]) -> Dict[str, Any]:
     if graph.get("provenance_paths"):
         provenance = validate_claim_provenance(graph)
         unique_reasons = list(dict.fromkeys(unique_reasons + provenance["reason_codes"]))
+    if graph.get("warning_claim_partition_contract_version"):
+        warning_partition = validate_warning_claim_partition(graph)
+        unique_reasons = list(dict.fromkeys(
+            unique_reasons + warning_partition["reason_codes"]
+        ))
     return {
         "verified": not unique_reasons,
         "reason_codes": unique_reasons,

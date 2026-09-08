@@ -40,4 +40,5 @@ jobs:
           tests.test_teeth_ctx_003_referential_integrity
           tests.test_teeth_ctx_003_claim_provenance
           tests.test_teeth_ctx_003_condition_provenance
+          tests.test_teeth_ctx_003_warning_claim_partition
           -v

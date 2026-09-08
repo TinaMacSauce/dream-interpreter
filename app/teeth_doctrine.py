@@ -219,7 +219,32 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
     }
 
     def finish_result() -> Dict[str, Any]:
+        selected_rule_ids = list(result.get("applied_rule_ids", []))
         graph = finalize_context_graph(context_graph, result, registry)
+        graph_rule_ids = [
+            record["rule_id"]
+            for record in graph.get("rule_sets", {}).get("public_applied", [])
+        ]
+        result["applied_rule_ids"] = list(dict.fromkeys(
+            selected_rule_ids + graph_rule_ids
+        ))
+        atomic_families = list(dict.fromkeys(
+            claim.get("warning_family")
+            for claim in graph.get("claim_manifest", [])
+            if claim.get("claim_scope") == "atomic_warning"
+            and claim.get("warning_family")
+        ))
+        if atomic_families:
+            result["active_doctrine"] = True
+            result["active_warning"] = True
+            result["loose_warning"] = "loose_sickness" in atomic_families
+            result["bleeding_gums_warning"] = "bleeding_gums" in atomic_families
+            if not result.get("warning_kind"):
+                result["warning_kind"] = (
+                    atomic_families[0]
+                    if len(atomic_families) == 1
+                    else "multiple_condition_warnings"
+                )
         result["context_graph"] = graph
         result["context_graph_contract_version"] = graph["contract_version"]
         for key in (
@@ -233,6 +258,10 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
             "condition_provenance_contract_version",
             "condition_transition_edges",
             "condition_provenance_integrity",
+            "warning_claim_partition_contract_version",
+            "warning_claim_dispositions",
+            "warning_claim_partition_summary",
+            "warning_claim_partition_integrity",
             "provenance_contract_version",
             "provenance_nodes",
             "provenance_paths",

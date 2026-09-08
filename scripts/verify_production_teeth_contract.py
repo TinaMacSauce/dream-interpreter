@@ -206,6 +206,7 @@ ATTEMPT_BINDING_EXPECTED: Dict[str, Dict[str, Any]] = {
 GRAPH_CONTRACT_VERSION = "context-graph-referential-integrity/1.0"
 PROVENANCE_CONTRACT_VERSION = "claim-provenance-reachability/1.0"
 CONDITION_PROVENANCE_CONTRACT_VERSION = "condition-state-provenance/1.0"
+WARNING_CLAIM_PARTITION_CONTRACT_VERSION = "warning-claim-partition-conservation/1.0"
 CONDITION_GRAPH_EXPECTED: Dict[str, Dict[str, Any]] = {
     "CTX-003-COND-PROV-GUMS-NEGATED-001": {
         "events": {"gum-bleeding-1", "negated-loose-1", "negated-loss-1"},
@@ -270,6 +271,68 @@ CONDITION_PUBLIC_EXPECTED: Dict[str, Dict[str, Any]] = {
 
 for _condition_case_id, _condition_expected in CONDITION_PUBLIC_EXPECTED.items():
     EXPECTED[_condition_case_id] = {**_condition_expected, "condition_graph": True}
+
+WARNING_PARTITION_EXPECTED: Dict[str, Dict[str, Any]] = {
+    "CTX-003-CLAIM-PART-MULTI-OWNER-CONDITIONS-001": {
+        "atomic_count": 2, "owners": {("dreamer",), ("sister",)},
+        "families": {"bleeding_gums", "loose_sickness"}, "compound_count": 1,
+        "rules": {"TEETH-OMEN-GUM-BLOOD", "TEETH-STATE-LOOSE"},
+    },
+    "CTX-003-CLAIM-PART-SAME-OWNER-DISTINCT-CONDITIONS-001": {
+        "atomic_count": 2, "owners": {("dreamer",)},
+        "families": {"bleeding_gums", "loose_sickness"}, "compound_count": 1,
+    },
+    "CTX-003-CLAIM-PART-TWO-OWNER-LOOSE-001": {
+        "atomic_count": 2, "owners": {("dreamer",), ("sister",)},
+        "families": {"loose_sickness"}, "compound_count": 1,
+        "rule_record_count": {"TEETH-STATE-LOOSE": 2},
+    },
+    "CTX-003-CLAIM-PART-TWO-OTHER-OWNERS-001": {
+        "atomic_count": 2, "owners": {("sister",), ("brother",)},
+        "families": {"loose_sickness"}, "compound_count": 1,
+    },
+    "CTX-003-CLAIM-PART-TWO-LOOSE-ONE-EVENT-001": {
+        "atomic_count": 1, "owners": {("dreamer",)},
+        "families": {"loose_sickness"}, "compound_count": 0,
+        "rules": {"TEETH-STATE-LOOSE"},
+    },
+    "CTX-003-CLAIM-PART-ONE-LOSS-MULTI-RULE-001": {
+        "atomic_count": 1, "owners": {("dreamer",)},
+        "families": {"tooth_loss"}, "compound_count": 0,
+        "claim_rules": {"TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE"},
+    },
+    "CTX-003-CLAIM-PART-LOSS-PLUS-OTHER-LOOSE-001": {
+        "atomic_count": 2, "owners": {("dreamer",), ("sister",)},
+        "families": {"tooth_loss", "loose_sickness"}, "compound_count": 1,
+    },
+    "CTX-003-CLAIM-PART-GUMS-PLUS-OTHER-LOSS-001": {
+        "atomic_count": 2, "owners": {("dreamer",), ("sister",)},
+        "families": {"bleeding_gums", "tooth_loss"}, "compound_count": 1,
+    },
+    "CTX-003-CLAIM-PART-LOOSE-THEN-LOSS-001": {
+        "atomic_count": 1, "owners": {("dreamer",)},
+        "families": {"tooth_loss"}, "compound_count": 0,
+        "historical": {"loose-1"},
+    },
+    "CTX-003-CLAIM-PART-QUOTED-PLUS-GUMS-001": {
+        "atomic_count": 1, "owners": {("dreamer",)},
+        "families": {"bleeding_gums"}, "compound_count": 0,
+        "excluded_events": {"quoted-loose-1"},
+    },
+    "CTX-003-CLAIM-PART-HYPOTHETICAL-PLUS-OTHER-001": {
+        "atomic_count": 1, "owners": {("sister",)},
+        "families": {"loose_sickness"}, "compound_count": 0,
+        "excluded_events": {"hypothetical-loose-1"},
+    },
+    "CTX-003-CLAIM-PART-NEGATED-PLUS-OTHER-001": {
+        "atomic_count": 1, "owners": {("sister",)},
+        "families": {"loose_sickness"}, "compound_count": 0,
+        "excluded_events": {"negated-loose-1"},
+    },
+}
+
+for _warning_case_id in WARNING_PARTITION_EXPECTED:
+    EXPECTED[_warning_case_id] = {"warning_partition": True}
 
 
 def _validate_condition_graph(case_id: str, dream: str, doctrine: Dict[str, Any]) -> List[str]:
@@ -568,6 +631,58 @@ def _validate_provenance(case_id: str, doctrine: Dict[str, Any]) -> List[str]:
     return errors
 
 
+def _validate_warning_partition(case_id: str, doctrine: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    graph = doctrine.get("context_graph") or {}
+    expected = WARNING_PARTITION_EXPECTED[case_id]
+    if graph.get("warning_claim_partition_contract_version") != WARNING_CLAIM_PARTITION_CONTRACT_VERSION:
+        return [f"{case_id}: missing warning-claim partition contract"]
+    integrity = graph.get("warning_claim_partition_integrity") or {}
+    if integrity.get("verified") is not True or integrity.get("reason_codes") != []:
+        errors.append(f"{case_id}: warning-claim partition integrity did not pass: {integrity!r}")
+    claims = list(graph.get("claim_manifest", []))
+    atomic = [claim for claim in claims if claim.get("claim_scope") == "atomic_warning"]
+    compound = [claim for claim in claims if claim.get("claim_scope") == "compound_presentation"]
+    if len(atomic) != expected["atomic_count"]:
+        errors.append(f"{case_id}: atomic claim count expected {expected['atomic_count']}, got {len(atomic)}")
+    if len(compound) != expected["compound_count"]:
+        errors.append(f"{case_id}: compound claim count expected {expected['compound_count']}, got {len(compound)}")
+    owners = {tuple(claim.get("owner_ids", [])) for claim in atomic}
+    if owners != expected["owners"]:
+        errors.append(f"{case_id}: atomic owners expected {sorted(expected['owners'])}, got {sorted(owners)}")
+    families = {claim.get("warning_family") for claim in atomic}
+    if families != expected["families"]:
+        errors.append(f"{case_id}: warning families expected {sorted(expected['families'])}, got {sorted(families)}")
+    consumed_events = {
+        event_id for claim in atomic for event_id in claim.get("consumed_event_ids", [])
+    }
+    if consumed_events & expected.get("excluded_events", set()):
+        errors.append(f"{case_id}: gated event entered a released atomic claim")
+    dispositions = {
+        item.get("event_id"): item.get("disposition")
+        for item in graph.get("warning_claim_dispositions", [])
+    }
+    if any(dispositions.get(event_id) != "historical" for event_id in expected.get("historical", set())):
+        errors.append(f"{case_id}: historical warning event was not preserved")
+    public_records = list(graph.get("rule_sets", {}).get("public_applied", []))
+    public_rules = {record.get("rule_id") for record in public_records}
+    if "rules" in expected and public_rules != expected["rules"]:
+        errors.append(f"{case_id}: public rules expected {sorted(expected['rules'])}, got {sorted(public_rules)}")
+    if "claim_rules" in expected and set(atomic[0].get("consumed_rule_ids", [])) != expected["claim_rules"]:
+        errors.append(f"{case_id}: atomic claim rules do not match")
+    for rule_id, count in expected.get("rule_record_count", {}).items():
+        actual = sum(record.get("rule_id") == rule_id for record in public_records)
+        if actual != count:
+            errors.append(f"{case_id}: {rule_id} record count expected {count}, got {actual}")
+    if compound:
+        members = set(compound[0].get("member_claim_ids", []))
+        if members != {claim.get("claim_id") for claim in atomic}:
+            errors.append(f"{case_id}: compound members do not match atomic claims")
+        if any(compound[0].get(field) for field in ("consumed_event_ids", "consumed_rule_ids", "consumed_span_ids")):
+            errors.append(f"{case_id}: compound claim consumes raw sources")
+    return errors
+
+
 def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
     errors: List[str] = []
     case_evidence: Dict[str, Any] = {}
@@ -636,7 +751,7 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
             if field in {
                 "include", "exclude", "exact_rules", "unresolved_include",
                 "narration_contains", "narration_excludes", "attempt_record",
-                "condition_graph",
+                "condition_graph", "warning_partition",
             }:
                 continue
             if doctrine.get(field) != value:
@@ -686,6 +801,9 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
 
         if expected.get("condition_graph"):
             case_errors.extend(_validate_condition_graph(case_id, item.get("dream", ""), doctrine))
+
+        if expected.get("warning_partition"):
+            case_errors.extend(_validate_warning_partition(case_id, doctrine))
 
         case_errors.extend(_validate_provenance(case_id, doctrine))
 

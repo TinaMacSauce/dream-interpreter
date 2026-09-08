@@ -122,10 +122,26 @@ CONDITION_PROVENANCE_QA_CASES = (
     ("CTX-003-COND-PROV-MULTI-OWNER-001", "My gums were bleeding. My sister's tooth was loose but did not fall out."),
 )
 
+WARNING_CLAIM_PARTITION_QA_CASES = (
+    ("CTX-003-CLAIM-PART-MULTI-OWNER-CONDITIONS-001", "My gums were bleeding. My sister's tooth was loose but did not fall out."),
+    ("CTX-003-CLAIM-PART-SAME-OWNER-DISTINCT-CONDITIONS-001", "My gums were bleeding and my tooth was loose but did not fall out."),
+    ("CTX-003-CLAIM-PART-TWO-OWNER-LOOSE-001", "My tooth was loose. My sister's tooth was loose."),
+    ("CTX-003-CLAIM-PART-TWO-OTHER-OWNERS-001", "My sister's tooth was loose. My brother's tooth was loose."),
+    ("CTX-003-CLAIM-PART-TWO-LOOSE-ONE-EVENT-001", "Two of my teeth were loose, but neither fell out."),
+    ("CTX-003-CLAIM-PART-ONE-LOSS-MULTI-RULE-001", "My tooth fell out."),
+    ("CTX-003-CLAIM-PART-LOSS-PLUS-OTHER-LOOSE-001", "My tooth fell out. My sister's tooth was loose but did not fall out."),
+    ("CTX-003-CLAIM-PART-GUMS-PLUS-OTHER-LOSS-001", "My gums were bleeding. My sister's tooth fell out."),
+    ("CTX-003-CLAIM-PART-LOOSE-THEN-LOSS-001", "My tooth became loose, then it fell out."),
+    ("CTX-003-CLAIM-PART-QUOTED-PLUS-GUMS-001", 'My aunt said, "My tooth is loose." My gums were bleeding.'),
+    ("CTX-003-CLAIM-PART-HYPOTHETICAL-PLUS-OTHER-001", "If my tooth were loose, I would worry. My sister's tooth was loose."),
+    ("CTX-003-CLAIM-PART-NEGATED-PLUS-OTHER-001", "My tooth was not loose. My sister's tooth was loose."),
+)
+
 TEETH_QA_CASES = (
     BASE_TEETH_QA_CASES
     + ATTEMPT_BINDING_QA_CASES
     + CONDITION_PROVENANCE_QA_CASES
+    + WARNING_CLAIM_PARTITION_QA_CASES
 )
 
 

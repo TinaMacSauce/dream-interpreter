@@ -50,16 +50,13 @@ def finalize_claim_provenance(
     events = _inventory(graph.get("event_inventory", []), "event_id")
     claims = _inventory(graph.get("claim_manifest", []), "claim_id")
     registry_rules = _registry_rules(registry)
-    partitions: Dict[str, str] = {}
-    rule_records: Dict[str, Mapping[str, Any]] = {}
-    for partition, records in graph.get("rule_sets", {}).items():
-        if partition == "contract_version":
-            continue
-        for record in records:
-            rule_id = str(record.get("rule_id") or "")
-            if rule_id:
-                partitions[rule_id] = partition
-                rule_records[rule_id] = record
+    rule_records: List[tuple[str, Mapping[str, Any]]] = []
+    # public_applied is the canonical active partition. warning_active and
+    # structural are views over those same records and must not duplicate paths.
+    for partition in ("public_applied", "matched_historical", "withheld_unresolved"):
+        for record in graph.get("rule_sets", {}).get(partition, []):
+            if record.get("rule_id"):
+                rule_records.append((partition, record))
 
     nodes: Dict[str, Dict[str, Any]] = {}
     paths: List[Dict[str, Any]] = []
@@ -84,25 +81,34 @@ def finalize_claim_provenance(
             "event_chain_id_or_null": chain,
         })
 
-    released_claim_for_rule: Dict[str, str] = {}
+    released_claim_for_rule_event: Dict[tuple[str, str], str] = {}
     for claim in claims.values():
         if claim.get("released"):
             for rule_id in claim.get("consumed_rule_ids", []):
-                released_claim_for_rule.setdefault(str(rule_id), str(claim["claim_id"]))
+                for event_id in claim.get("consumed_event_ids", []):
+                    released_claim_for_rule_event.setdefault(
+                        (str(rule_id), str(event_id)),
+                        str(claim["claim_id"]),
+                    )
 
     path_index = 0
-    for rule_id, record in sorted(rule_records.items()):
+    for partition, record in sorted(
+        rule_records,
+        key=lambda item: (
+            str(item[1].get("rule_id") or ""),
+            str((item[1].get("source_event_ids") or [""])[0]),
+            item[0],
+        ),
+    ):
+        rule_id = str(record.get("rule_id") or "")
         registry_rule = registry_rules.get(rule_id, {})
-        partition = partitions.get(rule_id, "")
         verified_active = bool(registry_rule.get("status") == "APPROVED" and registry_rule.get("active") is True)
-        released = partition in {"public_applied", "warning_active", "structural"} and verified_active
-        claim_id = released_claim_for_rule.get(rule_id)
-        if released and not claim_id:
-            released = False
         for event_id in record.get("source_event_ids", []):
             event = events.get(str(event_id))
             if not event:
                 continue
+            claim_id = released_claim_for_rule_event.get((rule_id, str(event_id)))
+            released = partition == "public_applied" and verified_active and bool(claim_id)
             units = _cardinality(event) if event.get("event_type") == "tooth_loss" else 1
             for unit in range(1, units + 1):
                 path_index += 1
@@ -136,7 +142,11 @@ def finalize_claim_provenance(
                     "cardinality_unit": unit,
                     "disposition": disposition,
                     "complete": bool(span_id and event_id and rule_id and (claim_id or disposition != "released")),
-                    "warning_path": bool(result.get("active_warning") and partition in {"public_applied", "warning_active"}),
+                    "warning_path": bool(
+                        partition == "public_applied"
+                        and claim_id
+                        and claims.get(claim_id, {}).get("claim_scope") == "atomic_warning"
+                    ),
                     "modifier": event.get("event_type") in {"pain_modifier", "tooth_blood_modifier"}
                         or rule_id.startswith("TEETH-MOD-") or rule_id.startswith("TEETH-PULL-"),
                     "terminal": rule_id == "TEETH-END-TERMINAL",

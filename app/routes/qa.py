@@ -20,7 +20,7 @@ from app.snake_registry import get_snake_registry_snapshot, public_snake_registr
 qa_bp = Blueprint("qa", __name__)
 
 TEETH_QA_CONTRACT_VERSION = "teeth-qa-contract-v2"
-SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v4"
+SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v5"
 
 
 @qa_bp.post("/qa/interpret")
@@ -290,6 +290,13 @@ SNAKE_QA_CASES = (
     ("SNAKE-002-ARBITRATION-QUOTED-ENDING-001", 'My sister said, "The snake killed me," but I saw the snake only watching her when the dream ended.'),
     ("SNAKE-002-ARBITRATION-HYPOTHETICAL-ENDING-001", "If the snake killed me I would lose, but it actually ran away at the end."),
     ("SNAKE-002-ARBITRATION-AMBIGUOUS-KILL-001", "Two snakes stood before me. I killed it at the end."),
+    ("EVID-REG-SNAKE-027", "A snake watched my sister from across the room."),
+    ("EVID-REG-SNAKE-028", "The snake tried to bite my cousin but never touched her."),
+    ("EVID-REG-SNAKE-029", "No snake chased, bit, or attacked me. I only saw a carving of one."),
+    ("EVID-REG-SNAKE-030", "A snake was in my bedroom, therefore my partner cursed me."),
+    ("EVID-REG-SNAKE-031", "A snake moved through my house but never approached anyone."),
+    ("EVID-REG-SNAKE-032", "A snake was hiding in my kitchen."),
+    ("EVID-REG-SNAKE-033", "A snake was in my bathroom and did not attack."),
 )
 
 

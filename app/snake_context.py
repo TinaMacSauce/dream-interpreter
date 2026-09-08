@@ -44,14 +44,19 @@ def _target(text: str, action: str) -> str:
 
 
 def extract_snake_context(dream: str) -> Dict[str, Any]:
-    """Extract only explicit Snake facts needed by approved Decision 01 rules."""
+    """Extract only explicit Snake facts needed by approved Decisions 01 and 02."""
     text = normalize_text(dream)
     has_snake_token = _has(rf"\b{_SNAKE}\b", text)
+    representation_type = "carving" if has_snake_token and _has(
+        r"\b(?:carving|carved image|carved figure)\b",
+        text,
+    ) else ""
     presence_negated = _has(
         rf"\b(?:no|without)\s+{_SNAKE}\b|\b(?:did not|didn't|never)\s+(?:see|saw|notice)\s+(?:a\s+|any\s+)?{_SNAKE}\b",
         text,
     )
-    has_snake = bool(has_snake_token and not presence_negated)
+    live_snake_present = bool(has_snake_token and not presence_negated and not representation_type)
+    has_snake = bool(live_snake_present or representation_type == "carving")
 
     nonactual_bite = _has(
         rf"\b(?:wondered|asked|imagined)\b.{{0,55}}\bif\b.{{0,35}}\b{_SNAKE}\b.{{0,20}}\b(?:bit|bite|bites)\b|"
@@ -61,6 +66,11 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
     )
     explicit_nonoccurrence = _has(
         rf"\b{_SNAKE}\b.{{0,30}}\b(?:did not|didn't|never)\s+bite(?:\s+or\s+attack)?\b",
+        text,
+    )
+    explicit_nonattack = _has(
+        rf"\b{_SNAKE}\b.{{0,45}}\b(?:did not|didn't|never)\s+(?:approach|attack|chase|strike|lunge)\b|"
+        rf"\b(?:no|without)\b.{{0,20}}\b(?:attack|chase|strike|lunge)\b",
         text,
     )
     attempted_bite = bool(not explicit_nonoccurrence and _has(
@@ -98,7 +108,7 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
         rf"\b(?:i|we)\b.{{0,25}}\b(?:was|were|felt)\b.{{0,15}}\bdefeated\b.{{0,35}}\b(?:by\s+)?(?:the\s+)?{_SNAKE}\b",
         text,
     )
-    bite_target = _target(text, "bite") if completed_bite else ""
+    bite_target = _target(text, "bite") if (completed_bite or attempted_bite) else ""
     defeat = bool(explicit_defeat or (completed_bite and bite_target == "dreamer"))
 
     battle = _has(rf"\b(?:fight|fighting|fought|battle|battling|struggle|struggling)\b.{{0,60}}\b{_SNAKE}\b|\b{_SNAKE}\b.{{0,60}}\b(?:fight|fighting|battle|struggle)\b", text)
@@ -121,10 +131,21 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
         strength = "lesser_or_weaker"
 
     location = ""
-    if _has(rf"\b{_SNAKE}\b.{{0,60}}\b(?:home|house|bedroom|kitchen|yard)\b|\b(?:home|house|bedroom|kitchen|yard)\b.{{0,60}}\b{_SNAKE}\b", text):
-        location = "home_or_family_sphere"
+    location_observed = ""
+    if _has(rf"\b{_SNAKE}\b.{{0,60}}\bbedroom\b|\bbedroom\b.{{0,60}}\b{_SNAKE}\b", text):
+        location = "intimate_life_sphere"
+        location_observed = "bedroom"
+    elif _has(rf"\b{_SNAKE}\b.{{0,60}}\bkitchen\b|\bkitchen\b.{{0,60}}\b{_SNAKE}\b", text):
+        location = "productivity_healing_replenishment_sphere"
+        location_observed = "kitchen"
+    elif _has(rf"\b{_SNAKE}\b.{{0,60}}\b(?:home|house|yard)\b|\b(?:home|house|yard)\b.{{0,60}}\b{_SNAKE}\b", text):
+        location = "life_sphere"
+        location_observed = "house"
+    elif _has(rf"\b{_SNAKE}\b.{{0,60}}\bbathroom\b|\bbathroom\b.{{0,60}}\b{_SNAKE}\b", text):
+        location_observed = "bathroom"
     elif _has(rf"\b{_SNAKE}\b.{{0,60}}\b(?:work|workplace|office|job)\b|\b(?:work|workplace|office|job)\b.{{0,60}}\b{_SNAKE}\b", text):
         location = "work_sphere"
+        location_observed = "work"
 
     transform_person = _has(
         rf"\b{_SNAKE}\b.{{0,45}}\b(?:turned|transformed|changed|became)\b"
@@ -162,8 +183,8 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
     elif retreat:
         action = "retreat"
 
-    target = _target(text, "bite" if completed_bite else "attack" if attack else "watch" if watching else "") if action else ""
-    event_graph = extract_snake_event_graph(dream) if has_snake else {
+    target = _target(text, "bite" if (completed_bite or attempted_bite) else "attack" if attack else "watch" if watching else "") if action else ""
+    event_graph = extract_snake_event_graph(dream) if live_snake_present else {
         "contract_version": SNAKE_EVENT_CONTRACT_VERSION,
         "entities": [], "events": [], "target_lineage": [],
         "terminal_frontiers": [], "rule_bindings": [],
@@ -256,6 +277,18 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
         retreat = any(event.get("action") == "retreat" for event in action_events)
         transform_person = bool(transform_person or any(event.get("action") == "transform_to_person" for event in action_events))
 
+    if explicit_nonattack and not completed_bite and not attempted_bite:
+        attack = False
+        if action == "attack":
+            action = ""
+            target = ""
+    if representation_type:
+        action = ""
+        target = ""
+        attack = watching = retreat = completed_bite = attempted_bite = venom = False
+        outcome = "not_established"
+        unfinished = transform_person = False
+
     unfinished = bool(
         unfinished
         or (
@@ -284,6 +317,9 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
     return {
         "context_version": SNAKE_CONTEXT_VERSION,
         "has_snake": has_snake,
+        "live_snake_present": live_snake_present,
+        "representation_type": representation_type,
+        "entity_form": "representation" if representation_type else ("live_snake" if live_snake_present else ""),
         "presence_negated": presence_negated,
         "quantity": quantity,
         "action": action,
@@ -299,6 +335,7 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
         "unfinished_battle": unfinished,
         "strength": strength,
         "location_scope": location,
+        "location_observed": location_observed,
         "transformed_into_person": transform_person,
         "ownership_mentioned": ownership_mentioned,
         "colors_ignored": colors,

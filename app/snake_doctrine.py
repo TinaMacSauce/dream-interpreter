@@ -32,21 +32,30 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
             if rule_id and rule_id not in rules:
                 rules.append(rule_id)
 
-    apply("snake_base_enemy")
+    apply("snake_base_enemy", bool(context.get("live_snake_present")))
+    apply("snake_representation_carving", context.get("representation_type") == "carving")
     apply("snake_action_map", bool(context.get("action")))
     apply(
         "snake_attack",
         bool(context.get("attack") or context.get("completed_bite") or context.get("attempted_bite")),
     )
     apply("snake_watching", bool(context.get("watching")))
+    apply("snake_watching_target", bool(context.get("watching") and context.get("action_target") not in {"", "dreamer", "unspecified"}))
     apply("snake_retreat", bool(context.get("retreat")))
     apply("snake_victory", context.get("outcome") == "dreamer_victory" or "SNAKE-END-VICTORY" in eligible_binding_ids)
     apply("snake_defeat", context.get("outcome") == "opposition_victory_in_encounter" or "SNAKE-END-DEFEAT" in eligible_binding_ids)
     apply("snake_quantity", context.get("quantity") == "multiple")
     apply("snake_size_danger", bool(context.get("strength")))
     apply("snake_bite", bool(context.get("completed_bite")))
+    apply("snake_bite_attempt_target", bool(context.get("attempted_bite") and context.get("action_target") not in {"", "dreamer", "unspecified"}))
     apply("snake_venom", bool(context.get("venom")))
     apply("snake_location", bool(context.get("location_scope")))
+    apply("snake_location_house_life", context.get("location_scope") == "life_sphere")
+    apply("snake_location_bedroom_intimacy", context.get("location_scope") == "intimate_life_sphere")
+    apply(
+        "snake_location_kitchen_productivity_healing_replenishment",
+        context.get("location_scope") == "productivity_healing_replenishment_sphere",
+    )
     apply("snake_transform_person", bool(context.get("transformed_into_person")))
     apply("snake_ownership_low", bool(context.get("ownership_mentioned")))
     apply("snake_unfinished_battle", bool(context.get("unfinished_battle")))
@@ -59,13 +68,20 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
     return {
         "active_doctrine": active,
         "symbol": "Snake" if active else "",
-        "base_meaning": "enemy_or_opposition" if active else "",
+        "base_meaning": (
+            "lurking_opposition_warning"
+            if active and context.get("representation_type") == "carving"
+            else "enemy_or_opposition" if active else ""
+        ),
+        "representation_type": context.get("representation_type", "") if active else "",
+        "entity_form": context.get("entity_form", "") if active else "",
         "action": context.get("action", "") if active else "",
         "action_target": context.get("action_target", "") if active else "",
         "outcome": context.get("outcome", "") if active else "",
         "quantity": context.get("quantity", "") if active else "",
         "strength": context.get("strength", "") if active else "",
         "location_scope": context.get("location_scope", "") if active else "",
+        "location_observed": context.get("location_observed", "") if active else "",
         "completed_bite": bool(active and context.get("completed_bite")),
         "attempted_bite": bool(active and context.get("attempted_bite")),
         "venom": bool(active and context.get("venom")),
@@ -83,7 +99,7 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
         ),
         "predictive_certainty": "none",
         "applied_rule_ids": rules,
-        "doctrine_version": registry.get("doctrine_version") or "DEC-SNAKE-2026-09-08-01",
+        "doctrine_version": registry.get("doctrine_version") or "DEC-SNAKE-2026-09-08-02",
         "context_version": SNAKE_CONTEXT_VERSION,
         "event_graph": context.get("event_graph") or {},
         "event_inventory": list(context.get("event_inventory") or []),
@@ -107,9 +123,14 @@ def build_snake_narration_facts(dream: str) -> Dict[str, Any]:
     if not doctrine.get("active_doctrine"):
         return {**doctrine, "active": False, "narration_text": ""}
 
-    parts = [
-        "Within Jamaican and Caribbean spiritual tradition, the snake represents an enemy or opposition."
-    ]
+    if doctrine.get("representation_type") == "carving":
+        parts = [
+            "Within Jamaican and Caribbean spiritual tradition, a snake carving carries a bounded warning of lurking opposition; it is not a live-snake event or proof of a hidden person, surveillance, or supernatural cause."
+        ]
+    else:
+        parts = [
+            "Within Jamaican and Caribbean spiritual tradition, the snake represents an enemy or opposition."
+        ]
     action = doctrine.get("action")
     raw_target = doctrine.get("action_target") or ""
     target = "you" if raw_target == "dreamer" else (raw_target or "the described target")
@@ -118,7 +139,7 @@ def build_snake_narration_facts(dream: str) -> Dict[str, Any]:
     elif action == "attack":
         parts.append(f"Its attack represents conflict directed toward {target}; the attack alone does not settle the outcome.")
     elif action == "attempted_bite":
-        parts.append("The attempted bite shows an attempted attack, not completed harm.")
+        parts.append(f"The attempted bite shows an attempted attack directed toward {target}, not completed contact or harm.")
     elif action == "completed_bite":
         parts.append(f"The completed bite represents an attack completed against {target} in this spiritual reading.")
     elif action == "retreat":
@@ -130,8 +151,12 @@ def build_snake_narration_facts(dream: str) -> Dict[str, Any]:
         parts.append("Its smaller or weaker form indicates lesser opposition.")
     elif doctrine.get("strength") == "stronger_or_more_dangerous":
         parts.append("Its larger, fiercer, or dangerous form indicates stronger opposition.")
-    if doctrine.get("location_scope") == "home_or_family_sphere":
-        parts.append("The location associates the issue with the home or family sphere without identifying a culprit.")
+    if doctrine.get("location_scope") == "life_sphere":
+        parts.append("The house location associates the warning with the dreamer's life generally, without identifying a culprit.")
+    elif doctrine.get("location_scope") == "intimate_life_sphere":
+        parts.append("The bedroom location associates the warning with the intimate sphere, without identifying a partner or culprit.")
+    elif doctrine.get("location_scope") == "productivity_healing_replenishment_sphere":
+        parts.append("The kitchen location associates the warning with productivity, healing, and replenishment, without implying contamination, illness, or a culprit.")
     elif doctrine.get("location_scope") == "work_sphere":
         parts.append("The location associates the issue with the work sphere without identifying a culprit.")
     if doctrine.get("venom"):

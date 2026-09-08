@@ -13,11 +13,11 @@ EXPECTED_TEETH_CONTEXT_VERSION = "teeth-context-v2"
 EXPECTED_TEETH_REGISTRY_SHEET_REVISION = "6138"
 EXPECTED_TEETH_REGISTRY_CONTENT_REVISION = "fnv1a64:c51447de5d35bd59"
 EXPECTED_TEETH_REGISTRY_CONTRACT_VERSION = "teeth-doctrine-registry-v1"
-EXPECTED_SNAKE_DOCTRINE_VERSION = "DEC-SNAKE-2026-09-08-01"
+EXPECTED_SNAKE_DOCTRINE_VERSION = "DEC-SNAKE-2026-09-08-02"
 EXPECTED_SNAKE_CONTEXT_VERSION = "snake-context-event-terminal-v1"
-EXPECTED_SNAKE_REGISTRY_RANGE = "DoctrineRegistry!A25:M42"
-EXPECTED_SNAKE_REGISTRY_SHEET_REVISION = "6138"
-EXPECTED_SNAKE_REGISTRY_CONTENT_REVISION = "fnv1a64:ae0190f42f79b9c8"
+EXPECTED_SNAKE_REGISTRY_RANGE = "DoctrineRegistry!A25:M54"
+EXPECTED_SNAKE_REGISTRY_SHEET_REVISION = "6144"
+EXPECTED_SNAKE_REGISTRY_CONTENT_REVISION = "fnv1a64:1c8decb0fe7b56da"
 EXPECTED_SNAKE_REGISTRY_CONTRACT_VERSION = "snake-doctrine-registry-v1"
 
 
@@ -140,9 +140,9 @@ def validate_health_payload(
             "sheet_revision": EXPECTED_SNAKE_REGISTRY_SHEET_REVISION,
             "content_revision": EXPECTED_SNAKE_REGISTRY_CONTENT_REVISION,
             "doctrine_version": EXPECTED_SNAKE_DOCTRINE_VERSION,
-            "rule_count": 18,
-            "active_rule_count": 18,
-            "unresolved_rule_count": 0,
+            "rule_count": 29,
+            "active_rule_count": 24,
+            "unresolved_rule_count": 5,
             "loaded_from": "canonical_sheet",
         }
         errors.extend(

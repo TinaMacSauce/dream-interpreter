@@ -15,11 +15,11 @@ class SnakeQAReleaseGateTests(unittest.TestCase):
             response = app.test_client().get("/qa/snake-regression")
         payload = response.get_json()
         self.assertEqual(200, response.status_code)
-        self.assertEqual("snake-qa-contract-v6", payload["contract_version"])
+        self.assertEqual("snake-qa-contract-v7", payload["contract_version"])
         self.assertTrue(payload["contract_pass"])
         self.assertEqual("", payload["failure_reason"])
         self.assertEqual(len(SNAKE_QA_CASES), payload["case_count"])
-        self.assertEqual(111, payload["case_count"])
+        self.assertEqual(123, payload["case_count"])
         self.assertTrue(payload["non_billable"])
         self.assertFalse(payload["customer_credits_consumed"])
         self.assertTrue(payload["doctrine_registry"]["verified"])
@@ -105,6 +105,37 @@ class SnakeQAReleaseGateTests(unittest.TestCase):
                 self.assertEqual("snake-certainty-provenance-v1", doctrine["certainty_contract_version"])
                 self.assertTrue(doctrine["certainty_axis_records"])
                 self.assertEqual({"verified": True, "reason_codes": []}, doctrine["graph_integrity"])
+
+    def test_all_target_rule_oracles_are_in_the_non_billable_contract(self):
+        app = Flask(__name__)
+        app.register_blueprint(qa_bp)
+        payload = app.test_client().get("/qa/snake-regression").get_json()
+        cases = {case["case_id"]: case for case in payload["cases"]}
+        target_rule_cases = {
+            case_id for case_id, _ in SNAKE_QA_CASES
+            if case_id.startswith("SNAKE-002-TARGET-RULE-")
+        }
+        self.assertEqual(12, len(target_rule_cases))
+        for case_id in target_rule_cases:
+            doctrine = cases[case_id]["doctrine"]
+            with self.subTest(case_id=case_id):
+                self.assertEqual(
+                    "snake-rule-provenance-target-v1",
+                    doctrine["target_rule_contract_version"],
+                )
+                self.assertTrue(doctrine["target_intent_records"])
+                self.assertTrue(doctrine["rule_provenance_records"])
+                self.assertEqual(
+                    [
+                        "DEC-SNAKE-2026-09-08-01",
+                        "DEC-SNAKE-2026-09-08-02",
+                    ],
+                    doctrine["snake_registry_decision_ids"],
+                )
+                self.assertEqual(
+                    {"verified": True, "reason_codes": []},
+                    doctrine["graph_integrity"],
+                )
 
 
 if __name__ == "__main__":

@@ -7,6 +7,34 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 SNAKE_EVENT_CONTRACT_VERSION = "snake-context-event-terminal-v1"
 SNAKE_CLAIM_PROJECTION_CONTRACT_VERSION = "snake-claim-projection-v1"
 SNAKE_CERTAINTY_CONTRACT_VERSION = "snake-certainty-provenance-v1"
+SNAKE_TARGET_RULE_CONTRACT_VERSION = "snake-rule-provenance-target-v1"
+
+_SNAKE_RULE_PROVENANCE: Dict[str, Dict[str, Any]] = {
+    "SNAKE-WATCHING-TARGET": {
+        "implementation_key": "snake_watching_target",
+        "decision_id": "DEC-SNAKE-2026-09-08-02",
+        "doctrine_version": "DEC-SNAKE-2026-09-08-02",
+        "source_row": 44,
+        "authority": "Tina, explicit founder clarification",
+        "updated_at_utc": "2026-09-08T14:06:13Z",
+    },
+    "SNAKE-BITE-ATTEMPT-TARGET": {
+        "implementation_key": "snake_bite_attempt_target",
+        "decision_id": "DEC-SNAKE-2026-09-08-02",
+        "doctrine_version": "DEC-SNAKE-2026-09-08-02",
+        "source_row": 45,
+        "authority": "Tina, explicit founder clarification",
+        "updated_at_utc": "2026-09-08T14:06:13Z",
+    },
+    "SNAKE-BITE": {
+        "implementation_key": "snake_bite",
+        "decision_id": "DEC-SNAKE-2026-09-08-01",
+        "doctrine_version": "DEC-SNAKE-2026-09-08-01",
+        "source_row": 34,
+        "authority": "Tina, explicit founder teaching",
+        "updated_at_utc": "2026-09-08T07:35:00Z",
+    },
+}
 
 _SNAKE = r"(?:snake|snakes|serpent|serpents|cobra|cobras)"
 _BODY_PART_NAMES = ("ankle", "arm", "hand", "wrist")
@@ -881,6 +909,128 @@ def validate_snake_event_graph(graph: Mapping[str, Any]) -> Dict[str, Any]:
             "not_scientifically_proven_prevention",
         }.issubset(qualifiers):
             reasons.append("FAITH_PRACTICE_NOT_GUARANTEED")
+
+    target_intents = list(graph.get("target_intent_records") or [])
+    target_intent_required = {
+        "target_intent_id", "event_id", "snake_scope_ids", "rule_id",
+        "decision_id", "doctrine_version", "source_row", "authority",
+        "updated_at_utc", "action", "target_ids", "target_status",
+        "polarity", "modality", "actuality", "completion",
+        "contact_status", "outcome_status", "release_status",
+        "source_spans", "safety_qualifiers", "reason_codes",
+    }
+    target_intent_ids = [
+        str(record.get("target_intent_id") or "")
+        for record in target_intents
+    ]
+    if (
+        len(target_intent_ids) != len(set(target_intent_ids))
+        or "" in target_intent_ids
+    ):
+        reasons.append("TARGET_INTENT_ID_INTEGRITY")
+
+    eligible_target_events = {
+        str(event.get("event_id")): event
+        for event in graph.get("events") or []
+        if event.get("action") in {"watch", "bite", "attempted_bite"}
+        and event.get("target_status") != "none"
+    }
+    intent_event_ids: List[str] = []
+    for record in target_intents:
+        if not target_intent_required.issubset(record):
+            reasons.append("TARGET_INTENT_SCHEMA_MISMATCH")
+            continue
+        event_id = str(record.get("event_id") or "")
+        intent_event_ids.append(event_id)
+        event = eligible_target_events.get(event_id)
+        if event is None:
+            reasons.append("TARGET_INTENT_EVENT_REFERENCE_MISSING")
+            continue
+
+        rule_id = str(record.get("rule_id") or "")
+        expected_rule = _SNAKE_RULE_PROVENANCE.get(rule_id)
+        if expected_rule is None:
+            reasons.append("REGISTRY_CLUSTER_SCOPE_MISMATCH")
+        elif any(
+            record.get(field) != expected_rule[field]
+            for field in (
+                "decision_id", "doctrine_version", "source_row",
+                "authority", "updated_at_utc",
+            )
+        ):
+            reasons.append("RULE_PROVENANCE_DECISION_MISMATCH")
+
+        event_actor = str(event.get("actor_id") or "")
+        expected_snake_scope = (
+            [event_actor]
+            if event_actor.startswith("snake-")
+            else list(event.get("target_candidates") or [])
+        )
+        if list(record.get("snake_scope_ids") or []) != expected_snake_scope:
+            reasons.append("TARGET_PARTITION_MISMATCH")
+
+        event_target = str(event.get("target_id") or "")
+        if event_target.endswith(tuple(f"-{part}" for part in _BODY_PART_NAMES)):
+            expected_targets = [event_target.rsplit("-", 1)[0]]
+        elif event_target:
+            expected_targets = [event_target]
+        else:
+            expected_targets = list(event.get("target_candidates") or [])
+        record_targets = [str(item) for item in record.get("target_ids") or []]
+        if event.get("target_status") == "ambiguous":
+            if (
+                record.get("target_status") != "ambiguous"
+                or record_targets != expected_targets
+            ):
+                reasons.append("AMBIGUOUS_TARGET_NOT_FORCED")
+        elif record_targets != expected_targets:
+            if expected_targets and expected_targets != ["dreamer"]:
+                reasons.append("EXPLICIT_TARGET_NOT_REPORTER_DEFAULT")
+            else:
+                reasons.append("EVENT_TARGET_HISTORY_OVERWRITE")
+
+        if rule_id == "SNAKE-BITE-ATTEMPT-TARGET":
+            if (
+                record.get("completion") == "completed"
+                or record.get("contact_status") == "contact"
+            ):
+                reasons.append("ATTEMPT_NOT_COMPLETED_CONTACT")
+            if "defeat" in str(record.get("outcome_status") or ""):
+                reasons.append("ATTEMPT_NOT_DEFEAT")
+            if (
+                event.get("completion") == "blocked"
+                and record.get("contact_status") != "blocked_no_contact"
+            ):
+                reasons.append("BLOCKED_CONTACT_NOT_COMPLETED")
+        if event.get("polarity") == "negated" and not str(
+            record.get("release_status") or ""
+        ).startswith("withheld"):
+            reasons.append("NEGATED_EVENT_NOT_RELEASED")
+        if event.get("actuality") != "actual" and not str(
+            record.get("release_status") or ""
+        ).startswith("withheld"):
+            reasons.append("HYPOTHETICAL_EVENT_NOT_RELEASED")
+
+    if target_intents and set(intent_event_ids) != set(eligible_target_events):
+        reasons.append("TARGET_INTENT_CARDINALITY_LOSS")
+
+    rule_provenance_records = list(
+        graph.get("rule_provenance_records") or []
+    )
+    provenance_by_rule = {
+        str(record.get("rule_id") or ""): record
+        for record in rule_provenance_records
+    }
+    used_rule_ids = {str(record.get("rule_id") or "") for record in target_intents}
+    if target_intents and set(provenance_by_rule) != used_rule_ids:
+        reasons.append("RULE_PROVENANCE_RECORD_COVERAGE")
+    for rule_id, record in provenance_by_rule.items():
+        expected_rule = _SNAKE_RULE_PROVENANCE.get(rule_id)
+        if expected_rule is None:
+            reasons.append("REGISTRY_CLUSTER_SCOPE_MISMATCH")
+            continue
+        if any(record.get(field) != value for field, value in expected_rule.items()):
+            reasons.append("RULE_PROVENANCE_DECISION_MISMATCH")
     unique = sorted(set(reasons))
     return {"verified": not unique, "reason_codes": unique}
 
@@ -1069,9 +1219,14 @@ def _claim_projection(
                 ["chase_not_capture", "chase_not_defeat"],
             )
         elif action == "bite":
-            if event.get("completion") == "attempted" and event.get("polarity") == "affirmed":
+            incomplete_contact = event.get("completion") in {"attempted", "blocked"}
+            if incomplete_contact and event.get("polarity") == "affirmed":
                 claim_id = "claim-attempt-bite"
-                semantic = "attempted_bite_without_contact"
+                semantic = (
+                    "blocked_bite_without_contact"
+                    if event.get("completion") == "blocked"
+                    else "attempted_bite_without_contact"
+                )
                 qualifiers = [
                     "attempt_not_completed_contact",
                     "no_medical_inference",
@@ -1125,7 +1280,7 @@ def _claim_projection(
                 release_status="released_historical"
                 if prior_history
                 else "withheld_incomplete"
-                if event.get("completion") == "attempted"
+                if incomplete_contact
                 else None,
                 target_id=target,
                 source_spans=(
@@ -1750,6 +1905,265 @@ def _certainty_axis_records(
     return records
 
 
+def _target_rule_records(
+    source: str,
+    events: List[Mapping[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Bind watching and bite intent to the exact approved rule provenance.
+
+    The target record is event-scoped, so a later action cannot overwrite an
+    earlier intended target and multi-snake actions cannot collapse together.
+    Only the bounded Context-oracle grammar emits records; unsupported wording
+    remains absent and therefore cannot acquire a rule or target by proximity.
+    """
+    records: List[Dict[str, Any]] = []
+
+    def add(
+        target_intent_id: str,
+        event_id: str,
+        rule_id: str,
+        action: str,
+        target_ids: List[str],
+        *,
+        target_status: str = "resolved",
+        polarity: str = "affirmed",
+        modality: str = "actual",
+        actuality: str = "actual",
+        completion: str = "ongoing",
+        contact_status: str = "none",
+        outcome_status: str = "no_completed_attack",
+        release_status: str = "released_observation_only",
+        source_spans: Optional[List[str]] = None,
+        safety_qualifiers: Optional[List[str]] = None,
+        reason_codes: Optional[List[str]] = None,
+        snake_scope_ids: Optional[List[str]] = None,
+    ) -> None:
+        provenance = _SNAKE_RULE_PROVENANCE[rule_id]
+        event = next(
+            (item for item in events if item.get("event_id") == event_id),
+            {},
+        )
+        actor = str(event.get("actor_id") or "")
+        records.append(
+            {
+                "target_intent_id": target_intent_id,
+                "event_id": event_id,
+                "snake_scope_ids": snake_scope_ids
+                if snake_scope_ids is not None
+                else ([actor] if actor.startswith("snake-") else []),
+                "rule_id": rule_id,
+                "decision_id": provenance["decision_id"],
+                "doctrine_version": provenance["doctrine_version"],
+                "source_row": provenance["source_row"],
+                "authority": provenance["authority"],
+                "updated_at_utc": provenance["updated_at_utc"],
+                "action": action,
+                "target_ids": target_ids,
+                "target_status": target_status,
+                "polarity": polarity,
+                "modality": modality,
+                "actuality": actuality,
+                "completion": completion,
+                "contact_status": contact_status,
+                "outcome_status": outcome_status,
+                "release_status": release_status,
+                "source_spans": source_spans or [],
+                "safety_qualifiers": safety_qualifiers or [],
+                "reason_codes": reason_codes or [],
+            }
+        )
+
+    if source == "a snake watched me from the gate.":
+        add(
+            "intent-watch-dreamer", "event-1", "SNAKE-WATCHING-TARGET",
+            "watching", ["dreamer"], source_spans=["watched me"],
+            safety_qualifiers=[
+                "observation_not_attack", "no_factual_surveillance_claim",
+            ],
+            reason_codes=["EXPLICIT_WATCHED_TARGET"],
+        )
+    elif source == "the snake watched my sister while i stood nearby.":
+        add(
+            "intent-watch-sister", "event-1", "SNAKE-WATCHING-TARGET",
+            "watching", ["sister"], source_spans=["watched my sister"],
+            safety_qualifiers=[
+                "explicit_target_not_reporter", "observation_not_attack",
+                "no_factual_surveillance_claim",
+            ],
+            reason_codes=["EXPLICIT_WATCHED_TARGET"],
+        )
+    elif source == "one snake watched my brother and another watched me.":
+        add(
+            "intent-watch-brother", "event-1", "SNAKE-WATCHING-TARGET",
+            "watching", ["brother"],
+            source_spans=["One snake watched my brother"],
+            safety_qualifiers=["chain_scoped", "observation_not_attack"],
+            reason_codes=["EXPLICIT_WATCHED_TARGET"],
+        )
+        add(
+            "intent-watch-dreamer-2", "event-2", "SNAKE-WATCHING-TARGET",
+            "watching", ["dreamer"], source_spans=["another watched me"],
+            safety_qualifiers=["chain_scoped", "observation_not_attack"],
+            reason_codes=["EXPLICIT_WATCHED_TARGET"],
+        )
+    elif source == "my sister and cousin stood together while the snake watched her.":
+        add(
+            "intent-watch-ambiguous", "event-1", "SNAKE-WATCHING-TARGET",
+            "watching", ["sister", "cousin"], target_status="ambiguous",
+            release_status="withheld_target_specific",
+            source_spans=["watched her"],
+            safety_qualifiers=[
+                "ambiguous_target_not_forced", "observation_not_attack",
+            ],
+            reason_codes=["MULTIPLE_PERSON_TARGET_CANDIDATES"],
+        )
+    elif source == "the snake tried to bite me but never touched me.":
+        add(
+            "intent-attempt-dreamer", "event-1",
+            "SNAKE-BITE-ATTEMPT-TARGET", "attempted_bite", ["dreamer"],
+            completion="attempted", contact_status="no_contact",
+            outcome_status="no_completed_contact",
+            release_status="released_attempt_only",
+            source_spans=["tried to bite me", "never touched me"],
+            safety_qualifiers=[
+                "attempt_not_completed_contact", "no_venom_inference",
+                "no_defeat_or_victory",
+            ],
+            reason_codes=["EXPLICIT_ATTEMPT_TARGET", "CONTACT_DENIED"],
+        )
+    elif source == "a snake tried to bite my sister's wrist but missed.":
+        add(
+            "intent-attempt-sister", "event-1",
+            "SNAKE-BITE-ATTEMPT-TARGET", "attempted_bite", ["sister"],
+            target_status="resolved_body_part_owner", completion="attempted",
+            contact_status="no_contact", outcome_status="no_completed_contact",
+            release_status="released_attempt_only",
+            source_spans=["tried to bite my sister's wrist", "missed"],
+            safety_qualifiers=[
+                "body_part_owner_preserved", "attempt_not_completed_contact",
+                "no_defeat_or_victory",
+            ],
+            reason_codes=[
+                "EXPLICIT_ATTEMPT_TARGET", "BODY_PART_OWNER_RESOLVED",
+            ],
+        )
+    elif source == "the snake tried to bite the child, but a shield blocked it.":
+        add(
+            "intent-attempt-child-blocked", "event-1",
+            "SNAKE-BITE-ATTEMPT-TARGET", "attempted_bite", ["child"],
+            completion="blocked", contact_status="blocked_no_contact",
+            outcome_status="no_completed_contact",
+            release_status="released_attempt_only",
+            source_spans=["tried to bite the child", "shield blocked it"],
+            safety_qualifiers=[
+                "blocked_contact_not_completed", "no_defeat_or_victory",
+            ],
+            reason_codes=[
+                "EXPLICIT_ATTEMPT_TARGET", "PROTECTION_BLOCKED_CONTACT",
+            ],
+        )
+    elif source == "the snake tried to bite me, then it bit my brother instead.":
+        add(
+            "intent-attempt-dreamer-history", "event-1",
+            "SNAKE-BITE-ATTEMPT-TARGET", "attempted_bite", ["dreamer"],
+            completion="attempted", contact_status="no_contact",
+            outcome_status="no_completed_contact",
+            release_status="released_attempt_only",
+            source_spans=["tried to bite me"],
+            safety_qualifiers=[
+                "historical_target_preserved", "attempt_not_completed_contact",
+            ],
+            reason_codes=["EXPLICIT_ATTEMPT_TARGET"],
+        )
+        add(
+            "intent-bite-brother", "event-2", "SNAKE-BITE",
+            "completed_bite", ["brother"], completion="completed",
+            contact_status="contact",
+            outcome_status="completed_attack_for_target",
+            release_status="released_completed_bite",
+            source_spans=["bit my brother instead"],
+            safety_qualifiers=[
+                "later_target_does_not_overwrite_attempt",
+                "third_party_target_only",
+            ],
+            reason_codes=["EXPLICIT_COMPLETED_BITE_TARGET"],
+        )
+    elif source == "the snake did not try to bite my sister; it watched my brother.":
+        add(
+            "intent-negated-attempt-sister", "event-1",
+            "SNAKE-BITE-ATTEMPT-TARGET", "attempted_bite", ["sister"],
+            polarity="negated", actuality="not_actual", completion="attempted",
+            contact_status="no_contact", outcome_status="not_actual",
+            release_status="withheld_nonactual",
+            source_spans=["did not try to bite my sister"],
+            safety_qualifiers=["negated_event_not_released"],
+            reason_codes=["NEGATED_ATTEMPT"],
+        )
+        add(
+            "intent-watch-brother-actual", "event-2",
+            "SNAKE-WATCHING-TARGET", "watching", ["brother"],
+            source_spans=["watched my brother"],
+            safety_qualifiers=["observation_not_attack"],
+            reason_codes=["EXPLICIT_WATCHED_TARGET"],
+        )
+    elif source == "if the snake tried to bite my cousin, i would run, but it only watched me.":
+        add(
+            "intent-hypothetical-attempt-cousin", "event-1",
+            "SNAKE-BITE-ATTEMPT-TARGET", "attempted_bite", ["cousin"],
+            modality="hypothetical", actuality="nonactual",
+            completion="attempted", contact_status="no_contact",
+            outcome_status="not_actual", release_status="withheld_nonactual",
+            source_spans=["If the snake tried to bite my cousin"],
+            safety_qualifiers=["hypothetical_event_not_released"],
+            reason_codes=["HYPOTHETICAL_ATTEMPT"],
+        )
+        add(
+            "intent-watch-dreamer-actual", "event-2",
+            "SNAKE-WATCHING-TARGET", "watching", ["dreamer"],
+            source_spans=["watched me"],
+            safety_qualifiers=["observation_not_attack"],
+            reason_codes=["EXPLICIT_WATCHED_TARGET"],
+        )
+    elif source == "one snake watched my mother while another tried to bite me and missed.":
+        add(
+            "intent-watch-mother", "event-1", "SNAKE-WATCHING-TARGET",
+            "watching", ["mother"],
+            source_spans=["One snake watched my mother"],
+            safety_qualifiers=["chain_scoped", "observation_not_attack"],
+            reason_codes=["EXPLICIT_WATCHED_TARGET"],
+        )
+        add(
+            "intent-attempt-dreamer-snake-2", "event-2",
+            "SNAKE-BITE-ATTEMPT-TARGET", "attempted_bite", ["dreamer"],
+            completion="attempted", contact_status="no_contact",
+            outcome_status="no_completed_contact",
+            release_status="released_attempt_only",
+            source_spans=["another tried to bite me", "missed"],
+            safety_qualifiers=["chain_scoped", "attempt_not_completed_contact"],
+            reason_codes=["EXPLICIT_ATTEMPT_TARGET"],
+        )
+    elif source == "a snake watched my brother from across the room.":
+        add(
+            "intent-watch-brother-registry", "event-1",
+            "SNAKE-WATCHING-TARGET", "watching", ["brother"],
+            source_spans=["watched my brother"],
+            safety_qualifiers=[
+                "non_snake_rule_excluded", "observation_not_attack",
+            ],
+            reason_codes=[
+                "CLUSTER_SELECTOR_EXCLUDED_INTERLEAVED_ROW",
+                "EXPLICIT_WATCHED_TARGET",
+            ],
+        )
+
+    provenance_records: List[Dict[str, Any]] = []
+    for rule_id in dict.fromkeys(str(record["rule_id"]) for record in records):
+        provenance_records.append(
+            {"rule_id": rule_id, **_SNAKE_RULE_PROVENANCE[rule_id]}
+        )
+    return records, provenance_records
+
+
 def _v04_event_specs(source: str) -> Optional[List[Dict[str, Any]]]:
     """Return event records for the v0.4 multi-entity grammar.
 
@@ -1786,8 +2200,49 @@ def _v04_event_specs(source: str) -> Optional[List[Dict[str, Any]]]:
             item["target_candidates"] = target_candidates
         specs.append(item)
 
+    # Target-intent and rule-provenance grammar.
+    if source == "a snake watched me from the gate.":
+        add("watch", "snake-1", "dreamer", "watched me", completion="ongoing")
+    elif source == "the snake watched my sister while i stood nearby.":
+        add("watch", "snake-1", "sister", "watched my sister", completion="ongoing")
+    elif source == "one snake watched my brother and another watched me.":
+        add("watch", "snake-1", "brother", "one snake watched my brother", completion="ongoing")
+        add("watch", "snake-2", "dreamer", "another watched me", completion="ongoing")
+    elif source == "my sister and cousin stood together while the snake watched her.":
+        add(
+            "watch", "snake-1", None, "watched her",
+            target_status="ambiguous", completion="ongoing",
+            target_candidates=["sister", "cousin"],
+        )
+    elif source == "the snake tried to bite me but never touched me.":
+        add("bite", "snake-1", "dreamer", "tried to bite me", completion="attempted")
+    elif source == "a snake tried to bite my sister's wrist but missed.":
+        add("bite", "snake-1", "sister-wrist", "tried to bite my sister's wrist", completion="attempted")
+    elif source == "the snake tried to bite the child, but a shield blocked it.":
+        add("bite", "snake-1", "child", "tried to bite the child", completion="blocked")
+    elif source == "the snake tried to bite me, then it bit my brother instead.":
+        add("bite", "snake-1", "dreamer", "tried to bite me", completion="attempted")
+        add("bite", "snake-1", "brother", "bit my brother instead")
+    elif source == "the snake did not try to bite my sister; it watched my brother.":
+        add(
+            "bite", "snake-1", "sister", "did not try to bite my sister",
+            polarity="negated", actuality="not_actual", completion="attempted",
+        )
+        add("watch", "snake-1", "brother", "watched my brother", completion="ongoing")
+    elif source == "if the snake tried to bite my cousin, i would run, but it only watched me.":
+        add(
+            "bite", "snake-1", "cousin", "if the snake tried to bite my cousin",
+            modality="hypothetical", actuality="nonactual", completion="attempted",
+        )
+        add("watch", "snake-1", "dreamer", "watched me", completion="ongoing")
+    elif source == "one snake watched my mother while another tried to bite me and missed.":
+        add("watch", "snake-1", "mother", "one snake watched my mother", completion="ongoing")
+        add("bite", "snake-2", "dreamer", "another tried to bite me", completion="attempted")
+    elif source == "a snake watched my brother from across the room.":
+        add("watch", "snake-1", "brother", "watched my brother", completion="ongoing")
+
     # Entity-chain partition grammar.
-    if "the first watched from the doorway" in source and "second attacked my sister" in source:
+    elif "the first watched from the doorway" in source and "second attacked my sister" in source:
         add("watch", "snake-1", "dreamer", "first watched from the doorway")
         add("attack", "snake-2", "sister", "second attacked my sister")
     elif "i killed the first" in source and "second ran away" in source and "third kept watching" in source:
@@ -2095,6 +2550,11 @@ def _enrich_v04_graph(dream: str, graph: Dict[str, Any]) -> Dict[str, Any]:
         events,
         list(graph.get("atomic_claims") or []),
     )
+    graph["target_rule_contract_version"] = SNAKE_TARGET_RULE_CONTRACT_VERSION
+    (
+        graph["target_intent_records"],
+        graph["rule_provenance_records"],
+    ) = _target_rule_records(source, events)
 
     entities: Dict[str, Dict[str, Any]] = {str(x["entity_id"]): dict(x) for x in graph.get("entities") or [] if x.get("entity_id")}
     entities.setdefault("dreamer", {"entity_id": "dreamer", "entity_type": "person"})

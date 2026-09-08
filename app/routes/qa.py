@@ -20,7 +20,7 @@ from app.snake_registry import get_snake_registry_snapshot, public_snake_registr
 qa_bp = Blueprint("qa", __name__)
 
 TEETH_QA_CONTRACT_VERSION = "teeth-qa-contract-v2"
-SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v6"
+SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v7"
 
 
 @qa_bp.post("/qa/interpret")
@@ -310,6 +310,18 @@ SNAKE_QA_CASES = (
     ("SNAKE-003-CERTAINTY-RECURRENCE-001", "Again I fought the same snake, but I woke before either of us won."),
     ("SNAKE-003-CERTAINTY-FAITH-PRACTICE-001", "A snake attacked me and I woke before the fight ended. After waking I rejected the bad dream and planned to read Psalm 91 before bed."),
     ("SNAKE-003-CERTAINTY-BITE-THEN-VICTORY-001", "The snake bit my hand, but I kept fighting and killed that same snake at the end."),
+    ("SNAKE-002-TARGET-RULE-WATCH-DREAMER-001", "A snake watched me from the gate."),
+    ("SNAKE-002-TARGET-RULE-WATCH-SISTER-001", "The snake watched my sister while I stood nearby."),
+    ("SNAKE-002-TARGET-RULE-WATCH-MULTI-TARGET-001", "One snake watched my brother and another watched me."),
+    ("SNAKE-002-TARGET-RULE-WATCH-AMBIGUOUS-001", "My sister and cousin stood together while the snake watched her."),
+    ("SNAKE-002-TARGET-RULE-ATTEMPT-DREAMER-001", "The snake tried to bite me but never touched me."),
+    ("SNAKE-002-TARGET-RULE-ATTEMPT-SISTER-WRIST-001", "A snake tried to bite my sister's wrist but missed."),
+    ("SNAKE-002-TARGET-RULE-ATTEMPT-BLOCKED-001", "The snake tried to bite the child, but a shield blocked it."),
+    ("SNAKE-002-TARGET-RULE-ATTEMPT-THEN-OTHER-BITE-001", "The snake tried to bite me, then it bit my brother instead."),
+    ("SNAKE-002-TARGET-RULE-NEGATED-ATTEMPT-PLUS-WATCH-001", "The snake did not try to bite my sister; it watched my brother."),
+    ("SNAKE-002-TARGET-RULE-HYPOTHETICAL-PLUS-WATCH-001", "If the snake tried to bite my cousin, I would run, but it only watched me."),
+    ("SNAKE-002-TARGET-RULE-MIXED-TWO-SNAKES-001", "One snake watched my mother while another tried to bite me and missed."),
+    ("SNAKE-002-TARGET-RULE-INTERLEAVED-REGISTRY-001", "A snake watched my brother from across the room."),
 )
 
 

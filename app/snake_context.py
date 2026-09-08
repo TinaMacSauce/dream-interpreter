@@ -7,6 +7,7 @@ from app.utils import normalize_text
 from app.snake_event_graph import (
     SNAKE_CERTAINTY_CONTRACT_VERSION,
     SNAKE_EVENT_CONTRACT_VERSION,
+    SNAKE_TARGET_RULE_CONTRACT_VERSION,
     extract_snake_event_graph,
 )
 
@@ -355,6 +356,9 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
         "claim_projection_manifest": event_graph.get("claim_projection_manifest") or [],
         "certainty_contract_version": event_graph.get("certainty_contract_version") or SNAKE_CERTAINTY_CONTRACT_VERSION,
         "certainty_axis_records": event_graph.get("certainty_axis_records") or [],
+        "target_rule_contract_version": event_graph.get("target_rule_contract_version") or SNAKE_TARGET_RULE_CONTRACT_VERSION,
+        "target_intent_records": event_graph.get("target_intent_records") or [],
+        "rule_provenance_records": event_graph.get("rule_provenance_records") or [],
         "location_scopes": event_graph.get("location_scopes") or [],
         "rule_bindings": event_graph.get("rule_bindings") or [],
         "graph_integrity": event_graph.get("graph_integrity") or {"verified": False, "reason_codes": ["GRAPH_MISSING"]},

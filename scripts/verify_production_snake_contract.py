@@ -57,6 +57,21 @@ CERTAINTY_CASE_IDS = {
     "SNAKE-003-CERTAINTY-BITE-THEN-VICTORY-001",
 }
 
+TARGET_RULE_CASE_IDS = {
+    "SNAKE-002-TARGET-RULE-WATCH-DREAMER-001",
+    "SNAKE-002-TARGET-RULE-WATCH-SISTER-001",
+    "SNAKE-002-TARGET-RULE-WATCH-MULTI-TARGET-001",
+    "SNAKE-002-TARGET-RULE-WATCH-AMBIGUOUS-001",
+    "SNAKE-002-TARGET-RULE-ATTEMPT-DREAMER-001",
+    "SNAKE-002-TARGET-RULE-ATTEMPT-SISTER-WRIST-001",
+    "SNAKE-002-TARGET-RULE-ATTEMPT-BLOCKED-001",
+    "SNAKE-002-TARGET-RULE-ATTEMPT-THEN-OTHER-BITE-001",
+    "SNAKE-002-TARGET-RULE-NEGATED-ATTEMPT-PLUS-WATCH-001",
+    "SNAKE-002-TARGET-RULE-HYPOTHETICAL-PLUS-WATCH-001",
+    "SNAKE-002-TARGET-RULE-MIXED-TWO-SNAKES-001",
+    "SNAKE-002-TARGET-RULE-INTERLEAVED-REGISTRY-001",
+}
+
 ORDINARY_LANGUAGE_CASES: Dict[str, Dict[str, Any]] = {
     "REG-SNAKE-ATTACK-001": {"action": "attack", "outcome": "unresolved", "include": ["SNAKE-ATTACK", "SNAKE-UNFINISHED-BATTLE"], "exclude": ["SNAKE-END-DEFEAT"]},
     "REG-SNAKE-BITE-ATTEMPT-001": {"attempted_bite": True, "completed_bite": False, "exclude": ["SNAKE-BITE", "SNAKE-END-DEFEAT"]},
@@ -90,7 +105,7 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
     if not isinstance(payload, dict):
         return ["payload is not an object"]
     errors: List[str] = []
-    if payload.get("contract_version") != "snake-qa-contract-v6":
+    if payload.get("contract_version") != "snake-qa-contract-v7":
         errors.append("contract_version mismatch")
     if payload.get("contract_pass") is not True:
         errors.append(
@@ -195,7 +210,10 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
             errors.append(f"{case.get('case_id')} event graph contract mismatch")
         if integrity.get("verified") is not True or integrity.get("reason_codes"):
             errors.append(f"{case.get('case_id')} event graph integrity failed")
-        if not graph.get("events") or not graph.get("terminal_frontiers"):
+        if not graph.get("events") or (
+            case.get("case_id") not in TARGET_RULE_CASE_IDS
+            and not graph.get("terminal_frontiers")
+        ):
             errors.append(f"{case.get('case_id')} event graph inventory missing")
     if not CERTAINTY_CASE_IDS.issubset(cases):
         errors.append("certainty provenance regression identifiers missing")
@@ -205,6 +223,16 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
             errors.append(f"{case_id} certainty contract mismatch")
         if not doctrine.get("certainty_axis_records"):
             errors.append(f"{case_id} certainty records missing")
+    if not TARGET_RULE_CASE_IDS.issubset(cases):
+        errors.append("target-rule provenance regression identifiers missing")
+    for case_id in TARGET_RULE_CASE_IDS:
+        doctrine = (cases.get(case_id) or {}).get("doctrine") or {}
+        if doctrine.get("target_rule_contract_version") != "snake-rule-provenance-target-v1":
+            errors.append(f"{case_id} target-rule contract mismatch")
+        if not doctrine.get("target_intent_records"):
+            errors.append(f"{case_id} target-intent records missing")
+        if not doctrine.get("rule_provenance_records"):
+            errors.append(f"{case_id} rule-provenance records missing")
     return errors
 
 

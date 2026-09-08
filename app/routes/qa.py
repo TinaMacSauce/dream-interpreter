@@ -13,11 +13,14 @@ from app.teeth_doctrine import (
     build_teeth_narration_facts,
 )
 from app.teeth_registry import get_teeth_registry_snapshot, public_registry_metadata
+from app.snake_doctrine import build_snake_doctrine_context, build_snake_narration_facts
+from app.snake_registry import get_snake_registry_snapshot, public_snake_registry_metadata
 
 
 qa_bp = Blueprint("qa", __name__)
 
 TEETH_QA_CONTRACT_VERSION = "teeth-qa-contract-v2"
+SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v1"
 
 
 @qa_bp.post("/qa/interpret")
@@ -45,6 +48,7 @@ def qa_interpret():
 @qa_bp.get("/qa/status")
 def qa_status():
     registry = get_teeth_registry_snapshot()
+    snake_registry = get_snake_registry_snapshot()
     access = public_qa_access_metadata()
     response = jsonify(
         {
@@ -52,8 +56,10 @@ def qa_status():
             "release": release_metadata(),
             "qa_access": access,
             "doctrine_registry": public_registry_metadata(registry),
+            "snake_doctrine_registry": public_snake_registry_metadata(snake_registry),
             "ready": bool(
                 registry.get("verified") is True
+                and snake_registry.get("verified") is True
                 and access.get("configured") is True
                 and access.get("storage_ready") is True
             ),
@@ -185,6 +191,61 @@ def teeth_regression_contract():
             ),
             "case_count": len(cases),
             "cases": cases,
+        }
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
+SNAKE_QA_CASES = (
+    ("base_enemy", "I saw a snake in the dream."),
+    ("presence_negated", "I did not see any snake."),
+    ("watching", "A snake watched me from the grass."),
+    ("attack_not_outcome", "A snake attacked me, but the dream ended before the fight was over."),
+    ("retreat", "The snake ran away from me."),
+    ("victory", "I fought the snake and killed it."),
+    ("found_dead_not_victory", "I found a dead snake beside the road."),
+    ("defeat", "The snake defeated me at the end."),
+    ("multiple", "Three snakes surrounded me."),
+    ("small", "A tiny snake crossed the path."),
+    ("large_cobra", "A huge cobra chased me."),
+    ("bite", "The snake bit me on the hand."),
+    ("attempted_bite", "The snake tried to bite me but did not."),
+    ("venom", "The snake bit me and venom entered my arm."),
+    ("home", "A snake was inside my house."),
+    ("work", "A snake appeared in my office at work."),
+    ("transformation", "The snake transformed into a person."),
+    ("ownership", "My neighbor owned the snake."),
+    ("unfinished", "I was fighting the snake when I woke up."),
+    ("color_excluded", "A red snake watched me."),
+)
+
+
+@qa_bp.get("/qa/snake-regression")
+def snake_regression_contract():
+    registry = get_snake_registry_snapshot()
+    cases = [
+        {
+            "case_id": case_id,
+            "dream": dream,
+            "doctrine": build_snake_doctrine_context(dream),
+            "narration": build_snake_narration_facts(dream),
+        }
+        for case_id, dream in SNAKE_QA_CASES
+    ]
+    response = jsonify(
+        {
+            "contract_version": SNAKE_QA_CONTRACT_VERSION,
+            "release": release_metadata(),
+            "doctrine_registry": public_snake_registry_metadata(
+                registry,
+                include_rule_ids=True,
+            ),
+            "case_count": len(cases),
+            "cases": cases,
+            "non_billable": True,
+            "customer_credits_consumed": False,
         }
     )
     response.headers["Cache-Control"] = "no-store"

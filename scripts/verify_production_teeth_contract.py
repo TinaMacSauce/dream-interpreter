@@ -12,7 +12,7 @@ from urllib.request import Request, urlopen
 EXPECTED_CONTRACT_VERSION = "teeth-qa-contract-v2"
 EXPECTED_REGISTRY_CONTRACT_VERSION = "teeth-doctrine-registry-v1"
 EXPECTED_REGISTRY_CONTENT_REVISION = "fnv1a64:c51447de5d35bd59"
-EXPECTED_REGISTRY_SHEET_REVISION = "6134"
+EXPECTED_REGISTRY_SHEET_REVISION = "6138"
 
 EXPECTED: Dict[str, Dict[str, Any]] = {
     "quantity_one": {

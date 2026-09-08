@@ -53,3 +53,10 @@ jobs:
           python scripts/verify_production_teeth_contract.py
           --base-url https://interpreter.jamaicantruestories.com
           --expected-commit "$EXPECTED_COMMIT"
+      - name: Verify deployed Snake QA contract
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit || github.event.workflow_run.head_sha || github.sha }}
+        run: >-
+          python scripts/verify_production_snake_contract.py
+          --base-url https://interpreter.jamaicantruestories.com
+          --expected-commit "$EXPECTED_COMMIT"

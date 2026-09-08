@@ -4,17 +4,23 @@ import os
 from typing import Dict
 
 from app.teeth_context import TEETH_CONTEXT_VERSION
+from app.snake_context import SNAKE_CONTEXT_VERSION
 
 
-RELEASE_ID = "teeth-registry-v1"
+RELEASE_ID = "snake-dec01-foundation-v1"
 REPOSITORY = "TinaMacSauce/dream-interpreter"
 REPOSITORY_URL = "https://github.com/TinaMacSauce/dream-interpreter"
 PRODUCTION_URL = "https://interpreter.jamaicantruestories.com"
 TEETH_DOCTRINE_VERSION = "DEC-TEETH-2026-09-03-05"
 DOCTRINE_REGISTRY = "Dream Symbol Dictionary!DoctrineRegistry"
-TEETH_REGISTRY_SHEET_REVISION = "6134"
+TEETH_REGISTRY_SHEET_REVISION = "6138"
 TEETH_REGISTRY_CONTENT_REVISION = "fnv1a64:c51447de5d35bd59"
 TEETH_REGISTRY_CONTRACT_VERSION = "teeth-doctrine-registry-v1"
+SNAKE_DOCTRINE_VERSION = "DEC-SNAKE-2026-09-08-01"
+SNAKE_REGISTRY_RANGE = "DoctrineRegistry!A25:M42"
+SNAKE_REGISTRY_SHEET_REVISION = "6138"
+SNAKE_REGISTRY_CONTENT_REVISION = "fnv1a64:ae0190f42f79b9c8"
+SNAKE_REGISTRY_CONTRACT_VERSION = "snake-doctrine-registry-v1"
 
 
 def release_metadata() -> Dict[str, str]:
@@ -43,4 +49,10 @@ def release_metadata() -> Dict[str, str]:
         "teeth_registry_sheet_revision": TEETH_REGISTRY_SHEET_REVISION,
         "teeth_registry_content_revision": TEETH_REGISTRY_CONTENT_REVISION,
         "teeth_registry_contract_version": TEETH_REGISTRY_CONTRACT_VERSION,
+        "snake_doctrine_version": SNAKE_DOCTRINE_VERSION,
+        "snake_context_version": SNAKE_CONTEXT_VERSION,
+        "snake_registry_range": SNAKE_REGISTRY_RANGE,
+        "snake_registry_sheet_revision": SNAKE_REGISTRY_SHEET_REVISION,
+        "snake_registry_content_revision": SNAKE_REGISTRY_CONTENT_REVISION,
+        "snake_registry_contract_version": SNAKE_REGISTRY_CONTRACT_VERSION,
     }

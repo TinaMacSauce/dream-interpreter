@@ -61,6 +61,10 @@ from app.teeth_integration import (
     attach_teeth_narration_facts,
     bind_teeth_output_contract,
 )
+from app.snake_integration import (
+    attach_snake_narration_facts,
+    bind_snake_output_contract,
+)
 from app.sheets import (
     doctrine_available,
     get_or_create_worksheet,
@@ -953,6 +957,10 @@ def run_interpretation():
                 dream,
                 doctrine_facts,
             )
+            doctrine_facts = attach_snake_narration_facts(
+                dream,
+                doctrine_facts,
+            )
 
             doctrine_seal, bound_interpretation, bound_full_interpretation = (
                 bind_teeth_output_contract(
@@ -960,6 +968,14 @@ def run_interpretation():
                     seal=doctrine_seal,
                     interpretation=built.get("interpretation", {}),
                     full_interpretation=built.get("full_interpretation", ""),
+                )
+            )
+            doctrine_seal, bound_interpretation, bound_full_interpretation = (
+                bind_snake_output_contract(
+                    doctrine_facts=doctrine_facts,
+                    seal=doctrine_seal,
+                    interpretation=bound_interpretation,
+                    full_interpretation=bound_full_interpretation,
                 )
             )
 

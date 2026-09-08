@@ -18,6 +18,11 @@ TEETH_REGISTRY_CACHE: Dict[str, Any] = {
     "snapshot": None,
 }
 
+SNAKE_REGISTRY_CACHE: Dict[str, Any] = {
+    "loaded_at": 0.0,
+    "snapshot": None,
+}
+
 
 def invalidate_all_caches() -> None:
     LEGACY_CACHE["loaded_at"] = 0.0
@@ -30,3 +35,6 @@ def invalidate_all_caches() -> None:
 
     TEETH_REGISTRY_CACHE["loaded_at"] = 0.0
     TEETH_REGISTRY_CACHE["snapshot"] = None
+
+    SNAKE_REGISTRY_CACHE["loaded_at"] = 0.0
+    SNAKE_REGISTRY_CACHE["snapshot"] = None

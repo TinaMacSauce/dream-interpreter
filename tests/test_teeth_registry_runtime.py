@@ -90,6 +90,33 @@ class TeethRegistryRuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "registry_content_revision_mismatch"):
             validate_registry_values(values, expected_content_revision="fnv1a64:wrong")
 
+    def test_snake_rows_do_not_change_teeth_cluster_fingerprint(self):
+        values = registry_values()
+        teeth_revision = registry_content_revision(values)
+        values.append(
+            [
+                "SNAKE-BASE-ENEMY",
+                "DEC-SNAKE-2026-09-08-01",
+                "Snake",
+                "Snake appears",
+                "Enemy or opposition",
+                "Action refines",
+                "Cultural guidance only",
+                "APPROVED",
+                "Tina, explicit founder teaching",
+                "DEC-SNAKE-2026-09-08-01",
+                "snake_base_enemy",
+                "2026-09-08T07:35:00Z",
+                "TRUE",
+            ]
+        )
+        snapshot = validate_registry_values(
+            values,
+            expected_content_revision=teeth_revision,
+        )
+        self.assertTrue(snapshot["verified"])
+        self.assertEqual(23, snapshot["rule_count"])
+
     def test_production_loader_reads_exact_canonical_tab(self):
         values = registry_values()
         spreadsheet = _Spreadsheet(values)

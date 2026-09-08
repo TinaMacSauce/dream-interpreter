@@ -18,6 +18,7 @@ from app.sheets import (
     get_spreadsheet,
 )
 from app.teeth_registry import get_teeth_registry_snapshot, public_registry_metadata
+from app.snake_registry import get_snake_registry_snapshot, public_snake_registry_metadata
 
 health_bp = Blueprint("health", __name__)
 
@@ -48,6 +49,7 @@ def _system_snapshot() -> Dict[str, Any]:
     journal_ok = False
     spreadsheet_error = ""
     teeth_registry = get_teeth_registry_snapshot()
+    snake_registry = get_snake_registry_snapshot()
 
     try:
         get_spreadsheet()
@@ -65,11 +67,12 @@ def _system_snapshot() -> Dict[str, Any]:
         "timestamp": int(time.time()),
         "service": "dream-interpreter",
         "release": release_metadata(),
-        "status": "healthy" if spreadsheet_ok and teeth_registry.get("verified") is True else "degraded",
+        "status": "healthy" if spreadsheet_ok and teeth_registry.get("verified") is True and snake_registry.get("verified") is True else "degraded",
         "spreadsheet_connected": spreadsheet_ok,
         "spreadsheet_error": spreadsheet_error,
         "doctrine_sheets_available": doctrine_ok,
         "teeth_registry": public_registry_metadata(teeth_registry),
+        "snake_registry": public_snake_registry_metadata(snake_registry),
         "dream_journal_available": journal_ok,
         "stripe_configured": _safe_bool(stripe_config_ok()),
         "doctrine_mode_enabled": _safe_bool(Config.DOCTRINE_MODE),
@@ -157,6 +160,7 @@ def ready():
         snapshot["spreadsheet_connected"]
         and snapshot["doctrine_mode_enabled"]
         and snapshot["teeth_registry"].get("verified") is True
+        and snapshot["snake_registry"].get("verified") is True
     )
 
     return _build_response(

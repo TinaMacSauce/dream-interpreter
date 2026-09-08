@@ -242,6 +242,7 @@ def public_qa_access_metadata() -> Dict[str, Any]:
         "interpret_route": "/qa/interpret",
         "application_route": "/interpret",
         "fixed_contract_route": "/qa/teeth-regression",
+        "snake_fixed_contract_route": "/qa/snake-regression",
         "grant_authentication": "X-Admin-Key",
         "interpret_authentication": "X-QA-Token or Authorization Bearer",
         "email_domain": Config.QA_EMAIL_DOMAIN,

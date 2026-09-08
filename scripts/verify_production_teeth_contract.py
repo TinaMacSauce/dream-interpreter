@@ -207,6 +207,7 @@ GRAPH_CONTRACT_VERSION = "context-graph-referential-integrity/1.0"
 PROVENANCE_CONTRACT_VERSION = "claim-provenance-reachability/1.0"
 CONDITION_PROVENANCE_CONTRACT_VERSION = "condition-state-provenance/1.0"
 WARNING_CLAIM_PARTITION_CONTRACT_VERSION = "warning-claim-partition-conservation/1.0"
+NARRATION_CLAIM_CONTRACT_VERSION = "narration-claim-consumption/1.0"
 CONDITION_GRAPH_EXPECTED: Dict[str, Dict[str, Any]] = {
     "CTX-003-COND-PROV-GUMS-NEGATED-001": {
         "events": {"gum-bleeding-1", "negated-loose-1", "negated-loss-1"},
@@ -333,6 +334,61 @@ WARNING_PARTITION_EXPECTED: Dict[str, Dict[str, Any]] = {
 
 for _warning_case_id in WARNING_PARTITION_EXPECTED:
     EXPECTED[_warning_case_id] = {"warning_partition": True}
+
+NARRATION_EXPECTED: Dict[str, int] = {
+    "CTX-003-NARR-CONS-MULTI-OWNER-CONDITIONS-001": 2,
+    "CTX-003-NARR-CONS-SAME-OWNER-DISTINCT-CONDITIONS-001": 2,
+    "CTX-003-NARR-CONS-TWO-OWNER-LOOSE-001": 2,
+    "CTX-003-NARR-CONS-LOSS-PLUS-OTHER-LOOSE-001": 2,
+    "CTX-003-NARR-CONS-GUMS-PLUS-OTHER-LOSS-001": 2,
+    "CTX-003-NARR-CONS-QUOTED-PLUS-GUMS-001": 1,
+    "CTX-003-NARR-CONS-HYPOTHETICAL-PLUS-OTHER-001": 1,
+    "CTX-003-NARR-CONS-NEGATED-PLUS-OTHER-001": 1,
+    "CTX-003-NARR-CONS-LOOSE-THEN-LOSS-001": 1,
+    "CTX-003-NARR-CONS-ATTEMPT-THEN-SECOND-LOSS-001": 1,
+    "CTX-003-NARR-CONS-TERMINAL-RETURN-001": 0,
+    "CTX-003-NARR-CONS-ONE-LOSS-MULTI-RULE-001": 1,
+}
+
+for _narration_case_id in NARRATION_EXPECTED:
+    EXPECTED[_narration_case_id] = {"narration_contract": True}
+
+
+def _validate_narration_contract(
+    case_id: str, doctrine: Dict[str, Any], narration: Dict[str, Any]
+) -> List[str]:
+    errors: List[str] = []
+    if narration.get("contract_version") != NARRATION_CLAIM_CONTRACT_VERSION:
+        return [f"{case_id}: missing narration claim contract"]
+    integrity = narration.get("narration_integrity") or {}
+    if integrity.get("verified") is not True or integrity.get("reason_codes") != []:
+        errors.append(f"{case_id}: narration integrity did not pass: {integrity!r}")
+    graph = doctrine.get("context_graph") or {}
+    atomic = {
+        claim.get("claim_id"): claim for claim in graph.get("claim_manifest", [])
+        if claim.get("claim_scope") == "atomic_warning" and claim.get("released") is True
+    }
+    clauses = list(narration.get("narration_clauses") or [])
+    members = [clause for clause in clauses if clause.get("clause_type") == "warning_member"]
+    expected_count = NARRATION_EXPECTED[case_id]
+    if len(members) != expected_count:
+        errors.append(f"{case_id}: warning member count expected {expected_count}, got {len(members)}")
+    consumed = [claim_id for clause in members for claim_id in clause.get("member_claim_ids", [])]
+    if set(consumed) != set(atomic) or len(consumed) != len(set(consumed)):
+        errors.append(f"{case_id}: released atomic claims are not consumed exactly once")
+    text = str(narration.get("narration_text") or "")
+    for clause in clauses:
+        span = clause.get("output_span") or {}
+        start, end = span.get("start"), span.get("end")
+        if not isinstance(start, int) or not isinstance(end, int) or text[start:end] != clause.get("rendered_text"):
+            errors.append(f"{case_id}: narration clause output span does not round-trip")
+        if any(clause.get(field) for field in ("consumed_event_ids", "consumed_rule_ids", "consumed_span_ids")):
+            errors.append(f"{case_id}: narration clause consumes raw source data")
+        profile = clause.get("certainty_profile") or {}
+        for axis in ("warning_presence", "warning_severity", "rule_match_confidence", "binding_confidence", "predictive_certainty"):
+            if axis not in profile:
+                errors.append(f"{case_id}: narration certainty axis {axis} is missing")
+    return errors
 
 
 def _validate_condition_graph(case_id: str, dream: str, doctrine: Dict[str, Any]) -> List[str]:
@@ -752,6 +808,7 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
                 "include", "exclude", "exact_rules", "unresolved_include",
                 "narration_contains", "narration_excludes", "attempt_record",
                 "condition_graph", "warning_partition",
+                "narration_contract",
             }:
                 continue
             if doctrine.get(field) != value:
@@ -804,6 +861,9 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
 
         if expected.get("warning_partition"):
             case_errors.extend(_validate_warning_partition(case_id, doctrine))
+
+        if expected.get("narration_contract"):
+            case_errors.extend(_validate_narration_contract(case_id, doctrine, narration))
 
         case_errors.extend(_validate_provenance(case_id, doctrine))
 

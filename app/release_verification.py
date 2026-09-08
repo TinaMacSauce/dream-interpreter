@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 
 EXPECTED_SERVICE = "dream-interpreter"
-EXPECTED_RELEASE_ID = "snake-dec01-foundation-v1"
+EXPECTED_RELEASE_ID = "release-observability-v1"
 EXPECTED_REPOSITORY = "TinaMacSauce/dream-interpreter"
 EXPECTED_REPOSITORY_URL = "https://github.com/TinaMacSauce/dream-interpreter"
 EXPECTED_PRODUCTION_URL = "https://interpreter.jamaicantruestories.com"

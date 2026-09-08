@@ -45,4 +45,5 @@ jobs:
           tests.test_snake_registry_runtime
           tests.test_snake_doctrine
           tests.test_snake_qa_gate
+          tests.test_release_evidence
           -v

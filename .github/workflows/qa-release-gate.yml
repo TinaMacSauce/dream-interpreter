@@ -41,4 +41,5 @@ jobs:
           tests.test_teeth_ctx_003_claim_provenance
           tests.test_teeth_ctx_003_condition_provenance
           tests.test_teeth_ctx_003_warning_claim_partition
+          tests.test_teeth_ctx_003_narration_claim_consumption
           -v

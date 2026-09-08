@@ -19,6 +19,13 @@ def build_teeth_output_summary(teeth: Dict[str, Any]) -> str:
     if teeth.get("active") is not True:
         return ""
 
+    structured = str(teeth.get("narration_text") or "").strip()
+    integrity = teeth.get("narration_integrity")
+    if structured and isinstance(integrity, dict):
+        if integrity.get("verified") is True:
+            return structured
+        return ""
+
     parts: List[str] = []
     seen = set()
     for item in [teeth.get("lead", ""), *(teeth.get("details") or [])]:

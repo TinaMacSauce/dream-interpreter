@@ -31,6 +31,25 @@ EXPECTED_CASES: Dict[str, Dict[str, Any]] = {
     "color_excluded": {"colors_ignored": ["red"], "include": ["SNAKE-COLOR-EXCLUDED"]},
 }
 
+ORDINARY_LANGUAGE_CASES: Dict[str, Dict[str, Any]] = {
+    "REG-SNAKE-ATTACK-001": {"action": "attack", "outcome": "unresolved", "include": ["SNAKE-ATTACK", "SNAKE-UNFINISHED-BATTLE"], "exclude": ["SNAKE-END-DEFEAT"]},
+    "REG-SNAKE-BITE-ATTEMPT-001": {"attempted_bite": True, "completed_bite": False, "exclude": ["SNAKE-BITE", "SNAKE-END-DEFEAT"]},
+    "REG-SNAKE-BITE-DREAMER-001": {"action_target": "dreamer", "completed_bite": True, "outcome": "opposition_victory_in_encounter", "include": ["SNAKE-BITE", "SNAKE-END-DEFEAT"]},
+    "REG-SNAKE-CHASE-ESCAPE-001": {"completed_bite": False, "outcome": "not_established", "exclude": ["SNAKE-BITE", "SNAKE-END-DEFEAT"]},
+    "REG-SNAKE-CHASE-CAPTURE-001": {"completed_bite": False, "outcome": "unresolved", "exclude": ["SNAKE-BITE", "SNAKE-END-DEFEAT"]},
+    "REG-SNAKE-DEFEAT-001": {"outcome": "opposition_victory_in_encounter", "include": ["SNAKE-END-DEFEAT"]},
+    "REG-SNAKE-HYPOTHETICAL-001": {"completed_bite": False, "outcome": "not_established", "exclude": ["SNAKE-BITE", "SNAKE-END-DEFEAT"]},
+    "REG-SNAKE-MULTI-ACTION-001": {"quantity": "multiple", "include": ["SNAKE-WATCHING", "SNAKE-ATTACK", "SNAKE-QUANTITY"]},
+    "REG-SNAKE-MIXED-ENDINGS-001": {"outcome": "mixed", "include": ["SNAKE-BITE", "SNAKE-END-VICTORY", "SNAKE-END-DEFEAT", "SNAKE-RETREAT"]},
+    "REG-SNAKE-NEGATION-001": {"completed_bite": False, "attempted_bite": False, "exclude": ["SNAKE-BITE", "SNAKE-ATTACK", "SNAKE-END-DEFEAT"]},
+    "REG-SNAKE-PROTECT-OTHER-001": {"action_target": "child", "outcome": "dreamer_victory", "include": ["SNAKE-ATTACK", "SNAKE-END-VICTORY"], "exclude": ["SNAKE-BITE", "SNAKE-END-DEFEAT"]},
+    "REG-SNAKE-SIZE-SPECIES-001": {"quantity": "multiple", "strength": "stronger_or_more_dangerous", "include": ["SNAKE-QUANTITY", "SNAKE-SIZE-DANGER"]},
+    "REG-SNAKE-TRANSFORM-001": {"transformed_into_person": True, "include": ["SNAKE-TRANSFORM-PERSON"]},
+    "REG-SNAKE-TRANSFORM-ACCUSATION-001": {"transformed_into_person": True, "include": ["SNAKE-TRANSFORM-PERSON"]},
+    "REG-SNAKE-VENOM-ABSENT-001": {"completed_bite": True, "venom": False, "exclude": ["SNAKE-VENOM"]},
+    "REG-SNAKE-QUOTED-001": {"active_doctrine": False, "completed_bite": False, "exact": []},
+}
+
 
 def fetch_json(url: str, timeout: float) -> tuple[int, Dict[str, Any]]:
     request = Request(url, headers={"Accept": "application/json"}, method="GET")
@@ -45,10 +64,11 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
     if not isinstance(payload, dict):
         return ["payload is not an object"]
     errors: List[str] = []
-    if payload.get("contract_version") != "snake-qa-contract-v2":
+    if payload.get("contract_version") != "snake-qa-contract-v3":
         errors.append("contract_version mismatch")
-    if not isinstance(payload.get("case_count"), int) or payload.get("case_count") < len(EXPECTED_CASES) + 31:
-        errors.append(f"case_count expected at least {len(EXPECTED_CASES) + 31}, got {payload.get('case_count')!r}")
+    minimum_cases = len(EXPECTED_CASES) + 31 + len(ORDINARY_LANGUAGE_CASES)
+    if not isinstance(payload.get("case_count"), int) or payload.get("case_count") < minimum_cases:
+        errors.append(f"case_count expected at least {minimum_cases}, got {payload.get('case_count')!r}")
     if payload.get("non_billable") is not True or payload.get("customer_credits_consumed") is not False:
         errors.append("bounded QA billing contract mismatch")
     release = payload.get("release") or {}
@@ -95,6 +115,28 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
         for forbidden in ("definitely", "will happen", "is the enemy", "will get sick"):
             if forbidden in narration:
                 errors.append(f"{case_id} narration contains forbidden phrase {forbidden!r}")
+    if not set(ORDINARY_LANGUAGE_CASES).issubset(cases):
+        errors.append("ordinary-language regression identifiers missing")
+    for case_id, expected in ORDINARY_LANGUAGE_CASES.items():
+        doctrine = (cases.get(case_id) or {}).get("doctrine") or {}
+        rules = doctrine.get("applied_rule_ids") or []
+        for field, value in expected.items():
+            if field in {"include", "exclude", "exact"}:
+                continue
+            if doctrine.get(field) != value:
+                errors.append(f"{case_id}.{field} expected {value!r}, got {doctrine.get(field)!r}")
+        for rule_id in expected.get("include", []):
+            if rule_id not in rules:
+                errors.append(f"{case_id} missing rule {rule_id}")
+        for rule_id in expected.get("exclude", []):
+            if rule_id in rules:
+                errors.append(f"{case_id} unexpectedly included rule {rule_id}")
+        if "exact" in expected and rules != expected["exact"]:
+            errors.append(f"{case_id} exact rules expected {expected['exact']!r}, got {rules!r}")
+        graph = doctrine.get("event_graph") or {}
+        integrity = graph.get("graph_integrity") or {}
+        if integrity.get("verified") is not True or integrity.get("reason_codes"):
+            errors.append(f"{case_id} event graph integrity failed")
     context_cases = [case for case_id, case in cases.items() if case_id.startswith("SNAKE-00")]
     if len(context_cases) < 31:
         errors.append(f"context case count expected at least 31, got {len(context_cases)}")

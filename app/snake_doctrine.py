@@ -20,6 +20,11 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
         and (context.get("graph_integrity") or {}).get("verified") is True
     )
     rules: List[str] = []
+    eligible_binding_ids = {
+        str(binding.get("rule_id"))
+        for binding in context.get("rule_bindings") or []
+        if binding.get("disposition") in {"eligible", "eligible_partitioned", "target_scoped", "partitioned_by_target"}
+    }
 
     def apply(key: str, condition: bool = True) -> None:
         if active and condition:
@@ -35,8 +40,8 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
     )
     apply("snake_watching", bool(context.get("watching")))
     apply("snake_retreat", bool(context.get("retreat")))
-    apply("snake_victory", context.get("outcome") == "dreamer_victory")
-    apply("snake_defeat", context.get("outcome") == "opposition_victory_in_encounter")
+    apply("snake_victory", context.get("outcome") == "dreamer_victory" or "SNAKE-END-VICTORY" in eligible_binding_ids)
+    apply("snake_defeat", context.get("outcome") == "opposition_victory_in_encounter" or "SNAKE-END-DEFEAT" in eligible_binding_ids)
     apply("snake_quantity", context.get("quantity") == "multiple")
     apply("snake_size_danger", bool(context.get("strength")))
     apply("snake_bite", bool(context.get("completed_bite")))
@@ -48,8 +53,8 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
     apply("snake_color_excluded", bool(context.get("colors_ignored")))
     # Tina's response/practice teaching follows an active troubling Snake reading,
     # and remains a separate guidance axis rather than changing the outcome.
-    apply("snake_faith_response")
-    apply("snake_faith_best_practice")
+    apply("snake_faith_response", bool(context.get("faith_response_eligible")))
+    apply("snake_faith_best_practice", bool(context.get("faith_best_practice_eligible")))
 
     return {
         "active_doctrine": active,
@@ -70,11 +75,11 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
         "colors_ignored": list(context.get("colors_ignored") or []) if active else [],
         "response_guidance": (
             "Immediately cancel or reject the bad dream upon waking within Tina's Christian faith practice."
-            if active else ""
+            if active and context.get("faith_response_eligible") else ""
         ),
         "best_practice_guidance": (
             "Repentance, reading Psalms, and reading Psalm 91 before bed are recommended Christian spiritual practices within the Jamaican True Stories framework."
-            if active else ""
+            if active and context.get("faith_best_practice_eligible") else ""
         ),
         "predictive_certainty": "none",
         "applied_rule_ids": rules,
@@ -101,7 +106,8 @@ def build_snake_narration_facts(dream: str) -> Dict[str, Any]:
         "Within Jamaican and Caribbean spiritual tradition, the snake represents an enemy or opposition."
     ]
     action = doctrine.get("action")
-    target = doctrine.get("action_target") or "the described target"
+    raw_target = doctrine.get("action_target") or ""
+    target = "you" if raw_target == "dreamer" else (raw_target or "the described target")
     if action == "watching":
         parts.append(f"Its watching points to monitoring directed toward {target}, not a completed attack.")
     elif action == "attack":

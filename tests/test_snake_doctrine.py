@@ -73,16 +73,28 @@ class SnakeDoctrineTests(unittest.TestCase):
         self.assertIn("not medical evidence", narration)
 
     def test_faith_guidance_is_separate_and_non_guaranteeing(self):
-        doctrine = self.doctrine("A snake watched me.")
+        neutral = self.doctrine("A snake watched me.")
+        self.assertNotIn("SNAKE-FAITH-RESPONSE", neutral["applied_rule_ids"])
+        self.assertNotIn("SNAKE-FAITH-BEST-PRACTICE", neutral["applied_rule_ids"])
+
+        dream = "A snake attacked me and I woke before either of us won."
+        doctrine = self.doctrine(dream)
         self.assertIn("SNAKE-FAITH-RESPONSE", doctrine["applied_rule_ids"])
         self.assertIn("SNAKE-FAITH-BEST-PRACTICE", doctrine["applied_rule_ids"])
         _, interpretation, full = bind_snake_output_contract(
-            doctrine_facts={"snake_narration": build_snake_narration_facts("A snake watched me.")},
+            doctrine_facts={"snake_narration": build_snake_narration_facts(dream)},
             seal={"risk": "high"}, interpretation={}, full_interpretation="",
         )
         self.assertIn("Psalm 91", interpretation["what_to_do"])
         self.assertIn("not scientifically proven", interpretation["what_to_do"])
         self.assertIn("not proof of an enemy", full)
+
+    def test_internal_dreamer_target_is_never_exposed_in_narration(self):
+        narration = build_snake_narration_facts(
+            "A snake attacked me, but the dream ended before either of us won."
+        )["narration_text"]
+        self.assertIn("directed toward you", narration)
+        self.assertNotIn("directed toward dreamer", narration)
 
     def test_mixed_teeth_snake_output_does_not_invent_precedence(self):
         snake = build_snake_narration_facts("A snake watched me.")

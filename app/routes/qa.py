@@ -20,7 +20,7 @@ from app.snake_registry import get_snake_registry_snapshot, public_snake_registr
 qa_bp = Blueprint("qa", __name__)
 
 TEETH_QA_CONTRACT_VERSION = "teeth-qa-contract-v2"
-SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v2"
+SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v3"
 
 
 @qa_bp.post("/qa/interpret")
@@ -250,6 +250,22 @@ SNAKE_QA_CASES = (
     ("SNAKE-002-TARGET-LINEAGE-NONPERSON-001", "The snake bit my travel bag and then disappeared."),
     ("SNAKE-002-TARGET-LINEAGE-BITE-THEN-VICTORY-001", "The snake bit my hand, but I kept fighting and killed that same snake at the end."),
     ("SNAKE-002-TARGET-LINEAGE-NEGATED-CORRECTION-001", "The snake did not bite my sister; it bit my hand instead."),
+    ("REG-SNAKE-ATTACK-001", "A snake attacked me, but the dream ended before either of us won."),
+    ("REG-SNAKE-BITE-ATTEMPT-001", "The snake lunged to bite me but missed."),
+    ("REG-SNAKE-BITE-DREAMER-001", "The snake bit my hand."),
+    ("REG-SNAKE-CHASE-ESCAPE-001", "A snake chased me, but I escaped and locked the door."),
+    ("REG-SNAKE-CHASE-CAPTURE-001", "A snake chased me and wrapped around me, but I woke before it bit me."),
+    ("REG-SNAKE-DEFEAT-001", "The snake knocked me down and stood over me when the dream ended."),
+    ("REG-SNAKE-HYPOTHETICAL-001", "I wondered what would happen if the snake bit me."),
+    ("REG-SNAKE-MULTI-ACTION-001", "Two snakes appeared: one watched me while the other attacked."),
+    ("REG-SNAKE-MIXED-ENDINGS-001", "Three snakes came: I killed one, another bit me, and the third ran away."),
+    ("REG-SNAKE-NEGATION-001", "The snake did not bite or attack me."),
+    ("REG-SNAKE-PROTECT-OTHER-001", "A snake attacked a child, and I killed it before it reached her."),
+    ("REG-SNAKE-SIZE-SPECIES-001", "A small garden snake and a huge cobra blocked my path."),
+    ("REG-SNAKE-TRANSFORM-001", "The snake turned into my sister."),
+    ("REG-SNAKE-TRANSFORM-ACCUSATION-001", "The snake became my coworker, so that proves he is my enemy."),
+    ("REG-SNAKE-VENOM-ABSENT-001", "The snake bit me, but the dream never showed or mentioned venom."),
+    ("REG-SNAKE-QUOTED-001", "My aunt said, 'A snake bit me,' but I saw no snake."),
 )
 
 

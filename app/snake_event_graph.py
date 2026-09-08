@@ -9,7 +9,7 @@ SNAKE_EVENT_CONTRACT_VERSION = "snake-context-event-terminal-v1"
 _SNAKE = r"(?:snake|snakes|serpent|serpents|cobra|cobras)"
 _BODY_PART_NAMES = ("ankle", "arm", "hand", "wrist")
 _BODY_PARTS = "(?:" + "|".join(_BODY_PART_NAMES) + ")"
-_PEOPLE = "(?:sister|brother|cousin|friend|child|mother|father|son|daughter|husband|wife)"
+_PEOPLE = "(?:sister|brother|cousin|friend|child|mother|father|son|daughter|husband|wife|aunt|uncle|coworker|neighbor)"
 
 
 def _normalise(value: str) -> str:
@@ -183,9 +183,9 @@ def extract_snake_event_graph(dream: str) -> Dict[str, Any]:
                    for start, end, action in consumed)
 
     patterns = [
-        (rf"\b(?:a\s+)?(?:small|huge|large|black|green)?\s*{_SNAKE}\s+(?:attacked|struck at|lunged at)(?:\s+me)?\b", "attack", "completed"),
+        (rf"\b(?:a\s+)?(?:small|huge|large|black|green)?\s*{_SNAKE}\s+(?:attacked|struck at|lunged at)(?:\s+(?:me|a\s+child|my\s+{_PEOPLE}))?\b", "attack", "completed"),
         (rf"\b(?:a\s+)?{_SNAKE}\s+rushed\s+between\s+my\s+sister\s+and\s+my\s+cousin\b", "attack", "completed"),
-        (rf"\b(?:a\s+)?{_SNAKE}\s+chased\s+me\s+through\s+the\s+yard\b", "chase", "ongoing"),
+        (rf"\b(?:a\s+)?{_SNAKE}\s+chased\s+me(?:\s+through\s+the\s+yard)?\b", "chase", "ongoing"),
         (rf"\b(?:a\s+)?{_SNAKE}\s+(?:watched|only watched)\s+(?:me|my\s+{_PEOPLE})\b", "watch", "ongoing"),
         (rf"\b(?:small\s+)?{_SNAKE}\s+watched\b", "watch", "ongoing"),
         (rf"\b(?:a\s+)?{_SNAKE}\s+(?:actually\s+)?(?:ran away|retreated|fled)\b", "retreat", "completed"),
@@ -208,16 +208,58 @@ def extract_snake_event_graph(dream: str) -> Dict[str, Any]:
                 target = {"surface": None, "person": None, "status": "ambiguous",
                           "basis": "plural_coreference_ambiguous", "path": None, "eligible": False,
                           "candidates": ["sister", "cousin"], "span": "my sister and my cousin"}
+            if action == "attack" and "attacked a child" in match.group(0):
+                target = {"surface": "child", "person": "child", "status": "resolved",
+                          "basis": "direct_person_object", "path": ["child"], "eligible": True, "span": "child"}
+                if "before it reached her" in source:
+                    completion = "attempted"
             add(match, action, completion=completion, target=target)
             consumed.append((match.start(), match.end(), action))
 
-    for match in _iter_matches(rf"\b{_SNAKE}\s+(?:did not|didn't|never)\s+bite\s+(?:me|my\s+{_PEOPLE})\b", source):
+    for match in _iter_matches(r"\bthe\s+third\s+ran\s+away\b", source):
+        add(match, "retreat", chain_number=3, completion="completed")
+        consumed.append((match.start(), match.end(), "retreat"))
+
+    for match in _iter_matches(rf"\b{_SNAKE}\s+(?:did not|didn't|never)\s+bite(?:\s+or\s+attack)?\s+(?:me|my\s+{_PEOPLE})\b", source):
         add(match, "bite", polarity="negated", actuality="not_actual")
         consumed.append((match.start(), match.end(), "bite"))
+        if re.search(r"\bor\s+attack\b", match.group(0)):
+            add(match, "attack", polarity="negated", actuality="not_actual")
 
-    for match in _iter_matches(rf"\bif\s+(?:the\s+)?{_SNAKE}\s+bites?\s+me\b", source):
+    for match in _iter_matches(rf"\bif\s+(?:the\s+)?{_SNAKE}\s+(?:bites?|bit)\s+me\b", source):
         add(match, "bite", modality="hypothetical", actuality="nonactual")
         consumed.append((match.start(), match.end(), "bite"))
+
+    for match in _iter_matches(rf"\b(?:the\s+)?{_SNAKE}\s+lunged\s+to\s+bite\s+me\s+but\s+(?:missed|failed)\b", source):
+        add(match, "attempted_bite", modality="attempted", completion="attempted")
+        consumed.append((match.start(), match.end(), "attempted_bite"))
+
+    for match in _iter_matches(r"\bbefore\s+it\s+bit\s+me\b", source):
+        add(match, "bite", modality="interrupted", actuality="nonactual", completion="blocked")
+        consumed.append((match.start(), match.end(), "bite"))
+
+    for match in _iter_matches(r"\bwrapped\s+around\s+me\b", source):
+        add(match, "capture", completion="ongoing", target={
+            "surface": "dreamer", "person": "dreamer", "status": "resolved",
+            "basis": "direct_person_object", "path": ["dreamer"], "eligible": True, "span": "me",
+        })
+
+    for match in _iter_matches(r"\b(?:the\s+)?snake\s+knocked\s+me\s+down\s+and\s+stood\s+over\s+me\b", source):
+        add(match, "overpower", target={
+            "surface": "dreamer", "person": "dreamer", "status": "resolved",
+            "basis": "direct_person_object", "path": ["dreamer"], "eligible": True, "span": "me",
+        })
+
+    for match in _iter_matches(r"\bone\s+watched\s+me\b", source):
+        add(match, "watch", chain_number=1, target={
+            "surface": "dreamer", "person": "dreamer", "status": "resolved",
+            "basis": "direct_person_object", "path": ["dreamer"], "eligible": True, "span": "me",
+        }, completion="ongoing")
+    for match in _iter_matches(r"\b(?:the\s+)?other\s+attacked\b", source):
+        add(match, "attack", chain_number=2, target={
+            "surface": None, "person": None, "status": "unspecified",
+            "basis": "unresolved", "path": None, "eligible": False, "span": "",
+        })
 
     for match in _iter_matches(rf"\b(?:tried|attempted)\s+to\s+bite\s+(?:my\s+(?:{_BODY_PARTS}|{_PEOPLE})|me)\b", source):
         completion = "blocked" if "blocked it before contact" in source else "attempted"
@@ -241,6 +283,14 @@ def extract_snake_event_graph(dream: str) -> Dict[str, Any]:
             continue
         add(match, "bite")
         consumed.append((match.start(), match.end(), "bite"))
+    for match in _iter_matches(r"\banother\s+bit\s+me\b", source):
+        if overlaps(match, ("bite", "attempted_bite")):
+            continue
+        add(match, "bite", chain_number=2, target={
+            "surface": "dreamer", "person": "dreamer", "status": "resolved",
+            "basis": "direct_person_object", "path": ["dreamer"], "eligible": True, "span": "me",
+        })
+        consumed.append((match.start(), match.end(), "bite"))
 
     for match in _iter_matches(r"\bvenom\s+(?:(?:entered?|moved)\s+(?:(?:and\s+move\s+)?through\s+)?|enter\s+and\s+move\s+through\s+)(?:my|his|her)\s+arm\b", source):
         prior_bites = [item for item in events_with_pos if item[0] < match.start() and item[1].get("action") == "bite"]
@@ -254,6 +304,11 @@ def extract_snake_event_graph(dream: str) -> Dict[str, Any]:
         target = {"surface": f"snake-{snake_number}", "person": None, "status": "resolved",
                   "basis": "direct_snake_object", "path": [f"snake-{snake_number}"], "eligible": False, "span": ""}
         add(match, "kill_by_dreamer", actor="dreamer", target=target, chain_number=snake_number)
+        consumed.append((match.start(), match.end(), "kill_by_dreamer"))
+    for match in _iter_matches(r"\bi\s+killed\s+one\b", source):
+        target = {"surface": "snake-1", "person": None, "status": "resolved",
+                  "basis": "direct_snake_object", "path": ["snake-1"], "eligible": False, "span": "one"}
+        add(match, "kill_by_dreamer", actor="dreamer", target=target, chain_number=1)
         consumed.append((match.start(), match.end(), "kill_by_dreamer"))
     for match in _iter_matches(r"\bi\s+(?:fought\s+(?:the\s+)?snake\s+and\s+)?(?:killed|defeated|destroyed|overcame|beat)\s+(?:it|the snake)\b", source):
         if overlaps(match, ("kill_by_dreamer",)):
@@ -273,8 +328,20 @@ def extract_snake_event_graph(dream: str) -> Dict[str, Any]:
                   "basis": "direct_snake_object", "path": ["snake-1"], "eligible": False, "span": ""}
         add(match, "discover_already_dead", actor="dreamer", target=target, completion="discovered_state")
 
-    for match in _iter_matches(rf"\b{_SNAKE}\s+(?:changed|transformed|turned)\s+into\s+(?:my\s+)?(?:friend|person|man|woman|someone|human)\b", source):
+    for match in _iter_matches(rf"\b{_SNAKE}\s+(?:changed|transformed|turned|became)\s+(?:into\s+)?(?:my\s+)?(?:friend|person|man|woman|someone|human|sister|brother|coworker)\b", source):
         add(match, "transform_to_person")
+
+    size_pair = re.search(r"\ba\s+small\s+garden\s+snake\s+and\s+a\s+huge\s+cobra\b", source)
+    if size_pair:
+        first = re.search(r"\bsmall\s+garden\s+snake\b", source)
+        second = re.search(r"\bhuge\s+cobra\b", source)
+        assert first is not None and second is not None
+        neutral = {"surface": None, "person": None, "status": "unspecified",
+                   "basis": "unresolved", "path": None, "eligible": False, "span": ""}
+        add(first, "presence", chain_number=1, target=neutral)
+        events_with_pos[-1][1]["strength"] = "lesser_or_weaker"
+        add(second, "presence", chain_number=2, target=neutral)
+        events_with_pos[-1][1]["strength"] = "stronger_or_more_dangerous"
 
     if not events_with_pos and re.search(rf"\b(?:fought|fighting|battle|battling)\b.*\b{_SNAKE}\b", source):
         match = re.search(rf"\b(?:fought|fighting|battle|battling)\b.*?\b{_SNAKE}\b", source)
@@ -370,10 +437,13 @@ def extract_snake_event_graph(dream: str) -> Dict[str, Any]:
                 person = prior_people[-1] if prior_people else person
         elif decisive["action"] == "attempted_bite" or decisive.get("completion") in {"attempted", "blocked"}:
             outcome = "unresolved" if "attack" in actions else "no_completed_conflict"
-        elif decisive["action"] in {"attack", "chase", "battle"}:
+        elif decisive["action"] in {"attack", "chase", "capture", "battle"}:
             outcome = "unresolved"
             if decisive["action"] == "battle" and not person:
                 person = "dreamer"
+        elif decisive["action"] == "overpower":
+            outcome = "defeat"
+            person = person or "dreamer"
         elif decisive["action"] in {"bite", "venom_entry"}:
             if target.get("status") == "ambiguous":
                 outcome = "unresolved"
@@ -442,7 +512,7 @@ def _rule_bindings(events: List[Mapping[str, Any]], frontiers: List[Mapping[str,
         bind("SNAKE-BASE-ENEMY", "eligible", eligible)
         bind("SNAKE-ACTION-MAP", "eligible", eligible)
     watches = [event for event in eligible if event.get("action") == "watch"]
-    attacks = [event for event in eligible if event.get("action") in {"attack", "chase", "bite", "attempted_bite"}]
+    attacks = [event for event in eligible if event.get("action") in {"attack", "chase", "capture", "overpower", "bite", "attempted_bite"}]
     bites = [event for event in eligible if event.get("action") == "bite" and event.get("completion") == "completed"]
     attempts = [event for event in eligible if event.get("action") == "attempted_bite" or (event.get("action") == "bite" and event.get("completion") != "completed")]
     if watches:

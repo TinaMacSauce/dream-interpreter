@@ -39,7 +39,7 @@ EXPECTED = {
     "REG-SNAKE-DEFEAT-001": {
         "fields": {"outcome": "opposition_victory_in_encounter"},
         "include": {"SNAKE-END-DEFEAT"},
-        "events": [("overpower", "chain-snake-1", "dreamer")],
+        "events": [("defeat_dreamer", "chain-snake-1", "dreamer")],
         "frontiers": [("chain-snake-1", "defeat")],
     },
     "REG-SNAKE-HYPOTHETICAL-001": {

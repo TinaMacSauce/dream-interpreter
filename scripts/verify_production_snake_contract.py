@@ -64,7 +64,7 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
     if not isinstance(payload, dict):
         return ["payload is not an object"]
     errors: List[str] = []
-    if payload.get("contract_version") != "snake-qa-contract-v3":
+    if payload.get("contract_version") != "snake-qa-contract-v4":
         errors.append("contract_version mismatch")
     minimum_cases = len(EXPECTED_CASES) + 31 + len(ORDINARY_LANGUAGE_CASES)
     if not isinstance(payload.get("case_count"), int) or payload.get("case_count") < minimum_cases:

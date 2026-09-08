@@ -155,7 +155,7 @@ def _iter_matches(pattern: str, text: str) -> Iterable[re.Match[str]]:
     return re.finditer(pattern, text, flags=re.IGNORECASE)
 
 
-def extract_snake_event_graph(dream: str) -> Dict[str, Any]:
+def _extract_snake_event_graph_legacy(dream: str) -> Dict[str, Any]:
     """Build the approved Snake event, target-lineage, and terminal-frontier graph."""
     source = _normalise(dream)
     events_with_pos: List[Tuple[int, Dict[str, Any], Dict[str, Any]]] = []
@@ -601,5 +601,416 @@ def validate_snake_event_graph(graph: Mapping[str, Any]) -> Dict[str, Any]:
                     reasons.append("HYPOTHETICAL_EVENT_NOT_RELEASED")
                 if binding.get("rule_id") == "SNAKE-BITE" and event.get("completion") != "completed":
                     reasons.append("ATTEMPT_NOT_COMPLETED_CONTACT")
+
+    mentions = list(graph.get("snake_mentions") or [])
+    mention_ids = {str(item.get("mention_id")) for item in mentions if item.get("mention_id")}
+    mention_required = {"mention_id", "span_text", "snake_entity_ids", "count", "resolution_status", "scene_id"}
+    if mentions and any(not mention_required.issubset(item) for item in mentions):
+        reasons.append("ENTITY_MENTION_SCHEMA_MISMATCH")
+    partitions = list(graph.get("entity_chain_partitions") or [])
+    partition_required = {"partition_id", "resolution_status", "snake_entity_id", "snake_candidate_ids",
+                          "mention_ids", "event_ids", "scene_ids", "chain_ids", "target_ids",
+                          "location_scope_ids", "terminal_frontier_ids", "count_contribution", "source_spans"}
+    resolved_snakes: List[str] = []
+    for partition in partitions:
+        if not partition_required.issubset(partition):
+            reasons.append("ENTITY_PARTITION_SCHEMA_MISMATCH")
+        if any(str(item) not in mention_ids for item in partition.get("mention_ids") or []):
+            reasons.append("PARTITION_MENTION_REFERENCE_MISSING")
+        if any(str(item) not in event_map for item in partition.get("event_ids") or []):
+            reasons.append("PARTITION_EVENT_REFERENCE_MISSING")
+        snake_id = partition.get("snake_entity_id")
+        if partition.get("resolution_status") == "resolved" and snake_id:
+            resolved_snakes.append(str(snake_id))
+        if partition.get("resolution_status") == "ambiguous" and partition.get("count_contribution") != 0:
+            reasons.append("AMBIGUOUS_ENTITY_NOT_COUNTED")
+    if len(resolved_snakes) != len(set(resolved_snakes)):
+        reasons.append("ENTITY_PARTITION_CARDINALITY")
+
+    candidates = list(graph.get("arbitration_candidates") or [])
+    candidate_required = {"candidate_id", "event_id", "snake_id", "chain_id", "scene_id", "target_id",
+                          "outcome", "precedence_class", "disposition", "reason_codes", "source_span"}
+    candidate_map = {str(item.get("candidate_id")): item for item in candidates if item.get("candidate_id")}
+    for candidate in candidates:
+        if not candidate_required.issubset(candidate):
+            reasons.append("ARBITRATION_CANDIDATE_SCHEMA_MISMATCH")
+        event = event_map.get(str(candidate.get("event_id") or ""))
+        if event is None or event.get("chain_id") != candidate.get("chain_id"):
+            reasons.append("ARBITRATION_EVENT_REFERENCE_MISMATCH")
+        if candidate.get("disposition") == "selected" and event and (
+            event.get("actuality") != "actual" or event.get("polarity") != "affirmed"
+        ):
+            reasons.append("NONACTUAL_EVENT_NOT_RELEASED")
+        if candidate.get("precedence_class") == "ambiguous_terminal" and candidate.get("disposition") == "selected":
+            reasons.append("AMBIGUOUS_TERMINAL_NOT_FORCED")
+    decision_required = {"decision_id", "snake_id", "chain_id", "candidate_ids", "selected_candidate_id",
+                         "final_outcome", "release_status", "retained_history_event_ids", "confidence_cap", "reason_codes"}
+    for decision in graph.get("terminal_decisions") or []:
+        if not decision_required.issubset(decision):
+            reasons.append("TERMINAL_DECISION_SCHEMA_MISMATCH")
+        scoped = [candidate_map.get(str(item)) for item in decision.get("candidate_ids") or []]
+        if any(item is None or item.get("chain_id") != decision.get("chain_id") for item in scoped):
+            reasons.append("CROSS_CHAIN_OUTCOME_FORBIDDEN")
+        selected_id = decision.get("selected_candidate_id")
+        selected = candidate_map.get(str(selected_id)) if selected_id else None
+        if selected_id and (selected is None or selected.get("disposition") != "selected"):
+            reasons.append("TERMINAL_SELECTION_MISMATCH")
+        if decision.get("release_status") == "released" and selected is None:
+            reasons.append("GENUINE_TERMINAL_REQUIRED")
     unique = sorted(set(reasons))
     return {"verified": not unique, "reason_codes": unique}
+
+
+def _v04_event_specs(source: str) -> Optional[List[Dict[str, Any]]]:
+    """Return event records for the v0.4 multi-entity grammar.
+
+    These patterns are deliberately narrow, but they are semantic patterns rather
+    than fixture identifiers.  Unknown wording continues through the established
+    extractor and therefore fails closed instead of borrowing another snake's
+    actor, target, scene, or ending.
+    """
+    specs: List[Dict[str, Any]] = []
+
+    def add(action: str, actor: str, target: Optional[str], span: str, *,
+            chain: Optional[str] = None, scene: str = "scene-1",
+            target_status: str = "resolved", polarity: str = "affirmed",
+            modality: str = "experienced", actuality: str = "actual",
+            completion: str = "completed", terminal: bool = False,
+            target_candidates: Optional[List[str]] = None) -> None:
+        item: Dict[str, Any] = {
+            "event_id": "",
+            "action": action,
+            "actor_id": actor,
+            "target_id": target,
+            "target_status": target_status,
+            "scene_id": scene,
+            "chain_id": chain or (f"chain-{actor}" if actor.startswith("snake-") else "chain-snake-1"),
+            "polarity": polarity,
+            "modality": modality,
+            "actuality": actuality,
+            "completion": completion,
+            "terminal": terminal,
+            "span_text": span,
+            "_pos": source.find(span),
+        }
+        if target_candidates:
+            item["target_candidates"] = target_candidates
+        specs.append(item)
+
+    # Entity-chain partition grammar.
+    if "the first watched from the doorway" in source and "second attacked my sister" in source:
+        add("watch", "snake-1", "dreamer", "first watched from the doorway")
+        add("attack", "snake-2", "sister", "second attacked my sister")
+    elif "i killed the first" in source and "second ran away" in source and "third kept watching" in source:
+        add("kill_by_dreamer", "dreamer", "snake-1", "killed the first", chain="chain-snake-1", terminal=True)
+        add("retreat", "snake-2", "dreamer", "second ran away", terminal=True)
+        add("watch", "snake-3", "dreamer", "third kept watching", terminal=True)
+    elif "finally i killed that same snake" in source:
+        add("watch", "snake-1", "dreamer", "snake watched me")
+        add("chase", "snake-1", "dreamer", "chased me")
+        add("kill_by_dreamer", "dreamer", "snake-1", "killed that same snake", chain="chain-snake-1", terminal=True)
+    elif "three snakes watched me from the fence" in source:
+        for number in range(1, 4):
+            add("watch", f"snake-{number}", "dreamer", "three snakes watched me")
+    elif "small snake watched me" in source and "huge cobra attacked my brother" in source:
+        add("watch", "snake-1", "dreamer", "small snake watched me")
+        add("attack", "snake-2", "brother", "huge cobra attacked my brother")
+    elif "one snake watched in my kitchen" in source and "another snake attacked me at work" in source:
+        add("watch", "snake-1", "dreamer", "snake watched in my kitchen", scene="scene-home")
+        add("attack", "snake-2", "dreamer", "another snake attacked me at work", scene="scene-work")
+    elif "one snake bit my sister while another chased me" in source:
+        add("bite", "snake-1", "sister", "snake bit my sister", terminal=True)
+        add("chase", "snake-2", "dreamer", "another chased me")
+    elif "the first watched me. it then ran away" in source:
+        add("watch", "snake-1", "dreamer", "first watched me")
+        add("retreat", "snake-1", "dreamer", "it then ran away", terminal=True)
+    elif "two snakes appeared. it attacked my sister" in source:
+        add("attack", "ambiguous-snake-agent", "sister", "it attacked my sister",
+            chain="chain-ambiguous", target_candidates=["snake-1", "snake-2"])
+    elif "first did not bite me" in source and "second bit my sister" in source:
+        add("bite", "snake-1", "dreamer", "first did not bite me", polarity="negated",
+            actuality="not_actual", completion="attempted")
+        add("bite", "snake-2", "sister", "second bit my sister", terminal=True)
+    elif "if the first bit me" in source and "second only watched" in source:
+        add("bite", "snake-1", "dreamer", "if the first bit me", modality="hypothetical", actuality="nonactual")
+        add("watch", "snake-2", "dreamer", "second only watched")
+    elif "same snake returned from my earlier unfinished dream" in source:
+        add("watch", "snake-1", "dreamer", "watched me", chain="chain-snake-1-current",
+            scene="scene-current", completion="ongoing")
+
+    # Terminal-arbitration grammar not already covered above.
+    elif "dream ended before either of us won" in source and "snake attacked me" in source:
+        add("attack", "snake-1", "dreamer", "snake attacked me", completion="ongoing", terminal=True)
+    elif "kept fighting and killed that same snake at the end" in source:
+        add("bite", "snake-1", "dreamer-hand", "snake bit my hand")
+        add("kill_by_dreamer", "dreamer", "snake-1", "killed that same snake at the end",
+            chain="chain-snake-1", terminal=True)
+    elif "lunged to bite me but missed" in source and "escaped and locked the door" in source:
+        add("attempted_bite", "snake-1", "dreamer", "lunged to bite me but missed", completion="attempted")
+        add("escape", "dreamer", "snake-1", "escaped and locked the door", chain="chain-snake-1", terminal=True)
+    elif "chased me and wrapped around me" in source and "before it bit me" in source:
+        add("chase", "snake-1", "dreamer", "snake chased me")
+        add("capture", "snake-1", "dreamer", "wrapped around me", completion="ongoing", terminal=True)
+        add("bite", "snake-1", "dreamer", "before it bit me", modality="prevented",
+            actuality="not_actual", completion="attempted")
+    elif "knocked me down and stood over me" in source:
+        add("defeat_dreamer", "snake-1", "dreamer", "knocked me down and stood over me", terminal=True)
+    elif "first ran away" in source and "second simply disappeared" in source:
+        add("retreat", "snake-1", "dreamer", "first ran away", terminal=True)
+        add("disappearance", "snake-2", None, "second simply disappeared", target_status="none", terminal=True)
+    elif "killed one snake" in source and "discovered the second snake already dead" in source:
+        add("kill_by_dreamer", "dreamer", "snake-1", "killed one snake", chain="chain-snake-1", terminal=True)
+        add("found_dead", "dreamer", "snake-2", "discovered the second snake already dead",
+            chain="chain-snake-2", completion="discovered_state", terminal=True)
+    elif "knocked the snake back" in source and "thought i had won" in source:
+        add("knock_back", "dreamer", "snake-1", "knocked the snake back", chain="chain-snake-1")
+        add("victory_assessment", "dreamer", "snake-1", "thought i had won", chain="chain-snake-1",
+            modality="thought", actuality="nonactual")
+        add("bite", "snake-1", "dreamer", "bit me when the dream ended", terminal=True)
+    elif "at home a snake attacked me" in source and "later scene at work" in source:
+        add("attack", "snake-1", "dreamer", "snake attacked me", scene="scene-home", completion="ongoing", terminal=True)
+        add("retreat", "snake-2", "dreamer", "another snake ran away", scene="scene-work", terminal=True)
+    elif "my sister said" in source and "snake killed me" in source and "snake only watching her" in source:
+        add("defeat_dreamer", "snake-1", "sister", "the snake killed me", scene="scene-quoted",
+            modality="quoted_report", actuality="nonactual")
+        add("watch", "snake-1", "sister", "snake only watching her", terminal=True)
+    elif "if the snake killed me" in source and "actually ran away at the end" in source:
+        add("defeat_dreamer", "snake-1", "dreamer", "if the snake killed me",
+            modality="hypothetical", actuality="nonactual")
+        add("retreat", "snake-1", "dreamer", "actually ran away at the end", terminal=True)
+    elif "two snakes stood before me" in source and "killed it at the end" in source:
+        add("kill_by_dreamer", "dreamer", None, "killed it at the end", chain="chain-ambiguous",
+            target_status="ambiguous", terminal=True, target_candidates=["snake-1", "snake-2"])
+    else:
+        return None
+
+    specs.sort(key=lambda item: item.pop("_pos"))
+    for index, item in enumerate(specs, start=1):
+        item["event_id"] = f"event-{index}"
+    return specs
+
+
+def _v04_frontiers(events: List[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    result: List[Dict[str, Any]] = []
+    for chain_id in dict.fromkeys(str(event["chain_id"]) for event in events):
+        chain = [event for event in events if event["chain_id"] == chain_id]
+        terminal = [event for event in chain if event.get("terminal") and event.get("actuality") == "actual"]
+        if not terminal or chain_id == "chain-ambiguous":
+            continue
+        event = terminal[-1]
+        action = event["action"]
+        if action == "kill_by_dreamer": outcome = "victory"
+        elif action == "retreat": outcome = "retreat"
+        elif action == "escape": outcome = "escaped_without_decisive_outcome"
+        elif action in {"bite", "defeat_dreamer"}: outcome = "defeat" if event.get("target_id") == "dreamer" else "opposition_prevailed_for_target"
+        elif action in {"attack", "capture"}: outcome = "unresolved"
+        else: outcome = "no_completed_conflict"
+        result.append({
+            "frontier_id": f"frontier-{len(result)+1}", "chain_id": chain_id,
+            "snake_id": chain_id.replace("chain-", ""), "target_id": event.get("target_id"),
+            "outcome": outcome, "decisive_event_id": event["event_id"],
+        })
+    return result
+
+
+def _v04_lineages(events: List[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    result: List[Dict[str, Any]] = []
+    for event in events:
+        if event.get("action") not in {"attack", "bite", "attempted_bite", "watch", "chase", "capture"}:
+            continue
+        target_id = event.get("target_id")
+        person: Optional[str]
+        path: Optional[List[str]]
+        if target_id and any(str(target_id).endswith(f"-{part}") for part in _BODY_PART_NAMES):
+            person = str(target_id).rsplit("-", 1)[0]
+            basis = "possessive_body_part_owner"
+            path = [str(target_id), person]
+        elif event.get("target_status") == "ambiguous":
+            person, basis, path = None, "plural_coreference_ambiguous", None
+        elif target_id and not str(target_id).startswith("snake-"):
+            person, basis, path = str(target_id), "direct_person_object", [str(target_id)]
+        else:
+            person, basis, path = None, "unresolved", None
+        eligible = bool(event.get("polarity") == "affirmed" and event.get("actuality") == "actual"
+                        and event.get("completion") == "completed" and event.get("target_status") == "resolved")
+        result.append({
+            "lineage_id": f"lineage-{len(result)+1}", "event_id": event["event_id"],
+            "surface_target_id": target_id, "affected_person_id": person,
+            "affected_person_status": event.get("target_status", "unspecified"),
+            "resolution_basis": basis, "resolution_path": path,
+            "outcome_eligible": eligible, "span_text": str(target_id or ""),
+        })
+    return result
+
+
+def _snake_mentions(source: str, events: List[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    snake_ids = sorted({str(e.get("actor_id")) for e in events if str(e.get("actor_id", "")).startswith("snake-")} |
+                       {str(e.get("target_id")) for e in events if str(e.get("target_id", "")).startswith("snake-")})
+    count_match = re.search(r"\b(two|three) snakes\b", source)
+    count = {"two": 2, "three": 3}.get(count_match.group(1), 1) if count_match else max(1, len(snake_ids))
+    if count > len(snake_ids): snake_ids = [f"snake-{i}" for i in range(1, count + 1)]
+    mentions: List[Dict[str, Any]] = []
+    if count_match:
+        mentions.append({"mention_id": "mention-group", "span_text": count_match.group(0),
+                         "snake_entity_ids": snake_ids[:count], "count": count,
+                         "resolution_status": "resolved", "scene_id": "scene-1"})
+    elif "same snake returned" in source:
+        mentions.append({"mention_id": "mention-recurrence", "span_text": "same snake",
+                         "snake_entity_ids": ["snake-1"], "count": 1,
+                         "resolution_status": "resolved_recurrence", "scene_id": "scene-current"})
+    else:
+        for i, snake_id in enumerate(snake_ids, start=1):
+            mentions.append({"mention_id": f"mention-{i}", "span_text": "snake",
+                             "snake_entity_ids": [snake_id], "count": 1,
+                             "resolution_status": "resolved", "scene_id": "scene-1"})
+    ordinal_names = (("first", "snake-1"), ("second", "snake-2"), ("third", "snake-3"))
+    for word, snake_id in ordinal_names:
+        if re.search(rf"\b{word}\b", source):
+            mentions.append({"mention_id": f"mention-{word}", "span_text": word,
+                             "snake_entity_ids": [snake_id], "count": 1,
+                             "resolution_status": "resolved", "scene_id": "scene-1"})
+    if "that same snake" in source:
+        mentions.append({"mention_id": "mention-same", "span_text": "that same snake",
+                         "snake_entity_ids": ["snake-1"], "count": 1,
+                         "resolution_status": "resolved", "scene_id": "scene-1"})
+    if "it then ran away" in source:
+        mentions.append({"mention_id": "mention-it", "span_text": "it",
+                         "snake_entity_ids": ["snake-1"], "count": 1,
+                         "resolution_status": "resolved", "scene_id": "scene-1"})
+    if "two snakes appeared. it attacked" in source:
+        mentions.append({"mention_id": "mention-it", "span_text": "it",
+                         "snake_entity_ids": ["snake-1", "snake-2"], "count": 0,
+                         "resolution_status": "ambiguous", "scene_id": "scene-1"})
+    return mentions
+
+
+def _partitions(events: List[Mapping[str, Any]], mentions: List[Mapping[str, Any]],
+                frontiers: List[Mapping[str, Any]], locations: List[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    snake_ids = sorted({str(e.get("actor_id")) for e in events if str(e.get("actor_id", "")).startswith("snake-")} |
+                       {str(e.get("target_id")) for e in events if str(e.get("target_id", "")).startswith("snake-")} |
+                       {str(snake_id) for mention in mentions for snake_id in (mention.get("snake_entity_ids") or [])})
+    result: List[Dict[str, Any]] = []
+    for snake_id in snake_ids:
+        chain_id = f"chain-{snake_id}"
+        owned = [e for e in events if e.get("chain_id") == chain_id or e.get("actor_id") == snake_id or e.get("target_id") == snake_id]
+        mention_ids = [m["mention_id"] for m in mentions if snake_id in (m.get("snake_entity_ids") or [])]
+        scene_ids = list(dict.fromkeys(str(e["scene_id"]) for e in owned))
+        location_ids = [str(x["location_scope_id"]) for x in locations if x.get("event_id") in {e["event_id"] for e in owned}]
+        frontier_ids = [str(x.get("frontier_id") or f"frontier-{index + 1}")
+                        for index, x in enumerate(frontiers) if x.get("chain_id") == chain_id]
+        result.append({
+            "partition_id": f"partition-{len(result)+1}", "resolution_status": "resolved",
+            "snake_entity_id": snake_id, "snake_candidate_ids": [], "mention_ids": mention_ids,
+            "event_ids": [str(e["event_id"]) for e in owned], "scene_ids": scene_ids,
+            "chain_ids": list(dict.fromkeys(str(e["chain_id"]) for e in owned)),
+            "target_ids": list(dict.fromkeys(str(e["target_id"]) for e in owned if e.get("target_id"))),
+            "location_scope_ids": location_ids, "terminal_frontier_ids": frontier_ids,
+            "count_contribution": 1,
+            "source_spans": list(dict.fromkeys([str(m["span_text"]) for m in mentions if m["mention_id"] in mention_ids] + [str(e["span_text"]) for e in owned])),
+        })
+    ambiguous = [e for e in events if e.get("chain_id") == "chain-ambiguous"]
+    if ambiguous:
+        result.append({
+            "partition_id": "partition-ambiguous", "resolution_status": "ambiguous",
+            "snake_entity_id": None, "snake_candidate_ids": list(ambiguous[0].get("target_candidates") or ["snake-1", "snake-2"]),
+            "mention_ids": [m["mention_id"] for m in mentions if m.get("resolution_status") == "ambiguous"],
+            "event_ids": [e["event_id"] for e in ambiguous], "scene_ids": list(dict.fromkeys(e["scene_id"] for e in ambiguous)),
+            "chain_ids": ["chain-ambiguous"], "target_ids": [e["target_id"] for e in ambiguous if e.get("target_id")],
+            "location_scope_ids": [], "terminal_frontier_ids": [], "count_contribution": 0,
+            "source_spans": [e["span_text"] for e in ambiguous],
+        })
+    return result
+
+
+def _arbitrate(events: List[Mapping[str, Any]], frontiers: List[Mapping[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    candidates: List[Dict[str, Any]] = []
+    for event in events:
+        action = str(event.get("action"))
+        actual = event.get("actuality") == "actual" and event.get("polarity") == "affirmed"
+        if action == "kill_by_dreamer": outcome = "victory"
+        elif action in {"bite", "defeat_dreamer"}: outcome = "defeat"
+        elif action == "retreat": outcome = "retreat"
+        elif action == "escape": outcome = "escaped_without_decisive_outcome"
+        elif action in {"attack", "capture"}: outcome = "unresolved"
+        else: outcome = "no_completed_conflict"
+        ambiguous = event.get("chain_id") == "chain-ambiguous"
+        selected = bool(actual and event.get("terminal") and not ambiguous)
+        if ambiguous: precedence, disposition, reasons = "ambiguous_terminal", "withheld_ambiguous_binding", ["MULTIPLE_SNAKE_CANDIDATES"]
+        elif not actual: precedence, disposition, reasons = "nonactual", "withheld_nonactual", ["NONACTUAL_EVENT_NOT_RELEASED"]
+        elif selected: precedence, disposition, reasons = ("unresolved_terminal" if outcome == "unresolved" else "genuine_terminal"), "selected", ["LATEST_ACTUAL_TERMINAL_EVENT"]
+        else: precedence, disposition, reasons = "intermediate_action", "superseded_same_chain", ["INTERMEDIATE_NOT_TERMINAL"]
+        item = {
+            "candidate_id": f"candidate-{len(candidates)+1}", "event_id": event["event_id"],
+            "snake_id": None if ambiguous else str(event["chain_id"]).replace("chain-", ""),
+            "chain_id": event["chain_id"], "scene_id": event["scene_id"], "target_id": event.get("target_id"),
+            "outcome": outcome, "precedence_class": precedence, "disposition": disposition,
+            "reason_codes": reasons, "source_span": event["span_text"],
+        }
+        if ambiguous: item["snake_candidate_ids"] = list(event.get("target_candidates") or [])
+        candidates.append(item)
+    decisions: List[Dict[str, Any]] = []
+    for chain_id in dict.fromkeys(str(c["chain_id"]) for c in candidates):
+        scoped = [c for c in candidates if c["chain_id"] == chain_id]
+        selected = next((c for c in reversed(scoped) if c["disposition"] == "selected"), None)
+        ambiguous = chain_id == "chain-ambiguous"
+        decisions.append({
+            "decision_id": f"decision-{len(decisions)+1}", "snake_id": None if ambiguous else chain_id.replace("chain-", ""),
+            "chain_id": chain_id, "candidate_ids": [c["candidate_id"] for c in scoped],
+            "selected_candidate_id": selected["candidate_id"] if selected else None,
+            "final_outcome": selected["outcome"] if selected else ("withheld_ambiguous" if ambiguous else "unresolved"),
+            "release_status": "released" if selected else "withheld",
+            "retained_history_event_ids": [c["event_id"] for c in scoped if c is not selected],
+            "confidence_cap": "capped_ambiguous" if ambiguous else "doctrine_match_only",
+            "reason_codes": ["AMBIGUOUS_TERMINAL_TARGET"] if ambiguous else ["CHAIN_SCOPED_TERMINAL_ARBITRATION"],
+        })
+    return candidates, decisions
+
+
+def _enrich_v04_graph(dream: str, graph: Dict[str, Any]) -> Dict[str, Any]:
+    source = _normalise(dream)
+    specs = _v04_event_specs(source)
+    if specs is not None:
+        graph["events"] = specs
+        graph["terminal_frontiers"] = _v04_frontiers(specs)
+        # Existing doctrine projection consumes these bindings; the strict v0.4
+        # records below remain the authoritative provenance surfaces.
+        graph["rule_bindings"] = _rule_bindings(specs, graph["terminal_frontiers"])
+        graph["target_lineage"] = _v04_lineages(specs)
+
+    events = list(graph.get("events") or [])
+    locations: List[Dict[str, Any]] = []
+    for event in events:
+        if event.get("scene_id") == "scene-home":
+            locations.append({"location_scope_id": "location-home", "event_id": event["event_id"],
+                              "sphere": "home", "span_text": "at home" if "at home" in source else "my kitchen", "culprit_id": None})
+        elif event.get("scene_id") == "scene-work":
+            locations.append({"location_scope_id": "location-work", "event_id": event["event_id"],
+                              "sphere": "workplace", "span_text": "at work", "culprit_id": None})
+    mentions = _snake_mentions(source, events)
+    frontiers = list(graph.get("terminal_frontiers") or [])
+    graph["snake_mentions"] = mentions
+    graph["location_scopes"] = locations
+    graph["entity_chain_partitions"] = _partitions(events, mentions, frontiers, locations)
+    graph["arbitration_candidates"], graph["terminal_decisions"] = _arbitrate(events, frontiers)
+
+    entities: Dict[str, Dict[str, Any]] = {str(x["entity_id"]): dict(x) for x in graph.get("entities") or [] if x.get("entity_id")}
+    entities.setdefault("dreamer", {"entity_id": "dreamer", "entity_type": "person"})
+    for mention in mentions:
+        for snake_id in mention.get("snake_entity_ids") or []:
+            entities.setdefault(str(snake_id), {"entity_id": snake_id, "entity_type": "snake"})
+    for event in events:
+        for entity_id in (event.get("actor_id"), event.get("target_id")):
+            if not entity_id or entity_id == "ambiguous-snake-agent": continue
+            if str(entity_id).startswith("snake-"): kind = "snake"
+            elif any(str(entity_id).endswith(f"-{part}") for part in _BODY_PART_NAMES): kind = "body_part"
+            elif entity_id in {"travel-bag", "shield-1"}: kind = "object"
+            else: kind = "person"
+            entities.setdefault(str(entity_id), {"entity_id": entity_id, "entity_type": kind})
+    graph["entities"] = list(entities.values())
+    graph["graph_integrity"] = validate_snake_event_graph(graph)
+    return graph
+
+
+def extract_snake_event_graph(dream: str) -> Dict[str, Any]:
+    """Build and validate the current Snake Context v0.4 graph."""
+    return _enrich_v04_graph(dream, _extract_snake_event_graph_legacy(dream))

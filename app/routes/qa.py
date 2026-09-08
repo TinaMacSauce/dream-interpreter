@@ -20,7 +20,7 @@ from app.snake_registry import get_snake_registry_snapshot, public_snake_registr
 qa_bp = Blueprint("qa", __name__)
 
 TEETH_QA_CONTRACT_VERSION = "teeth-qa-contract-v2"
-SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v3"
+SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v4"
 
 
 @qa_bp.post("/qa/interpret")
@@ -266,6 +266,30 @@ SNAKE_QA_CASES = (
     ("REG-SNAKE-TRANSFORM-ACCUSATION-001", "The snake became my coworker, so that proves he is my enemy."),
     ("REG-SNAKE-VENOM-ABSENT-001", "The snake bit me, but the dream never showed or mentioned venom."),
     ("REG-SNAKE-QUOTED-001", "My aunt said, 'A snake bit me,' but I saw no snake."),
+    ("SNAKE-002-PARTITION-TWO-DISTINCT-ACTIONS-001", "Two snakes came at me. The first watched from the doorway, while the second attacked my sister."),
+    ("SNAKE-002-PARTITION-THREE-MIXED-ENDINGS-001", "Three snakes surrounded me. I killed the first, the second ran away, and the third kept watching when the dream ended."),
+    ("SNAKE-002-PARTITION-SAME-SNAKE-SEQUENCE-001", "A snake watched me, then chased me, and finally I killed that same snake."),
+    ("SNAKE-002-PARTITION-GROUP-SHARED-ACTION-001", "Three snakes watched me from the fence."),
+    ("SNAKE-002-PARTITION-MODIFIER-SCOPE-001", "A small snake watched me while a huge cobra attacked my brother."),
+    ("SNAKE-002-PARTITION-LOCATION-SCOPE-001", "One snake watched in my kitchen. Later another snake attacked me at work."),
+    ("SNAKE-002-PARTITION-TARGET-SCOPE-001", "One snake bit my sister while another chased me."),
+    ("SNAKE-002-PARTITION-PRONOUN-RESOLVED-001", "Two snakes appeared. The first watched me. It then ran away."),
+    ("SNAKE-002-PARTITION-PRONOUN-AMBIGUOUS-001", "Two snakes appeared. It attacked my sister."),
+    ("SNAKE-002-PARTITION-NEGATED-MEMBER-001", "Two snakes came close. The first did not bite me, but the second bit my sister."),
+    ("SNAKE-002-PARTITION-HYPOTHETICAL-MEMBER-001", "Two snakes appeared. If the first bit me I would run, but the second only watched."),
+    ("SNAKE-002-PARTITION-RECURRENCE-SAME-ENTITY-001", "The same snake returned from my earlier unfinished dream, watched me, and the fight was still unfinished."),
+    ("SNAKE-002-ARBITRATION-ATTACK-UNRESOLVED-001", "A snake attacked me, but the dream ended before either of us won."),
+    ("SNAKE-002-ARBITRATION-BITE-THEN-VICTORY-001", "The snake bit my hand, but I kept fighting and killed that same snake at the end."),
+    ("SNAKE-002-ARBITRATION-ATTEMPT-THEN-ESCAPE-001", "The snake lunged to bite me but missed. I escaped and locked the door before I woke."),
+    ("SNAKE-002-ARBITRATION-CHASE-CAPTURE-WAKE-001", "A snake chased me and wrapped around me, but I woke before it bit me."),
+    ("SNAKE-002-ARBITRATION-DEFEAT-KNOCKDOWN-001", "The snake knocked me down and stood over me when the dream ended."),
+    ("SNAKE-002-ARBITRATION-RETREAT-VS-DISAPPEAR-001", "Two snakes appeared. The first ran away, while the second simply disappeared."),
+    ("SNAKE-002-ARBITRATION-KILL-VS-FOUND-DEAD-001", "I killed one snake, but I only discovered the second snake already dead."),
+    ("SNAKE-002-ARBITRATION-INTERMEDIATE-REVERSED-001", "I knocked the snake back and thought I had won, but it rose and bit me when the dream ended."),
+    ("SNAKE-002-ARBITRATION-SCENE-BREAK-001", "At home a snake attacked me. In a later scene at work, another snake ran away as the dream ended."),
+    ("SNAKE-002-ARBITRATION-QUOTED-ENDING-001", 'My sister said, "The snake killed me," but I saw the snake only watching her when the dream ended.'),
+    ("SNAKE-002-ARBITRATION-HYPOTHETICAL-ENDING-001", "If the snake killed me I would lose, but it actually ran away at the end."),
+    ("SNAKE-002-ARBITRATION-AMBIGUOUS-KILL-001", "Two snakes stood before me. I killed it at the end."),
 )
 
 

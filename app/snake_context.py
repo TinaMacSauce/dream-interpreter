@@ -307,7 +307,12 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
         "event_graph": event_graph,
         "event_inventory": graph_events,
         "target_lineage": event_graph.get("target_lineage") or [],
+        "snake_mentions": event_graph.get("snake_mentions") or [],
+        "entity_chain_partitions": event_graph.get("entity_chain_partitions") or [],
         "terminal_frontiers": graph_frontiers,
+        "arbitration_candidates": event_graph.get("arbitration_candidates") or [],
+        "terminal_decisions": event_graph.get("terminal_decisions") or [],
+        "location_scopes": event_graph.get("location_scopes") or [],
         "rule_bindings": event_graph.get("rule_bindings") or [],
         "graph_integrity": event_graph.get("graph_integrity") or {"verified": False, "reason_codes": ["GRAPH_MISSING"]},
     }

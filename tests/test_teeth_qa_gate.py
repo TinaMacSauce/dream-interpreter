@@ -210,6 +210,30 @@ class TeethQAReleaseGateTests(unittest.TestCase):
             evidence["errors"],
         )
 
+    def test_production_verifier_rejects_dangling_context_graph_reference(self):
+        app = Flask(__name__)
+        app.register_blueprint(qa_bp)
+
+        with patch.dict(os.environ, {"RENDER_GIT_COMMIT": "qa-route-sha"}, clear=False):
+            payload = app.test_client().get("/qa/teeth-regression").get_json()
+
+        payload["doctrine_registry"]["loaded_from"] = "canonical_sheet"
+        case = next(
+            item for item in payload["cases"]
+            if item["case_id"] == "CTX-001-ATTEMPT-BIND-DREAMER-001"
+        )
+        graph = case["doctrine"]["context_graph"]
+        graph["entity_inventory"] = [
+            item for item in graph["entity_inventory"]
+            if item["entity_id"] != "tooth-1"
+        ]
+        evidence = validate_production_contract(payload, expected_commit="qa-route-sha")
+        self.assertFalse(evidence["verified"])
+        self.assertTrue(
+            any("dangling target" in error for error in evidence["errors"]),
+            evidence["errors"],
+        )
+
     def test_qa_status_exposes_protected_non_billable_access_contract(self):
         app = Flask(__name__)
         app.register_blueprint(qa_bp)

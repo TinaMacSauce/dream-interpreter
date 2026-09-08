@@ -484,13 +484,22 @@ def _extract_restoration_attempt_records(dream: str) -> List[Dict[str, Any]]:
         if owner == "ambiguous" or target == "ambiguous":
             reasons.append("ambiguous_binding")
         eligible = not reasons
-        chain = None if channel in {"quoted_speech", "reported_speech"} or conditional else (
+        chain = None if (
+            channel in {"quoted_speech", "reported_speech"}
+            or conditional
+            or phase != "dream"
+        ) else (
             f"chain-{target}" if target != "ambiguous" else None
+        )
+        attempt_id = (
+            "waking-imagined-attempt-1"
+            if waking and imagined
+            else f"attempt-{index}"
         )
 
         records.append(
             {
-                "attempt_id": f"attempt-{index}",
+                "attempt_id": attempt_id,
                 "action": "manual_reinsertion_attempt",
                 "actor_id_or_ambiguous": actor,
                 "target_tooth_ids_or_ambiguous": [target] if target != "ambiguous" else "ambiguous",

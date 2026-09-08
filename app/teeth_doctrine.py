@@ -1,6 +1,11 @@
 from typing import Any, Dict, List
 
 from app.release_info import DOCTRINE_REGISTRY, TEETH_DOCTRINE_VERSION
+from app.context_graph import (
+    apply_loss_projection,
+    build_context_graph,
+    finalize_context_graph,
+)
 from app.rules import _affirmative_teeth_fallout_token
 from app.teeth_context import TEETH_CONTEXT_VERSION, extract_teeth_context
 from app.teeth_registry import (
@@ -84,9 +89,16 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
     registry = get_teeth_registry_snapshot()
     registry_verified = registry.get("verified") is True
     context = extract_teeth_context(dream)
+    context_graph = build_context_graph(dream, context)
+    apply_loss_projection(context, context_graph)
     phrase_fallout = bool(_affirmative_teeth_fallout_token(normalize_text(dream)))
+    graph_fallout = any(
+        event.get("event_type") == "tooth_loss"
+        and event.get("doctrine_eligible") is True
+        for event in context_graph.get("event_inventory", [])
+    )
     actual_fallout = bool(
-        (phrase_fallout or context.get("explicit_pull_removal"))
+        (graph_fallout or phrase_fallout or context.get("explicit_pull_removal"))
         and not context.get("hypothetical_loss")
     )
     supported_subject = bool(
@@ -193,8 +205,25 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
         "doctrine_registry": public_registry_metadata(registry),
     }
 
-    if not context.get("has_teeth_cluster") or not supported_subject:
+    def finish_result() -> Dict[str, Any]:
+        graph = finalize_context_graph(context_graph, result, registry)
+        result["context_graph"] = graph
+        result["context_graph_contract_version"] = graph["contract_version"]
+        for key in (
+            "entity_inventory",
+            "event_inventory",
+            "event_chain_inventory",
+            "aggregate_derivations",
+            "rule_sets",
+            "claim_manifest",
+            "terminal_frontiers",
+        ):
+            result[key] = graph[key]
+        result["graph_integrity"] = graph["integrity"]
         return result
+
+    if not context.get("has_teeth_cluster") or not supported_subject:
+        return finish_result()
 
     applied: List[str] = []
 
@@ -206,7 +235,7 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
     if terminal_return:
         apply_rule("terminal_ending")
         result["applied_rule_ids"] = applied
-        return result
+        return finish_result()
 
     if actual_fallout:
         if context.get("owner") == "dreamer":
@@ -215,6 +244,11 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
             apply_rule("own_fallout")
         elif context.get("owner") == "other":
             result["subject_scope"] = context.get("owner_relationship") or "other_person"
+            apply_rule("other_fallout")
+        elif context.get("owner") == "mixed":
+            result["relationship_scope"] = "mixed_owner_scopes"
+            result["subject_scope"] = "owner_bound_multiple_people"
+            apply_rule("own_fallout")
             apply_rule("other_fallout")
 
         if context.get("count") == "one":
@@ -258,7 +292,7 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
         apply_rule("repetition")
 
     result["applied_rule_ids"] = applied
-    return result
+    return finish_result()
 
 
 def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
@@ -322,7 +356,12 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
                 "death-associated omen warning, not as a prediction or guarantee."
             )
 
-        if doctrine.get("relationship_scope") == "relative_or_close_friend":
+        if doctrine.get("relationship_scope") == "mixed_owner_scopes":
+            details.append(
+                "The losses remain separated by owner: your own tooth keeps its relationship-circle scope, "
+                "while the other person's tooth concerns that person."
+            )
+        elif doctrine.get("relationship_scope") == "relative_or_close_friend":
             if count == "one_person":
                 owner_detail = (
                     "Because this was your own tooth, the warning concerns a relative or close friend, "

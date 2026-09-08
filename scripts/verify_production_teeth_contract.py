@@ -203,6 +203,71 @@ ATTEMPT_BINDING_EXPECTED: Dict[str, Dict[str, Any]] = {
     },
 }
 
+GRAPH_CONTRACT_VERSION = "context-graph-referential-integrity/1.0"
+GRAPH_EXPECTED: Dict[str, Dict[str, Any]] = {
+    "CTX-001-ATTEMPT-BIND-DREAMER-001": {
+        "entities": {"dreamer", "tooth-1"},
+        "events": {"loss-1", "attempt-1"},
+        "chains": {"chain-tooth-1"},
+        "consumed_attempts": {"attempt-1"},
+    },
+    "CTX-001-ATTEMPT-BIND-NEGATED-001": {
+        "events": {"loss-1", "attempt-1"}, "consumed_attempts": set(),
+    },
+    "CTX-001-ATTEMPT-BIND-HYPOTHETICAL-001": {
+        "events": {"hypothetical-loss-1", "attempt-1"},
+        "eligible_events": set(), "claims": set(), "consumed_attempts": set(),
+    },
+    "CTX-001-ATTEMPT-BIND-QUOTED-001": {
+        "entities": {"dreamer", "tooth-1", "aunt"},
+        "events": {"loss-1", "speech-1", "attempt-1"},
+        "attempt_chain": None, "consumed_attempts": set(),
+    },
+    "CTX-001-ATTEMPT-BIND-WAKING-001": {
+        "events": {"loss-1", "waking-imagined-attempt-1"},
+        "chains": {"chain-tooth-1"}, "attempt_chain": None,
+        "consumed_attempts": set(),
+    },
+    "CTX-001-ATTEMPT-BIND-OTHER-OWNER-001": {
+        "entities": {"sister", "sister-tooth-1"},
+        "events": {"loss-1", "attempt-1"},
+        "chains": {"chain-sister-tooth-1"},
+    },
+    "CTX-001-ATTEMPT-BIND-EXTERNAL-ACTOR-001": {
+        "entities": {"dreamer", "sister", "tooth-1"},
+        "events": {"loss-1", "attempt-1"},
+        "attempt_actor": "sister", "attempt_owner": "dreamer",
+    },
+    "CTX-001-ATTEMPT-BIND-MULTI-OWNER-001": {
+        "entities": {"dreamer", "dreamer-tooth-1", "sister", "sister-tooth-1"},
+        "events": {"dreamer-loss-1", "attempt-1", "sister-loss-1"},
+        "loss_count": 2, "chain_count": 2,
+        "aggregate_losses": {"dreamer-loss-1", "sister-loss-1"},
+    },
+    "CTX-001-ATTEMPT-BIND-AMBIGUOUS-TARGET-001": {
+        "loss_count": 2, "attempt_target": "ambiguous",
+        "attempt_owner": "ambiguous", "attempt_chain": None,
+        "consumed_attempts": set(),
+    },
+    "CTX-001-ATTEMPT-BIND-THEN-FIRM-001": {
+        "entities": {"dreamer", "tooth-1"},
+        "events": {"loss-1", "attempt-1", "firm-return-1"},
+        "frontier": "firm-return-1", "historical": {"loss-1", "attempt-1"},
+        "public_rules": {"TEETH-END-TERMINAL"},
+    },
+    "CTX-001-ATTEMPT-BIND-THEN-SECOND-LOSS-001": {
+        "entities": {"dreamer", "left-tooth-1", "tooth-2"},
+        "events": {"left-loss-1", "attempt-1", "second-loss-1"},
+        "loss_count": 2, "attempt_target": ["left-tooth-1"],
+        "warning_count": "multiple_people",
+    },
+    "CTX-001-ATTEMPT-BIND-REPORTED-001": {
+        "entities": {"dreamer", "tooth-1", "sister", "sister-tooth-1"},
+        "events": {"dreamer-loss-1", "speech-1", "attempt-1"},
+        "attempt_chain": None, "consumed_attempts": set(),
+    },
+}
+
 for _case_id, _record in ATTEMPT_BINDING_EXPECTED.items():
     EXPECTED[_case_id] = {"attempt_record": _record}
 
@@ -229,6 +294,113 @@ def _check_members(
         if present != should_exist:
             verb = "include" if should_exist else "exclude"
             errors.append(f"{case_id}: {label} must {verb} {rule_id}")
+    return errors
+
+
+def _validate_graph(case_id: str, dream: str, doctrine: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    expected = GRAPH_EXPECTED[case_id]
+    graph = doctrine.get("context_graph") or {}
+    if graph.get("contract_version") != GRAPH_CONTRACT_VERSION:
+        errors.append(f"{case_id}: missing graph contract {GRAPH_CONTRACT_VERSION}")
+        return errors
+
+    required = {
+        "entity_inventory", "event_inventory", "event_chain_inventory",
+        "restoration_attempt_records", "aggregate_derivations", "rule_sets",
+        "claim_manifest", "terminal_frontiers",
+    }
+    if not required.issubset(graph):
+        errors.append(f"{case_id}: graph collections are incomplete")
+        return errors
+
+    entities = {item.get("entity_id"): item for item in graph["entity_inventory"]}
+    events = {item.get("event_id"): item for item in graph["event_inventory"]}
+    chains = {item.get("event_chain_id"): item for item in graph["event_chain_inventory"]}
+    attempts = {item.get("attempt_id"): item for item in graph["restoration_attempt_records"]}
+    spans = {
+        item.get("source_span", {}).get("span_id")
+        for item in events.values()
+    }
+    for event in events.values():
+        span = event.get("source_span") or {}
+        if dream[span.get("start", 0):span.get("end", 0)] != span.get("text"):
+            errors.append(f"{case_id}: event source span does not round-trip")
+        for entity_id in (event.get("actor_id_or_null"), event.get("owner_id_or_ambiguous")):
+            if entity_id not in {None, "ambiguous", "unknown"} and entity_id not in entities:
+                errors.append(f"{case_id}: event has dangling entity {entity_id}")
+        targets = event.get("target_entity_ids_or_ambiguous")
+        if isinstance(targets, list) and any(target not in entities for target in targets):
+            errors.append(f"{case_id}: event has dangling target")
+        chain_id = event.get("event_chain_id_or_null")
+        if chain_id and (chain_id not in chains or event.get("event_id") not in chains[chain_id].get("event_ids", [])):
+            errors.append(f"{case_id}: event has dangling chain {chain_id}")
+    for chain in chains.values():
+        if any(event_id not in events for event_id in chain.get("event_ids", [])):
+            errors.append(f"{case_id}: chain has dangling event")
+        if any(entity_id not in entities for entity_id in chain.get("entity_ids", [])):
+            errors.append(f"{case_id}: chain has dangling entity")
+    for attempt in attempts.values():
+        target = attempt.get("target_tooth_ids_or_ambiguous")
+        if isinstance(target, list) and any(entity_id not in entities for entity_id in target):
+            errors.append(f"{case_id}: attempt has dangling target")
+        chain_id = attempt.get("event_chain_id_or_null")
+        if chain_id and chain_id not in chains:
+            errors.append(f"{case_id}: attempt has dangling chain")
+    rule_ids = set()
+    for partition, records in graph["rule_sets"].items():
+        if partition == "contract_version":
+            continue
+        for record in records:
+            rule_ids.add(record.get("rule_id"))
+            if not record.get("source_event_ids") or any(event_id not in events for event_id in record.get("source_event_ids", [])):
+                errors.append(f"{case_id}: rule has missing event provenance")
+            if any(span_id not in spans for span_id in record.get("source_span_ids", [])):
+                errors.append(f"{case_id}: rule has missing span provenance")
+    for claim in graph["claim_manifest"]:
+        if any(event_id not in events for event_id in claim.get("consumed_event_ids", [])):
+            errors.append(f"{case_id}: claim has dangling event")
+        if any(attempt_id not in attempts for attempt_id in claim.get("consumed_attempt_ids", [])):
+            errors.append(f"{case_id}: claim has dangling attempt")
+        if any(rule_id not in rule_ids for rule_id in claim.get("consumed_rule_ids", [])):
+            errors.append(f"{case_id}: claim has dangling rule")
+        if any(span_id not in spans for span_id in claim.get("consumed_span_ids", [])):
+            errors.append(f"{case_id}: claim has dangling span")
+
+    actual = {
+        "entities": set(entities), "events": set(events), "chains": set(chains),
+        "eligible_events": {event_id for event_id, event in events.items() if event.get("doctrine_eligible")},
+        "claims": {claim.get("claim_id") for claim in graph["claim_manifest"]},
+        "consumed_attempts": {
+            attempt_id for claim in graph["claim_manifest"]
+            for attempt_id in claim.get("consumed_attempt_ids", [])
+        },
+        "loss_count": sum(event.get("event_type") == "tooth_loss" for event in events.values()),
+        "chain_count": len(chains),
+        "public_rules": {item.get("rule_id") for item in graph["rule_sets"]["public_applied"]},
+    }
+    attempt = next(iter(attempts.values()))
+    actual.update({
+        "attempt_chain": attempt.get("event_chain_id_or_null"),
+        "attempt_actor": attempt.get("actor_id_or_ambiguous"),
+        "attempt_owner": attempt.get("owner_id_or_ambiguous"),
+        "attempt_target": attempt.get("target_tooth_ids_or_ambiguous"),
+        "warning_count": doctrine.get("warning_count"),
+    })
+    if graph["terminal_frontiers"]:
+        actual["frontier"] = graph["terminal_frontiers"][0].get("terminal_event_id")
+        actual["historical"] = set(graph["terminal_frontiers"][0].get("historical_event_ids", []))
+    aggregate_losses = {
+        event_id for aggregate in graph["aggregate_derivations"]
+        for event_id in aggregate.get("contributing_event_ids", [])
+    }
+    actual["aggregate_losses"] = aggregate_losses
+    for field, value in expected.items():
+        if actual.get(field) != value:
+            errors.append(f"{case_id}: graph {field} expected {value!r}, got {actual.get(field)!r}")
+    integrity = graph.get("integrity") or {}
+    if integrity.get("verified") is not True or integrity.get("reason_codes") != []:
+        errors.append(f"{case_id}: graph integrity did not pass: {integrity!r}")
     return errors
 
 
@@ -345,6 +517,7 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
                     case_errors.append(
                         f"{case_id}: attempt source span does not round-trip to dream text"
                     )
+            case_errors.extend(_validate_graph(case_id, item.get("dream", ""), doctrine))
 
         case_errors.extend(
             _check_members(

@@ -38,4 +38,5 @@ jobs:
           tests.test_teeth_release_verification
           tests.test_teeth_ctx_001_attempt_binding
           tests.test_teeth_ctx_003_referential_integrity
+          tests.test_teeth_ctx_003_claim_provenance
           -v

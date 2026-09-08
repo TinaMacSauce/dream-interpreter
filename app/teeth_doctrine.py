@@ -217,6 +217,13 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
             "rule_sets",
             "claim_manifest",
             "terminal_frontiers",
+            "provenance_contract_version",
+            "provenance_nodes",
+            "provenance_paths",
+            "provenance_edges",
+            "provenance_summary",
+            "provenance_digest",
+            "provenance_integrity",
         ):
             result[key] = graph[key]
         result["graph_integrity"] = graph["integrity"]

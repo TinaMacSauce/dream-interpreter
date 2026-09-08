@@ -234,6 +234,23 @@ class TeethQAReleaseGateTests(unittest.TestCase):
             evidence["errors"],
         )
 
+    def test_production_verifier_rejects_broken_claim_provenance(self):
+        app = Flask(__name__)
+        app.register_blueprint(qa_bp)
+
+        with patch.dict(os.environ, {"RENDER_GIT_COMMIT": "qa-route-sha"}, clear=False):
+            payload = app.test_client().get("/qa/teeth-regression").get_json()
+
+        payload["doctrine_registry"]["loaded_from"] = "canonical_sheet"
+        case = next(item for item in payload["cases"] if item["case_id"] == "quantity_one")
+        case["doctrine"]["context_graph"]["provenance_paths"][0]["complete"] = False
+        evidence = validate_production_contract(payload, expected_commit="qa-route-sha")
+        self.assertFalse(evidence["verified"])
+        self.assertTrue(
+            any("quantity_one: provenance path is incomplete" in error for error in evidence["errors"]),
+            evidence["errors"],
+        )
+
     def test_qa_status_exposes_protected_non_billable_access_contract(self):
         app = Flask(__name__)
         app.register_blueprint(qa_bp)

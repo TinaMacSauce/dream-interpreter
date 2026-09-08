@@ -204,6 +204,7 @@ ATTEMPT_BINDING_EXPECTED: Dict[str, Dict[str, Any]] = {
 }
 
 GRAPH_CONTRACT_VERSION = "context-graph-referential-integrity/1.0"
+PROVENANCE_CONTRACT_VERSION = "claim-provenance-reachability/1.0"
 GRAPH_EXPECTED: Dict[str, Dict[str, Any]] = {
     "CTX-001-ATTEMPT-BIND-DREAMER-001": {
         "entities": {"dreamer", "tooth-1"},
@@ -404,6 +405,57 @@ def _validate_graph(case_id: str, dream: str, doctrine: Dict[str, Any]) -> List[
     return errors
 
 
+def _validate_provenance(case_id: str, doctrine: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    graph = doctrine.get("context_graph") or {}
+    if graph.get("provenance_contract_version") != PROVENANCE_CONTRACT_VERSION:
+        return [f"{case_id}: missing provenance contract {PROVENANCE_CONTRACT_VERSION}"]
+    required = {
+        "provenance_nodes", "provenance_paths", "provenance_edges",
+        "provenance_summary", "provenance_digest", "provenance_integrity",
+    }
+    if not required.issubset(graph):
+        return [f"{case_id}: provenance collections are incomplete"]
+    integrity = graph.get("provenance_integrity") or {}
+    if integrity.get("verified") is not True or integrity.get("reason_codes") != []:
+        errors.append(f"{case_id}: provenance integrity did not pass: {integrity!r}")
+    digest = graph.get("provenance_digest")
+    if not isinstance(digest, str) or not digest.startswith("sha256:") or len(digest) != 71:
+        errors.append(f"{case_id}: provenance digest is missing or malformed")
+
+    events = {item.get("event_id"): item for item in graph.get("event_inventory", [])}
+    paths = graph.get("provenance_paths", [])
+    for path in paths:
+        event = events.get(path.get("event_id"))
+        if not event or not path.get("complete"):
+            errors.append(f"{case_id}: provenance path is incomplete")
+            continue
+        if path.get("disposition") == "released":
+            if not event.get("doctrine_eligible"):
+                errors.append(f"{case_id}: ineligible event reached a released claim")
+            if path.get("owner_id_or_ambiguous") != event.get("owner_id_or_ambiguous"):
+                errors.append(f"{case_id}: provenance path crossed owner boundary")
+            if path.get("event_chain_id_or_null") != event.get("event_chain_id_or_null"):
+                errors.append(f"{case_id}: provenance path crossed event-chain boundary")
+    if doctrine.get("active_warning"):
+        warning_paths = [
+            path for path in paths
+            if path.get("warning_path") and path.get("disposition") == "released"
+        ]
+        if not warning_paths:
+            errors.append(f"{case_id}: active warning has no complete released provenance path")
+        elif all(path.get("modifier") for path in warning_paths):
+            errors.append(f"{case_id}: modifier provenance replaced the base warning path")
+    if doctrine.get("ending_precedence"):
+        terminal_paths = [
+            path for path in paths
+            if path.get("terminal") and path.get("disposition") == "released"
+        ]
+        if len(terminal_paths) != 1:
+            errors.append(f"{case_id}: terminal ending lacks one current terminal path")
+    return errors
+
+
 def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
     errors: List[str] = []
     case_evidence: Dict[str, Any] = {}
@@ -518,6 +570,8 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
                         f"{case_id}: attempt source span does not round-trip to dream text"
                     )
             case_errors.extend(_validate_graph(case_id, item.get("dream", ""), doctrine))
+
+        case_errors.extend(_validate_provenance(case_id, doctrine))
 
         case_errors.extend(
             _check_members(

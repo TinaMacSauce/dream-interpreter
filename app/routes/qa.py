@@ -137,11 +137,27 @@ WARNING_CLAIM_PARTITION_QA_CASES = (
     ("CTX-003-CLAIM-PART-NEGATED-PLUS-OTHER-001", "My tooth was not loose. My sister's tooth was loose."),
 )
 
+NARRATION_CLAIM_CONSUMPTION_QA_CASES = (
+    ("CTX-003-NARR-CONS-MULTI-OWNER-CONDITIONS-001", "My gums were bleeding. My sister's tooth was loose but did not fall out."),
+    ("CTX-003-NARR-CONS-SAME-OWNER-DISTINCT-CONDITIONS-001", "My gums were bleeding and my tooth was loose but did not fall out."),
+    ("CTX-003-NARR-CONS-TWO-OWNER-LOOSE-001", "My tooth was loose. My sister's tooth was loose."),
+    ("CTX-003-NARR-CONS-LOSS-PLUS-OTHER-LOOSE-001", "My tooth fell out. My sister's tooth was loose but did not fall out."),
+    ("CTX-003-NARR-CONS-GUMS-PLUS-OTHER-LOSS-001", "My gums were bleeding. My sister's tooth fell out."),
+    ("CTX-003-NARR-CONS-QUOTED-PLUS-GUMS-001", 'My aunt said, "My tooth is loose." My gums were bleeding.'),
+    ("CTX-003-NARR-CONS-HYPOTHETICAL-PLUS-OTHER-001", "If my tooth were loose, I would worry. My sister's tooth was loose."),
+    ("CTX-003-NARR-CONS-NEGATED-PLUS-OTHER-001", "My tooth was not loose. My sister's tooth was loose."),
+    ("CTX-003-NARR-CONS-LOOSE-THEN-LOSS-001", "My tooth became loose, then it fell out."),
+    ("CTX-003-NARR-CONS-ATTEMPT-THEN-SECOND-LOSS-001", "My tooth fell out and I tried to put it back. Then another tooth fell out."),
+    ("CTX-003-NARR-CONS-TERMINAL-RETURN-001", "My tooth fell out, then the same tooth fitted firmly back into the same socket."),
+    ("CTX-003-NARR-CONS-ONE-LOSS-MULTI-RULE-001", "My tooth fell out."),
+)
+
 TEETH_QA_CASES = (
     BASE_TEETH_QA_CASES
     + ATTEMPT_BINDING_QA_CASES
     + CONDITION_PROVENANCE_QA_CASES
     + WARNING_CLAIM_PARTITION_QA_CASES
+    + NARRATION_CLAIM_CONSUMPTION_QA_CASES
 )
 
 

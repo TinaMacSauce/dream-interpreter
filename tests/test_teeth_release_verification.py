@@ -12,7 +12,7 @@ from app.release_verification import (
 COMMIT = "3f37f1085421d04ede2420cae63c4abb63a2202d"
 RELEASE = {
     "build_commit": COMMIT,
-    "release_id": "teeth-registry-v1",
+    "release_id": "snake-dec01-foundation-v1",
     "repository": "TinaMacSauce/dream-interpreter",
     "repository_url": "https://github.com/TinaMacSauce/dream-interpreter",
     "commit_url": f"https://github.com/TinaMacSauce/dream-interpreter/commit/{COMMIT}",
@@ -22,20 +22,39 @@ RELEASE = {
     "teeth_doctrine_version": "DEC-TEETH-2026-09-03-05",
     "teeth_context_version": "teeth-context-v2",
     "doctrine_registry": "Dream Symbol Dictionary!DoctrineRegistry",
-    "teeth_registry_sheet_revision": "6134",
+    "teeth_registry_sheet_revision": "6138",
     "teeth_registry_content_revision": "fnv1a64:c51447de5d35bd59",
     "teeth_registry_contract_version": "teeth-doctrine-registry-v1",
+    "snake_doctrine_version": "DEC-SNAKE-2026-09-08-01",
+    "snake_context_version": "snake-context-v1",
+    "snake_registry_range": "DoctrineRegistry!A25:M42",
+    "snake_registry_sheet_revision": "6138",
+    "snake_registry_content_revision": "fnv1a64:ae0190f42f79b9c8",
+    "snake_registry_contract_version": "snake-doctrine-registry-v1",
 }
 
 REGISTRY = {
     "verified": True,
     "contract_version": "teeth-doctrine-registry-v1",
-    "sheet_revision": "6134",
+    "sheet_revision": "6138",
     "content_revision": "fnv1a64:c51447de5d35bd59",
     "doctrine_version": "DEC-TEETH-2026-09-03-05",
     "rule_count": 23,
     "active_rule_count": 17,
     "unresolved_rule_count": 6,
+    "loaded_from": "canonical_sheet",
+}
+
+SNAKE_REGISTRY = {
+    "verified": True,
+    "contract_version": "snake-doctrine-registry-v1",
+    "sheet_range": "DoctrineRegistry!A25:M42",
+    "sheet_revision": "6138",
+    "content_revision": "fnv1a64:ae0190f42f79b9c8",
+    "doctrine_version": "DEC-SNAKE-2026-09-08-01",
+    "rule_count": 18,
+    "active_rule_count": 18,
+    "unresolved_rule_count": 0,
     "loaded_from": "canonical_sheet",
 }
 
@@ -47,6 +66,7 @@ QA_ACCESS = {
     "interpret_route": "/qa/interpret",
     "application_route": "/interpret",
     "fixed_contract_route": "/qa/teeth-regression",
+    "snake_fixed_contract_route": "/qa/snake-regression",
     "grant_authentication": "X-Admin-Key",
     "interpret_authentication": "X-QA-Token or Authorization Bearer",
     "non_billable": True,
@@ -100,6 +120,7 @@ class TeethProductionReleaseVerificationTests(unittest.TestCase):
             "spreadsheet_connected": True,
             "doctrine_sheets_available": True,
             "teeth_registry": REGISTRY,
+            "snake_registry": SNAKE_REGISTRY,
             "release": RELEASE,
         }
 
@@ -112,6 +133,7 @@ class TeethProductionReleaseVerificationTests(unittest.TestCase):
             "spreadsheet_connected": False,
             "doctrine_sheets_available": False,
             "teeth_registry": REGISTRY,
+            "snake_registry": SNAKE_REGISTRY,
             "release": RELEASE,
         }
 
@@ -126,6 +148,7 @@ class TeethProductionReleaseVerificationTests(unittest.TestCase):
             "spreadsheet_connected": True,
             "doctrine_sheets_available": True,
             "teeth_registry": dict(REGISTRY, verified=False),
+            "snake_registry": SNAKE_REGISTRY,
             "release": RELEASE,
         }
 
@@ -149,6 +172,7 @@ class TeethProductionReleaseVerificationTests(unittest.TestCase):
             "release": RELEASE,
             "qa_access": QA_ACCESS,
             "doctrine_registry": REGISTRY,
+            "snake_doctrine_registry": SNAKE_REGISTRY,
         }
 
         self.assertEqual([], validate_qa_status_payload(payload, expected_commit=COMMIT))
@@ -160,6 +184,7 @@ class TeethProductionReleaseVerificationTests(unittest.TestCase):
             "release": RELEASE,
             "qa_access": dict(QA_ACCESS, customer_entitlement_store_used=True),
             "doctrine_registry": REGISTRY,
+            "snake_doctrine_registry": SNAKE_REGISTRY,
         }
 
         errors = validate_qa_status_payload(payload, expected_commit=COMMIT)

@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  teeth-qa-contract:
+  doctrine-qa-contract:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -20,7 +20,7 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: pip install -r requirements.txt
-      - name: Enforce Teeth QA and access contracts
+      - name: Enforce Teeth and Snake QA and access contracts
         env:
           APP_ENV: test
           FLASK_SECRET_KEY: ci-test-secret-key
@@ -42,4 +42,7 @@ jobs:
           tests.test_teeth_ctx_003_condition_provenance
           tests.test_teeth_ctx_003_warning_claim_partition
           tests.test_teeth_ctx_003_narration_claim_consumption
+          tests.test_snake_registry_runtime
+          tests.test_snake_doctrine
+          tests.test_snake_qa_gate
           -v

@@ -1,0 +1,238 @@
+from __future__ import annotations
+
+import time
+from typing import Any, Dict, List, Mapping, Sequence, Tuple
+
+from app.cache import SNAKE_REGISTRY_CACHE
+from app.config import Config
+from app.sheets import get_spreadsheet
+from app.teeth_registry import (
+    REQUIRED_HEADERS,
+    cluster_registry_values,
+    registry_content_revision,
+)
+from app.utils import normalize_header
+
+
+REGISTRY_CONTRACT_VERSION = "snake-doctrine-registry-v1"
+EXPECTED_DOCTRINE_VERSION = "DEC-SNAKE-2026-09-08-01"
+EXPECTED_SHEET_REVISION = "6138"
+EXPECTED_CONTENT_REVISION = "fnv1a64:ae0190f42f79b9c8"
+EXPECTED_UPDATED_AT_UTC = "2026-09-08T07:35:00Z"
+EXPECTED_AUTHORITY = "Tina, explicit founder teaching"
+
+EXPECTED_RULES: Mapping[str, Tuple[str, str, bool]] = {
+    "snake_base_enemy": ("SNAKE-BASE-ENEMY", "APPROVED", True),
+    "snake_action_map": ("SNAKE-ACTION-MAP", "APPROVED", True),
+    "snake_attack": ("SNAKE-ATTACK", "APPROVED", True),
+    "snake_watching": ("SNAKE-WATCHING", "APPROVED", True),
+    "snake_retreat": ("SNAKE-RETREAT", "APPROVED", True),
+    "snake_victory": ("SNAKE-END-VICTORY", "APPROVED", True),
+    "snake_defeat": ("SNAKE-END-DEFEAT", "APPROVED", True),
+    "snake_quantity": ("SNAKE-QUANTITY", "APPROVED", True),
+    "snake_size_danger": ("SNAKE-SIZE-DANGER", "APPROVED", True),
+    "snake_bite": ("SNAKE-BITE", "APPROVED", True),
+    "snake_venom": ("SNAKE-VENOM", "APPROVED", True),
+    "snake_location": ("SNAKE-LOCATION", "APPROVED", True),
+    "snake_transform_person": ("SNAKE-TRANSFORM-PERSON", "APPROVED", True),
+    "snake_ownership_low": ("SNAKE-OWNERSHIP-LOW", "APPROVED", True),
+    "snake_unfinished_battle": ("SNAKE-UNFINISHED-BATTLE", "APPROVED", True),
+    "snake_color_excluded": ("SNAKE-COLOR-EXCLUDED", "APPROVED", True),
+    "snake_faith_response": ("SNAKE-FAITH-RESPONSE", "APPROVED", True),
+    "snake_faith_best_practice": (
+        "SNAKE-FAITH-BEST-PRACTICE",
+        "APPROVED",
+        True,
+    ),
+}
+
+
+def _truthy(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _rows_from_values(
+    values: Sequence[Sequence[Any]],
+) -> Tuple[List[str], List[Dict[str, str]]]:
+    if not values:
+        raise RuntimeError("snake_registry_empty")
+    headers = [normalize_header(str(value or "")) for value in values[0]]
+    if tuple(headers) != REQUIRED_HEADERS:
+        raise RuntimeError("snake_registry_schema_mismatch")
+    rows: List[Dict[str, str]] = []
+    for raw in values[1:]:
+        padded = list(raw) + [""] * max(0, len(headers) - len(raw))
+        row = {
+            headers[index]: str(padded[index] or "").strip()
+            for index in range(len(headers))
+        }
+        if any(row.values()):
+            rows.append(row)
+    return headers, rows
+
+
+def validate_snake_registry_values(
+    values: Sequence[Sequence[Any]],
+    *,
+    expected_content_revision: str | None = None,
+) -> Dict[str, Any]:
+    scoped_values = cluster_registry_values(values, "Snake")
+    _headers, rows = _rows_from_values(scoped_values)
+    content_revision = registry_content_revision(scoped_values)
+    if content_revision != (expected_content_revision or EXPECTED_CONTENT_REVISION):
+        raise RuntimeError("snake_registry_content_revision_mismatch")
+    if len(rows) != len(EXPECTED_RULES):
+        raise RuntimeError("snake_registry_rule_count_mismatch")
+
+    rules: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        key = row["implementation_key"]
+        if not key or key in rules or key not in EXPECTED_RULES:
+            raise RuntimeError("snake_registry_implementation_key_mismatch")
+        expected_rule_id, expected_status, expected_active = EXPECTED_RULES[key]
+        active = _truthy(row["active"])
+        if row["rule_id"] != expected_rule_id:
+            raise RuntimeError("snake_registry_rule_id_mismatch")
+        if row["status"] != expected_status or active is not expected_active:
+            raise RuntimeError("snake_registry_activation_mismatch")
+        if row["doctrine_version"] != EXPECTED_DOCTRINE_VERSION:
+            raise RuntimeError("snake_registry_doctrine_version_mismatch")
+        if row["decision_id"] != EXPECTED_DOCTRINE_VERSION:
+            raise RuntimeError("snake_registry_decision_id_mismatch")
+        if row["cluster"] != "Snake":
+            raise RuntimeError("snake_registry_cluster_mismatch")
+        if row["authority"] != EXPECTED_AUTHORITY:
+            raise RuntimeError("snake_registry_authority_mismatch")
+        if row["updated_at_utc"] != EXPECTED_UPDATED_AT_UTC:
+            raise RuntimeError("snake_registry_timestamp_mismatch")
+        rules[key] = {
+            "rule_id": row["rule_id"],
+            "status": row["status"],
+            "active": active,
+        }
+
+    active_rule_ids = sorted(
+        rule["rule_id"] for rule in rules.values() if rule["active"]
+    )
+    return {
+        "verified": True,
+        "contract_version": REGISTRY_CONTRACT_VERSION,
+        "sheet_name": Config.SHEET_DOCTRINE_REGISTRY,
+        "sheet_range": "DoctrineRegistry!A25:M42",
+        "sheet_revision": EXPECTED_SHEET_REVISION,
+        "content_revision": content_revision,
+        "doctrine_version": EXPECTED_DOCTRINE_VERSION,
+        "decision_id": EXPECTED_DOCTRINE_VERSION,
+        "rule_count": len(rules),
+        "active_rule_count": len(active_rule_ids),
+        "unresolved_rule_count": 0,
+        "active_rule_ids": active_rule_ids,
+        "unresolved_rule_ids": [],
+        "rules": rules,
+        "loaded_from": "canonical_sheet",
+        "error": "",
+    }
+
+
+def _test_manifest_snapshot() -> Dict[str, Any]:
+    rules = {
+        key: {"rule_id": value[0], "status": value[1], "active": value[2]}
+        for key, value in EXPECTED_RULES.items()
+    }
+    return {
+        "verified": True,
+        "contract_version": REGISTRY_CONTRACT_VERSION,
+        "sheet_name": Config.SHEET_DOCTRINE_REGISTRY,
+        "sheet_range": "DoctrineRegistry!A25:M42",
+        "sheet_revision": EXPECTED_SHEET_REVISION,
+        "content_revision": EXPECTED_CONTENT_REVISION,
+        "doctrine_version": EXPECTED_DOCTRINE_VERSION,
+        "decision_id": EXPECTED_DOCTRINE_VERSION,
+        "rule_count": len(rules),
+        "active_rule_count": len(rules),
+        "unresolved_rule_count": 0,
+        "active_rule_ids": sorted(rule["rule_id"] for rule in rules.values()),
+        "unresolved_rule_ids": [],
+        "rules": rules,
+        "loaded_from": "verified_test_manifest",
+        "error": "",
+    }
+
+
+def _failed_snapshot(error: Exception) -> Dict[str, Any]:
+    return {
+        "verified": False,
+        "contract_version": REGISTRY_CONTRACT_VERSION,
+        "sheet_name": Config.SHEET_DOCTRINE_REGISTRY,
+        "sheet_range": "DoctrineRegistry!A25:M42",
+        "sheet_revision": EXPECTED_SHEET_REVISION,
+        "content_revision": "",
+        "doctrine_version": EXPECTED_DOCTRINE_VERSION,
+        "decision_id": EXPECTED_DOCTRINE_VERSION,
+        "rule_count": 0,
+        "active_rule_count": 0,
+        "unresolved_rule_count": 0,
+        "active_rule_ids": [],
+        "unresolved_rule_ids": [],
+        "rules": {},
+        "loaded_from": "canonical_sheet",
+        "error": str(error) or type(error).__name__,
+    }
+
+
+def get_snake_registry_snapshot(*, force: bool = False) -> Dict[str, Any]:
+    if Config.APP_ENV == "test":
+        return _test_manifest_snapshot()
+    now = time.time()
+    cached = SNAKE_REGISTRY_CACHE.get("snapshot")
+    if (
+        not force
+        and isinstance(cached, dict)
+        and now - float(SNAKE_REGISTRY_CACHE.get("loaded_at") or 0)
+        < Config.CACHE_TTL_SECONDS
+    ):
+        return cached
+    try:
+        worksheet = get_spreadsheet().worksheet(Config.SHEET_DOCTRINE_REGISTRY)
+        snapshot = validate_snake_registry_values(worksheet.get_all_values())
+    except Exception as error:
+        snapshot = _failed_snapshot(error)
+    SNAKE_REGISTRY_CACHE["snapshot"] = snapshot
+    SNAKE_REGISTRY_CACHE["loaded_at"] = now
+    return snapshot
+
+
+def snake_rule_id_for(snapshot: Mapping[str, Any], implementation_key: str) -> str:
+    rule = (snapshot.get("rules") or {}).get(implementation_key) or {}
+    if snapshot.get("verified") is not True or rule.get("active") is not True:
+        return ""
+    return str(rule.get("rule_id") or "")
+
+
+def public_snake_registry_metadata(
+    snapshot: Mapping[str, Any],
+    *,
+    include_rule_ids: bool = False,
+) -> Dict[str, Any]:
+    keys = (
+        "verified",
+        "contract_version",
+        "sheet_name",
+        "sheet_range",
+        "sheet_revision",
+        "content_revision",
+        "doctrine_version",
+        "decision_id",
+        "rule_count",
+        "active_rule_count",
+        "unresolved_rule_count",
+        "loaded_from",
+        "error",
+    )
+    metadata = {key: snapshot.get(key) for key in keys}
+    if include_rule_ids:
+        metadata["active_rule_ids"] = list(snapshot.get("active_rule_ids") or [])
+        metadata["unresolved_rule_ids"] = list(
+            snapshot.get("unresolved_rule_ids") or []
+        )
+    return metadata

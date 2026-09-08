@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Set
 
 from app.config import Config
 from app.teeth_integration import build_teeth_output_summary
+from app.snake_integration import build_snake_output_summary
 from app.utils import compress_phrase_list, human_join, normalize_text
 
 
@@ -391,6 +392,9 @@ def build_doctrine_bound_summary(doctrine_facts: Dict[str, Any], interpretation:
     teeth = facts.get("teeth_narration")
     if isinstance(teeth, dict) and teeth.get("active") is True:
         return build_teeth_output_summary(teeth)
+    snake = facts.get("snake_narration")
+    if isinstance(snake, dict) and snake.get("active") is True:
+        return build_snake_output_summary(snake)
 
     event_context = _get_event_context(facts)
     max_symbols = max(1, Config.NARRATION_MAX_SYMBOLS)

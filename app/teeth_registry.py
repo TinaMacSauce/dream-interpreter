@@ -12,7 +12,7 @@ from app.utils import normalize_header
 
 REGISTRY_CONTRACT_VERSION = "teeth-doctrine-registry-v1"
 EXPECTED_DOCTRINE_VERSION = "DEC-TEETH-2026-09-03-05"
-EXPECTED_SHEET_REVISION = "6134"
+EXPECTED_SHEET_REVISION = "6138"
 EXPECTED_CONTENT_REVISION = "fnv1a64:c51447de5d35bd59"
 EXPECTED_UPDATED_AT_UTC = "2026-09-03T18:43:07Z"
 
@@ -34,7 +34,7 @@ REQUIRED_HEADERS = (
 
 # This is a governance manifest, not a second doctrine source. Runtime rule IDs,
 # statuses, and active flags come from the canonical Sheet only after the exact
-# registry content has been verified against revision 6134.
+# cluster-scoped registry content is verified at canonical Sheet revision 6138.
 EXPECTED_RULES: Mapping[str, Tuple[str, str, bool]] = {
     "own_fallout": ("TEETH-FALLOUT-OWN", "APPROVED", True),
     "one_fallout": ("TEETH-FALLOUT-ONE", "APPROVED", True),
@@ -79,6 +79,29 @@ def registry_content_revision(values: Sequence[Sequence[Any]]) -> str:
     return _fnv1a64(canonical)
 
 
+def cluster_registry_values(
+    values: Sequence[Sequence[Any]],
+    cluster: str,
+) -> List[List[Any]]:
+    """Return the shared header plus one cluster's rows from the canonical registry."""
+    if not values:
+        return []
+    header = list(values[0])
+    try:
+        cluster_index = [normalize_header(str(value or "")) for value in header].index(
+            "cluster"
+        )
+    except ValueError as error:
+        raise RuntimeError("registry_schema_mismatch") from error
+    rows = [
+        list(row)
+        for row in values[1:]
+        if len(row) > cluster_index
+        and str(row[cluster_index] or "").strip().casefold() == cluster.casefold()
+    ]
+    return [header, *rows]
+
+
 def _truthy(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -109,8 +132,9 @@ def validate_registry_values(
     expected_content_revision: str | None = None,
 ) -> Dict[str, Any]:
     """Validate the exact approved Sheet registry and return a safe snapshot."""
-    _headers, rows = _rows_from_values(values)
-    content_revision = registry_content_revision(values)
+    scoped_values = cluster_registry_values(values, "Teeth")
+    _headers, rows = _rows_from_values(scoped_values)
+    content_revision = registry_content_revision(scoped_values)
     if content_revision != (expected_content_revision or EXPECTED_CONTENT_REVISION):
         raise RuntimeError("registry_content_revision_mismatch")
     if len(rows) != len(EXPECTED_RULES):

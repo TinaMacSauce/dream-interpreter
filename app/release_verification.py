@@ -4,15 +4,21 @@ from typing import Any, Dict, List
 
 
 EXPECTED_SERVICE = "dream-interpreter"
-EXPECTED_RELEASE_ID = "teeth-registry-v1"
+EXPECTED_RELEASE_ID = "snake-dec01-foundation-v1"
 EXPECTED_REPOSITORY = "TinaMacSauce/dream-interpreter"
 EXPECTED_REPOSITORY_URL = "https://github.com/TinaMacSauce/dream-interpreter"
 EXPECTED_PRODUCTION_URL = "https://interpreter.jamaicantruestories.com"
 EXPECTED_TEETH_DOCTRINE_VERSION = "DEC-TEETH-2026-09-03-05"
 EXPECTED_TEETH_CONTEXT_VERSION = "teeth-context-v2"
-EXPECTED_TEETH_REGISTRY_SHEET_REVISION = "6134"
+EXPECTED_TEETH_REGISTRY_SHEET_REVISION = "6138"
 EXPECTED_TEETH_REGISTRY_CONTENT_REVISION = "fnv1a64:c51447de5d35bd59"
 EXPECTED_TEETH_REGISTRY_CONTRACT_VERSION = "teeth-doctrine-registry-v1"
+EXPECTED_SNAKE_DOCTRINE_VERSION = "DEC-SNAKE-2026-09-08-01"
+EXPECTED_SNAKE_CONTEXT_VERSION = "snake-context-v1"
+EXPECTED_SNAKE_REGISTRY_RANGE = "DoctrineRegistry!A25:M42"
+EXPECTED_SNAKE_REGISTRY_SHEET_REVISION = "6138"
+EXPECTED_SNAKE_REGISTRY_CONTENT_REVISION = "fnv1a64:ae0190f42f79b9c8"
+EXPECTED_SNAKE_REGISTRY_CONTRACT_VERSION = "snake-doctrine-registry-v1"
 
 
 def validate_release_metadata(
@@ -38,6 +44,12 @@ def validate_release_metadata(
         "teeth_registry_sheet_revision": EXPECTED_TEETH_REGISTRY_SHEET_REVISION,
         "teeth_registry_content_revision": EXPECTED_TEETH_REGISTRY_CONTENT_REVISION,
         "teeth_registry_contract_version": EXPECTED_TEETH_REGISTRY_CONTRACT_VERSION,
+        "snake_doctrine_version": EXPECTED_SNAKE_DOCTRINE_VERSION,
+        "snake_context_version": EXPECTED_SNAKE_CONTEXT_VERSION,
+        "snake_registry_range": EXPECTED_SNAKE_REGISTRY_RANGE,
+        "snake_registry_sheet_revision": EXPECTED_SNAKE_REGISTRY_SHEET_REVISION,
+        "snake_registry_content_revision": EXPECTED_SNAKE_REGISTRY_CONTENT_REVISION,
+        "snake_registry_contract_version": EXPECTED_SNAKE_REGISTRY_CONTRACT_VERSION,
     }
     return [
         f"release.{field} expected {value!r}, got {release.get(field)!r}"
@@ -117,6 +129,27 @@ def validate_health_payload(
             for field, value in registry_expected.items()
             if registry.get(field) != value
         )
+    snake_registry = payload.get("snake_registry")
+    if not isinstance(snake_registry, dict):
+        errors.append("snake_registry is missing or is not an object")
+    else:
+        snake_expected: Dict[str, Any] = {
+            "verified": True,
+            "contract_version": EXPECTED_SNAKE_REGISTRY_CONTRACT_VERSION,
+            "sheet_range": EXPECTED_SNAKE_REGISTRY_RANGE,
+            "sheet_revision": EXPECTED_SNAKE_REGISTRY_SHEET_REVISION,
+            "content_revision": EXPECTED_SNAKE_REGISTRY_CONTENT_REVISION,
+            "doctrine_version": EXPECTED_SNAKE_DOCTRINE_VERSION,
+            "rule_count": 18,
+            "active_rule_count": 18,
+            "unresolved_rule_count": 0,
+            "loaded_from": "canonical_sheet",
+        }
+        errors.extend(
+            f"snake_registry.{field} expected {value!r}, got {snake_registry.get(field)!r}"
+            for field, value in snake_expected.items()
+            if snake_registry.get(field) != value
+        )
     return errors
 
 
@@ -183,6 +216,7 @@ def validate_qa_status_payload(
             "interpret_route": "/qa/interpret",
             "application_route": "/interpret",
             "fixed_contract_route": "/qa/teeth-regression",
+            "snake_fixed_contract_route": "/qa/snake-regression",
             "grant_authentication": "X-Admin-Key",
             "interpret_authentication": "X-QA-Token or Authorization Bearer",
             "non_billable": True,
@@ -200,4 +234,7 @@ def validate_qa_status_payload(
     registry = payload.get("doctrine_registry")
     if not isinstance(registry, dict) or registry.get("verified") is not True:
         errors.append("doctrine_registry.verified expected True")
+    snake_registry = payload.get("snake_doctrine_registry")
+    if not isinstance(snake_registry, dict) or snake_registry.get("verified") is not True:
+        errors.append("snake_doctrine_registry.verified expected True")
     return errors

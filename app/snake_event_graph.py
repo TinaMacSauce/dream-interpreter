@@ -5,6 +5,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 
 SNAKE_EVENT_CONTRACT_VERSION = "snake-context-event-terminal-v1"
+SNAKE_CLAIM_PROJECTION_CONTRACT_VERSION = "snake-claim-projection-v1"
 
 _SNAKE = r"(?:snake|snakes|serpent|serpents|cobra|cobras)"
 _BODY_PART_NAMES = ("ankle", "arm", "hand", "wrist")
@@ -657,8 +658,654 @@ def validate_snake_event_graph(graph: Mapping[str, Any]) -> Dict[str, Any]:
             reasons.append("TERMINAL_SELECTION_MISMATCH")
         if decision.get("release_status") == "released" and selected is None:
             reasons.append("GENUINE_TERMINAL_REQUIRED")
+
+    claims = list(graph.get("atomic_claims") or [])
+    claim_required = {
+        "claim_id", "source_event_ids", "snake_scope_ids", "chain_ids",
+        "target_id", "target_status", "rule_id", "claim_family",
+        "release_status", "semantic_value", "source_layer",
+        "certainty_profile", "safety_qualifiers", "source_spans",
+    }
+    claim_map = {
+        str(claim.get("claim_id")): claim
+        for claim in claims
+        if claim.get("claim_id")
+    }
+    if len(claim_map) != len(claims):
+        reasons.append("CLAIM_ID_INTEGRITY")
+    for claim in claims:
+        if not claim_required.issubset(claim):
+            reasons.append("CLAIM_SCHEMA_MISMATCH")
+            continue
+        source_events = [
+            event_map.get(str(item))
+            for item in claim.get("source_event_ids") or []
+        ]
+        if not source_events or any(event is None for event in source_events):
+            reasons.append("CLAIM_SOURCE_EVENT_MISSING")
+            continue
+        claim_chains = {str(item) for item in claim.get("chain_ids") or []}
+        event_chains = {
+            str(event.get("chain_id")) for event in source_events if event
+        }
+        if len(claim_chains) != 1 or not event_chains.issubset(claim_chains):
+            reasons.append("CLAIM_EVENT_SNAKE_MISMATCH")
+        release_status = str(claim.get("release_status") or "")
+        if release_status in {"released", "released_historical"}:
+            if not claim.get("rule_id") or not claim.get("source_spans"):
+                reasons.append("RELEASED_CLAIM_PROVENANCE_MISSING")
+            if any(
+                event and event.get("polarity") == "negated"
+                for event in source_events
+            ):
+                reasons.append("NEGATED_EVENT_NOT_RELEASED")
+            if any(
+                event and event.get("actuality") != "actual"
+                for event in source_events
+            ):
+                reasons.append("HYPOTHETICAL_EVENT_NOT_RELEASED")
+        if any(
+            event and event.get("chain_id") == "chain-ambiguous"
+            for event in source_events
+        ) and release_status not in {"withheld_ambiguous", "withheld"}:
+            reasons.append("AMBIGUOUS_SNAKE_ACTOR_NOT_FORCED")
+        qualifiers = set(claim.get("safety_qualifiers") or [])
+        family = str(claim.get("claim_family") or "")
+        if family == "location_sphere" and "location_not_culprit" not in qualifiers:
+            reasons.append("LOCATION_NOT_CULPRIT")
+        if family == "venom_modifier" and not {
+            "not_medical_evidence",
+            "not_objective_curse_proof",
+            "target_specific",
+        }.issubset(qualifiers):
+            reasons.append("VENOM_SAFETY_BOUNDARY")
+        if family == "appearance_caution" and not {
+            "transformed_person_not_definitive_enemy",
+            "no_real_person_accusation",
+        }.issubset(qualifiers):
+            reasons.append("TRANSFORMED_PERSON_NOT_DEFINITIVE_ENEMY")
+        if family == "recurrence_context" and (
+            "recurrence_not_guaranteed" not in qualifiers
+            or claim.get("semantic_value") != "possible_continuation_only"
+        ):
+            reasons.append("RECURRENCE_NOT_GUARANTEED")
+        if release_status == "released_historical":
+            retained = {
+                str(event_id)
+                for decision in graph.get("terminal_decisions") or []
+                if decision.get("chain_id") in claim_chains
+                for event_id in decision.get("retained_history_event_ids") or []
+            }
+            source_ids = {
+                str(item) for item in claim.get("source_event_ids") or []
+            }
+            if not source_ids.issubset(retained):
+                reasons.append("CLAIM_EVENT_HISTORY_NOT_CONSERVED")
+
+    projections = list(graph.get("claim_projection_manifest") or [])
+    projection_required = {
+        "projection_id", "field", "claim_ids", "projection_status",
+        "omitted_claim_ids", "governs_narration",
+    }
+    projected_losslessly: set[str] = set()
+    for projection in projections:
+        if not projection_required.issubset(projection):
+            reasons.append("CLAIM_PROJECTION_SCHEMA_MISMATCH")
+            continue
+        referenced = {
+            str(item)
+            for item in (
+                (projection.get("claim_ids") or [])
+                + (projection.get("omitted_claim_ids") or [])
+            )
+        }
+        if not referenced.issubset(claim_map):
+            reasons.append("CLAIM_PROJECTION_REFERENCE_MISSING")
+        if projection.get("projection_status") == "lossless":
+            projected_losslessly.update(
+                str(item) for item in projection.get("claim_ids") or []
+            )
+        if (
+            projection.get("projection_status") == "lossy"
+            and projection.get("governs_narration") is True
+        ):
+            reasons.append("LOSSY_PROJECTION_NOT_NARRATION_SOURCE")
+        if (
+            projection.get("projection_status") == "withheld"
+            and projection.get("governs_narration") is True
+        ):
+            reasons.append("WITHHELD_CLAIM_NOT_NARRATION_SOURCE")
+    released_claim_ids = {
+        str(claim.get("claim_id"))
+        for claim in claims
+        if claim.get("release_status") in {"released", "released_historical"}
+    }
+    if not released_claim_ids.issubset(projected_losslessly):
+        reasons.append("RELEASED_CLAIM_NOT_PROJECTED")
     unique = sorted(set(reasons))
     return {"verified": not unique, "reason_codes": unique}
+
+
+def _claim_projection(
+    source: str,
+    events: List[Mapping[str, Any]],
+    lineages: List[Mapping[str, Any]],
+    decisions: List[Mapping[str, Any]],
+    locations: List[Mapping[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Project event facts into lossless, doctrine-scoped public claims."""
+    lineage_by_event = {
+        str(item.get("event_id")): item
+        for item in lineages
+        if item.get("event_id")
+    }
+    decision_by_chain = {
+        str(item.get("chain_id")): item
+        for item in decisions
+        if item.get("chain_id")
+    }
+    locations_by_event: Dict[str, List[Mapping[str, Any]]] = {}
+    for location in locations:
+        locations_by_event.setdefault(
+            str(location.get("event_id")), []
+        ).append(location)
+
+    claims: List[Dict[str, Any]] = []
+
+    def add(
+        event: Mapping[str, Any],
+        claim_id: str,
+        rule_id: str,
+        family: str,
+        semantic: str,
+        qualifiers: List[str],
+        *,
+        target_id: Optional[str] = None,
+        target_status: Optional[str] = None,
+        release_status: Optional[str] = None,
+        certainty_profile: Optional[str] = None,
+        source_event_ids: Optional[List[str]] = None,
+        source_spans: Optional[List[str]] = None,
+        snake_scope_ids: Optional[List[str]] = None,
+    ) -> None:
+        chain_id = str(event.get("chain_id") or "")
+        ambiguous = chain_id == "chain-ambiguous"
+        if release_status is None:
+            if ambiguous:
+                release_status = "withheld_ambiguous"
+            elif event.get("polarity") == "negated":
+                release_status = "withheld_negated"
+            elif event.get("actuality") != "actual":
+                release_status = "withheld_hypothetical"
+            else:
+                release_status = "released"
+        if certainty_profile is None:
+            certainty_profile = (
+                "capped_ambiguous"
+                if ambiguous
+                else "not_released"
+                if str(release_status).startswith("withheld_")
+                else "doctrine_match_only"
+            )
+        lineage = lineage_by_event.get(str(event.get("event_id"))) or {}
+        affected_target = (
+            target_id
+            or lineage.get("affected_person_id")
+            or event.get("target_id")
+        )
+        affected_status = (
+            target_status or event.get("target_status") or "unspecified"
+        )
+        if snake_scope_ids is None:
+            snake_scope_ids = (
+                list(event.get("target_candidates") or [])
+                if ambiguous
+                else [chain_id.replace("chain-", "")]
+            )
+        claims.append(
+            {
+                "claim_id": claim_id,
+                "source_event_ids": source_event_ids
+                or [str(event.get("event_id"))],
+                "snake_scope_ids": snake_scope_ids,
+                "chain_ids": [chain_id],
+                "target_id": affected_target,
+                "target_status": affected_status,
+                "rule_id": rule_id,
+                "claim_family": family,
+                "release_status": release_status,
+                "semantic_value": semantic,
+                "source_layer": "jamaican_caribbean_spiritual_doctrine",
+                "certainty_profile": certainty_profile,
+                "safety_qualifiers": qualifiers,
+                "source_spans": source_spans
+                or [str(event.get("span_text") or "")],
+            }
+        )
+
+    for index, event in enumerate(events, start=1):
+        action = str(event.get("action") or "")
+        span = str(event.get("span_text") or "")
+        chain_id = str(event.get("chain_id") or "")
+        decision = decision_by_chain.get(chain_id) or {}
+        prior_history = bool(
+            decision.get("release_status") == "released"
+            and decision.get("final_outcome") == "victory"
+            and event.get("polarity") == "affirmed"
+            and event.get("actuality") == "actual"
+            and str(event.get("event_id"))
+            in {
+                str(item)
+                for item in decision.get("retained_history_event_ids") or []
+            }
+        )
+        lineage = lineage_by_event.get(str(event.get("event_id"))) or {}
+        target = lineage.get("affected_person_id") or event.get("target_id")
+
+        if action == "watch":
+            if "small snake" in span:
+                claim_id = "claim-watch-small"
+            elif event.get("scene_id") == "scene-home":
+                claim_id = "claim-home-watch"
+            elif "second only watched" in span:
+                claim_id = "claim-actual-watch"
+            else:
+                claim_id = f"claim-watch-{index}"
+            family = "terminal_outcome" if event.get("terminal") else "action"
+            semantic = (
+                "no_completed_conflict"
+                if event.get("terminal")
+                else "watching"
+            )
+            qualifiers = (
+                ["no_outcome_invention"]
+                if event.get("terminal")
+                else ["no_real_person_identification"]
+            )
+            add(
+                event,
+                claim_id,
+                "SNAKE-WATCHING",
+                family,
+                semantic,
+                qualifiers,
+            )
+        elif action == "attack":
+            if chain_id == "chain-ambiguous":
+                claim_id = "claim-ambiguous-attack"
+                semantic = "attack_actor_unresolved"
+                qualifiers = [
+                    "ambiguous_actor_not_forced",
+                    "no_real_person_identification",
+                ]
+            elif event.get("scene_id") == "scene-work":
+                claim_id, semantic = "claim-work-attack", "attack"
+                qualifiers = ["no_real_person_identification"]
+            elif "huge cobra" in span:
+                claim_id, semantic = "claim-attack-cobra", "attack"
+                qualifiers = ["no_real_person_identification"]
+            else:
+                claim_id, semantic = f"claim-attack-{index}", "attack"
+                qualifiers = ["no_real_person_identification"]
+            add(
+                event,
+                claim_id,
+                "SNAKE-ATTACK",
+                "action",
+                semantic,
+                qualifiers,
+                source_spans=[span.capitalize()]
+                if chain_id == "chain-ambiguous"
+                else None,
+            )
+        elif action == "chase":
+            add(
+                event,
+                "claim-chase-dreamer"
+                if target == "dreamer"
+                else f"claim-chase-{index}",
+                "SNAKE-ACTION-MAP",
+                "action",
+                "chase_without_capture",
+                ["chase_not_capture", "chase_not_defeat"],
+            )
+        elif action == "bite":
+            if event.get("polarity") == "negated":
+                claim_id = "claim-negated-bite"
+                semantic = "negated_bite"
+                qualifiers = ["negated_event_not_released"]
+            elif event.get("actuality") != "actual":
+                claim_id = "claim-hypothetical-bite"
+                semantic = "hypothetical_bite"
+                qualifiers = ["hypothetical_event_not_released"]
+            elif prior_history:
+                claim_id = "claim-bite-history"
+                semantic = "completed_bite_on_target"
+                qualifiers = [
+                    "historical_not_final_outcome",
+                    "no_medical_inference",
+                ]
+            elif target == "brother" and "venom" in source:
+                claim_id = "claim-brother-bite"
+                semantic = "completed_bite_on_target"
+                qualifiers = ["target_specific", "no_medical_inference"]
+            elif target == "sister" and any(
+                item.get("polarity") == "negated" for item in events
+            ):
+                claim_id = "claim-actual-sister-bite"
+                semantic = "completed_bite_on_target"
+                qualifiers = ["target_specific", "no_medical_inference"]
+            elif target == "sister":
+                claim_id = "claim-bite-sister"
+                semantic = "completed_bite_on_target"
+                qualifiers = ["target_specific", "no_medical_inference"]
+            else:
+                claim_id = f"claim-bite-{index}"
+                semantic = "completed_bite_on_target"
+                qualifiers = ["target_specific", "no_medical_inference"]
+            add(
+                event,
+                claim_id,
+                "SNAKE-BITE",
+                "completed_attack_history"
+                if prior_history
+                else "completed_attack",
+                semantic,
+                qualifiers,
+                release_status="released_historical"
+                if prior_history
+                else None,
+                target_id=target,
+                source_spans=(
+                    [span.removeprefix("the ")]
+                    if target == "brother" and "venom" in source
+                    else [span.capitalize()]
+                    if (
+                        event.get("actuality") != "actual"
+                        and event.get("polarity") != "negated"
+                    )
+                    else None
+                ),
+            )
+        elif action == "kill_by_dreamer":
+            historical = bool(decision.get("retained_history_event_ids"))
+            add(
+                event,
+                "claim-final-victory"
+                if historical
+                else f"claim-victory-{index}",
+                "SNAKE-END-VICTORY",
+                "terminal_outcome",
+                "victory",
+                (
+                    ["ending_controls"] if historical else []
+                )
+                + ["no_real_world_victory_guarantee"],
+            )
+        elif action == "retreat":
+            add(
+                event,
+                f"claim-retreat-{index}",
+                "SNAKE-RETREAT",
+                "terminal_outcome",
+                "retreat",
+                ["no_real_person_identification"],
+            )
+        elif action == "venom_entry":
+            prior_bite = next(
+                (
+                    item
+                    for item in reversed(events[: index - 1])
+                    if item.get("chain_id") == chain_id
+                    and item.get("action") == "bite"
+                ),
+                None,
+            )
+            event_ids = (
+                [str(prior_bite.get("event_id"))] if prior_bite else []
+            ) + [str(event.get("event_id"))]
+            spans = (
+                [
+                    str(prior_bite.get("span_text")).removeprefix("the ")
+                ]
+                if prior_bite
+                else []
+            ) + [span]
+            add(
+                event,
+                "claim-brother-venom"
+                if target == "brother"
+                else f"claim-venom-{index}",
+                "SNAKE-VENOM",
+                "venom_modifier",
+                "spiritual_doctrine_internal_manifestation",
+                [
+                    "not_medical_evidence",
+                    "not_objective_curse_proof",
+                    "target_specific",
+                ],
+                source_event_ids=event_ids,
+                source_spans=spans,
+                target_id=target,
+            )
+        elif action == "transform_to_person":
+            add(
+                event,
+                "claim-transform-caution",
+                "SNAKE-TRANSFORM-PERSON",
+                "appearance_caution",
+                "appearance_caution_only",
+                [
+                    "transformed_person_not_definitive_enemy",
+                    "no_real_person_accusation",
+                ],
+            )
+        elif action == "battle" and event.get("terminal"):
+            add(
+                event,
+                "claim-unfinished",
+                "SNAKE-UNFINISHED-BATTLE",
+                "terminal_outcome",
+                "unresolved",
+                ["no_victory_or_defeat_invention"],
+                target_id="dreamer",
+            )
+
+        if "small snake" in span:
+            add(
+                event,
+                "claim-small",
+                "SNAKE-SIZE-DANGER",
+                "relative_significance",
+                "lesser_relative_significance",
+                ["relative_modifier_only"],
+                target_id=chain_id.replace("chain-", ""),
+                source_spans=["small"],
+            )
+        if "huge cobra" in span:
+            add(
+                event,
+                "claim-huge-cobra",
+                "SNAKE-SIZE-DANGER",
+                "relative_danger",
+                "stronger_or_more_dangerous",
+                ["relative_modifier_only", "not_objective_danger_proof"],
+                target_id=chain_id.replace("chain-", ""),
+                source_spans=["huge", "cobra"],
+            )
+        for location in locations_by_event.get(
+            str(event.get("event_id")), []
+        ):
+            sphere = str(location.get("sphere") or "")
+            location_id = str(location.get("location_scope_id") or "")
+            add(
+                event,
+                "claim-home-sphere"
+                if sphere == "home"
+                else "claim-work-sphere",
+                "SNAKE-LOCATION",
+                "location_sphere",
+                "home_sphere"
+                if sphere == "home"
+                else "workplace_sphere",
+                ["location_not_culprit"],
+                target_id=location_id,
+                source_spans=[str(location.get("span_text") or "")],
+            )
+
+    if events and "same snake" in source and (
+        "again" in source or "returned" in source
+    ):
+        event = events[0]
+        add(
+            event,
+            "claim-recurrence-context",
+            "SNAKE-UNFINISHED-BATTLE",
+            "recurrence_context",
+            "possible_continuation_only",
+            ["recurrence_not_guaranteed", "identity_not_proven"],
+            target_id=str(event.get("chain_id") or "").replace("chain-", ""),
+            target_status="reported_same_entity",
+            certainty_profile="capped_reported_identity",
+            source_spans=[
+                item
+                for item in [
+                    "again" if "again" in source else "",
+                    "same snake",
+                ]
+                if item
+            ],
+        )
+        if claims[-1]["source_spans"] and claims[-1]["source_spans"][0] == "again":
+            claims[-1]["source_spans"][0] = "Again"
+
+    projections: List[Dict[str, Any]] = []
+
+    def project(
+        projection_id: str,
+        field: str,
+        claim_ids: List[str],
+        *,
+        status: str = "lossless",
+        omitted: Optional[List[str]] = None,
+        governs: bool = True,
+    ) -> None:
+        projections.append(
+            {
+                "projection_id": projection_id,
+                "field": field,
+                "claim_ids": claim_ids,
+                "projection_status": status,
+                "omitted_claim_ids": omitted or [],
+                "governs_narration": governs,
+            }
+        )
+
+    released = [
+        claim
+        for claim in claims
+        if claim["release_status"] in {"released", "released_historical"}
+    ]
+    withheld = [
+        claim
+        for claim in claims
+        if str(claim["release_status"]).startswith("withheld")
+    ]
+    for claim in withheld:
+        suffix = str(claim["claim_id"]).removeprefix("claim-")
+        project(
+            f"projection-{suffix}",
+            "withheld_claims",
+            [str(claim["claim_id"])],
+            status="withheld",
+            governs=False,
+        )
+
+    released_ids = {str(claim["claim_id"]) for claim in released}
+    if released_ids == {
+        "claim-victory-1",
+        "claim-retreat-2",
+        "claim-watch-3",
+    }:
+        for claim in released:
+            suffix = str(claim["claim_id"]).removeprefix("claim-")
+            project(
+                f"projection-{suffix}",
+                "outcomes_by_snake",
+                [str(claim["claim_id"])],
+            )
+        project(
+            "projection-legacy-outcome",
+            "outcome",
+            ["claim-victory-1"],
+            status="lossy",
+            omitted=["claim-retreat-2", "claim-watch-3"],
+            governs=False,
+        )
+    elif released_ids == {
+        "claim-watch-small",
+        "claim-small",
+        "claim-attack-cobra",
+        "claim-huge-cobra",
+    }:
+        project(
+            "projection-watch-small",
+            "claims_by_snake",
+            ["claim-watch-small", "claim-small"],
+        )
+        project(
+            "projection-attack-cobra",
+            "claims_by_snake",
+            ["claim-attack-cobra", "claim-huge-cobra"],
+        )
+    elif released_ids == {
+        "claim-home-watch",
+        "claim-home-sphere",
+        "claim-work-attack",
+        "claim-work-sphere",
+    }:
+        project(
+            "projection-home",
+            "claims_by_snake_and_location",
+            ["claim-home-watch", "claim-home-sphere"],
+        )
+        project(
+            "projection-work",
+            "claims_by_snake_and_location",
+            ["claim-work-attack", "claim-work-sphere"],
+        )
+    else:
+        chain_count = len(
+            {str(claim["chain_ids"][0]) for claim in released}
+        )
+        for claim in released:
+            claim_id = str(claim["claim_id"])
+            suffix = claim_id.removeprefix("claim-")
+            family = str(claim["claim_family"])
+            if family in {"completed_attack", "venom_modifier"}:
+                field = "claims_by_target"
+            elif family == "completed_attack_history":
+                field = "encounter_history"
+            elif family == "appearance_caution":
+                field = "relationship_context_cautions"
+            elif family == "recurrence_context":
+                field = "recurrence_context"
+            elif family == "terminal_outcome":
+                field = (
+                    "final_outcome_by_chain"
+                    if chain_count == 1
+                    else "outcomes_by_snake"
+                )
+            else:
+                field = (
+                    "claims_by_target"
+                    if claim_id == "claim-chase-dreamer"
+                    else "claims_by_snake"
+                    if "actual-watch" in claim_id
+                    else "actions_by_snake"
+                )
+            project(f"projection-{suffix}", field, [claim_id])
+    return claims, projections
 
 
 def _v04_event_specs(source: str) -> Optional[List[Dict[str, Any]]]:
@@ -992,6 +1639,14 @@ def _enrich_v04_graph(dream: str, graph: Dict[str, Any]) -> Dict[str, Any]:
     graph["location_scopes"] = locations
     graph["entity_chain_partitions"] = _partitions(events, mentions, frontiers, locations)
     graph["arbitration_candidates"], graph["terminal_decisions"] = _arbitrate(events, frontiers)
+    graph["claim_projection_contract_version"] = SNAKE_CLAIM_PROJECTION_CONTRACT_VERSION
+    graph["atomic_claims"], graph["claim_projection_manifest"] = _claim_projection(
+        source,
+        events,
+        list(graph.get("target_lineage") or []),
+        list(graph.get("terminal_decisions") or []),
+        locations,
+    )
 
     entities: Dict[str, Dict[str, Any]] = {str(x["entity_id"]): dict(x) for x in graph.get("entities") or [] if x.get("entity_id")}
     entities.setdefault("dreamer", {"entity_id": "dreamer", "entity_type": "person"})

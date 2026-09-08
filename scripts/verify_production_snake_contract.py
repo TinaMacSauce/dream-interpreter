@@ -76,6 +76,11 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
     errors: List[str] = []
     if payload.get("contract_version") != "snake-qa-contract-v5":
         errors.append("contract_version mismatch")
+    if payload.get("contract_pass") is not True:
+        errors.append(
+            "contract_pass expected True, got "
+            f"{payload.get('contract_pass')!r}: {payload.get('failure_reason')!r}"
+        )
     minimum_cases = len(EXPECTED_CASES) + 31 + len(ORDINARY_LANGUAGE_CASES) + len(FOUNDER_CLARIFICATION_CASES)
     if not isinstance(payload.get("case_count"), int) or payload.get("case_count") < minimum_cases:
         errors.append(f"case_count expected at least {minimum_cases}, got {payload.get('case_count')!r}")

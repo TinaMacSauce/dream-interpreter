@@ -303,6 +303,7 @@ SNAKE_QA_CASES = (
 @qa_bp.get("/qa/snake-regression")
 def snake_regression_contract():
     registry = get_snake_registry_snapshot()
+    registry_verified = registry.get("verified") is True
     cases = [
         {
             "case_id": case_id,
@@ -315,6 +316,10 @@ def snake_regression_contract():
     response = jsonify(
         {
             "contract_version": SNAKE_QA_CONTRACT_VERSION,
+            "contract_pass": registry_verified,
+            "failure_reason": "" if registry_verified else (
+                registry.get("error") or "snake_registry_verification_failed"
+            ),
             "release": release_metadata(),
             "doctrine_registry": public_snake_registry_metadata(
                 registry,
@@ -328,4 +333,4 @@ def snake_regression_contract():
     )
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
-    return response
+    return response, 200 if registry_verified else 503

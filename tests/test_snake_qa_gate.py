@@ -16,11 +16,34 @@ class SnakeQAReleaseGateTests(unittest.TestCase):
         payload = response.get_json()
         self.assertEqual(200, response.status_code)
         self.assertEqual("snake-qa-contract-v5", payload["contract_version"])
+        self.assertTrue(payload["contract_pass"])
+        self.assertEqual("", payload["failure_reason"])
         self.assertEqual(len(SNAKE_QA_CASES), payload["case_count"])
         self.assertEqual(98, payload["case_count"])
         self.assertTrue(payload["non_billable"])
         self.assertFalse(payload["customer_credits_consumed"])
         self.assertTrue(payload["doctrine_registry"]["verified"])
+
+    def test_registry_failure_is_an_explicit_failed_contract(self):
+        app = Flask(__name__)
+        app.register_blueprint(qa_bp)
+        failed_registry = {
+            "verified": False,
+            "error": "snake_registry_content_revision_mismatch",
+            "rules": [],
+        }
+        with patch("app.routes.qa.get_snake_registry_snapshot", return_value=failed_registry):
+            response = app.test_client().get("/qa/snake-regression")
+        payload = response.get_json()
+        self.assertEqual(503, response.status_code)
+        self.assertFalse(payload["contract_pass"])
+        self.assertEqual(
+            "snake_registry_content_revision_mismatch",
+            payload["failure_reason"],
+        )
+        self.assertFalse(payload["doctrine_registry"]["verified"])
+        self.assertTrue(payload["non_billable"])
+        self.assertFalse(payload["customer_credits_consumed"])
 
     def test_every_active_case_is_safety_scoped(self):
         app = Flask(__name__)

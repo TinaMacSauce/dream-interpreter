@@ -1,5 +1,7 @@
 from typing import Any, Dict, List
 
+from app.narration_claim_consumption import build_narration_claim_consumption
+
 from app.release_info import DOCTRINE_REGISTRY, TEETH_DOCTRINE_VERSION
 from app.context_graph import (
     apply_loss_projection,
@@ -506,4 +508,11 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
         details.append("Repetition increases salience only; it does not prove or strengthen an outcome.")
 
     result["details"] = details
+    result.update(
+        build_narration_claim_consumption(
+            doctrine,
+            legacy_lead=result["lead"],
+            legacy_details=details,
+        )
+    )
     return result

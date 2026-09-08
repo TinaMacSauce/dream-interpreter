@@ -112,6 +112,8 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
         "claim_projection_contract_version": context.get("claim_projection_contract_version") or "",
         "atomic_claims": list(context.get("atomic_claims") or []),
         "claim_projection_manifest": list(context.get("claim_projection_manifest") or []),
+        "certainty_contract_version": context.get("certainty_contract_version") or "",
+        "certainty_axis_records": list(context.get("certainty_axis_records") or []),
         "location_scopes": list(context.get("location_scopes") or []),
         "rule_bindings": list(context.get("rule_bindings") or []),
         "graph_integrity": dict(context.get("graph_integrity") or {}),

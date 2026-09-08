@@ -47,6 +47,7 @@ jobs:
           tests.test_snake_context_event_graph
           tests.test_snake_context_v04_firewalls
           tests.test_snake_claim_projection
+          tests.test_snake_certainty_provenance
           tests.test_snake_founder_clarification_dec02
           tests.test_snake_ordinary_language_regressions
           tests.test_snake_qa_gate

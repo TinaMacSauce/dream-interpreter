@@ -41,6 +41,22 @@ FOUNDER_CLARIFICATION_CASES: Dict[str, Dict[str, Any]] = {
     "EVID-REG-SNAKE-033": {"location_observed": "bathroom", "location_scope": "", "exclude": ["SNAKE-LOCATION", "SNAKE-LOC-BATHROOM", "SNAKE-ATTACK"]},
 }
 
+CERTAINTY_CASE_IDS = {
+    "SNAKE-003-CERTAINTY-WATCHING-001",
+    "SNAKE-003-CERTAINTY-AMBIGUOUS-ACTOR-001",
+    "SNAKE-003-CERTAINTY-ATTEMPTED-BITE-001",
+    "SNAKE-003-CERTAINTY-DREAMER-BITE-001",
+    "SNAKE-003-CERTAINTY-VENOM-001",
+    "SNAKE-003-CERTAINTY-LOCATION-001",
+    "SNAKE-003-CERTAINTY-TRANSFORMATION-001",
+    "SNAKE-003-CERTAINTY-SIZE-DANGER-001",
+    "SNAKE-003-CERTAINTY-MIXED-CHAINS-001",
+    "SNAKE-003-CERTAINTY-NEGATED-ACTUAL-001",
+    "SNAKE-003-CERTAINTY-RECURRENCE-001",
+    "SNAKE-003-CERTAINTY-FAITH-PRACTICE-001",
+    "SNAKE-003-CERTAINTY-BITE-THEN-VICTORY-001",
+}
+
 ORDINARY_LANGUAGE_CASES: Dict[str, Dict[str, Any]] = {
     "REG-SNAKE-ATTACK-001": {"action": "attack", "outcome": "unresolved", "include": ["SNAKE-ATTACK", "SNAKE-UNFINISHED-BATTLE"], "exclude": ["SNAKE-END-DEFEAT"]},
     "REG-SNAKE-BITE-ATTEMPT-001": {"attempted_bite": True, "completed_bite": False, "exclude": ["SNAKE-BITE", "SNAKE-END-DEFEAT"]},
@@ -74,7 +90,7 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
     if not isinstance(payload, dict):
         return ["payload is not an object"]
     errors: List[str] = []
-    if payload.get("contract_version") != "snake-qa-contract-v5":
+    if payload.get("contract_version") != "snake-qa-contract-v6":
         errors.append("contract_version mismatch")
     if payload.get("contract_pass") is not True:
         errors.append(
@@ -181,6 +197,14 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
             errors.append(f"{case.get('case_id')} event graph integrity failed")
         if not graph.get("events") or not graph.get("terminal_frontiers"):
             errors.append(f"{case.get('case_id')} event graph inventory missing")
+    if not CERTAINTY_CASE_IDS.issubset(cases):
+        errors.append("certainty provenance regression identifiers missing")
+    for case_id in CERTAINTY_CASE_IDS:
+        doctrine = (cases.get(case_id) or {}).get("doctrine") or {}
+        if doctrine.get("certainty_contract_version") != "snake-certainty-provenance-v1":
+            errors.append(f"{case_id} certainty contract mismatch")
+        if not doctrine.get("certainty_axis_records"):
+            errors.append(f"{case_id} certainty records missing")
     return errors
 
 

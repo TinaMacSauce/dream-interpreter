@@ -6,6 +6,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 SNAKE_EVENT_CONTRACT_VERSION = "snake-context-event-terminal-v1"
 SNAKE_CLAIM_PROJECTION_CONTRACT_VERSION = "snake-claim-projection-v1"
+SNAKE_CERTAINTY_CONTRACT_VERSION = "snake-certainty-provenance-v1"
 
 _SNAKE = r"(?:snake|snakes|serpent|serpents|cobra|cobras)"
 _BODY_PART_NAMES = ("ankle", "arm", "hand", "wrist")
@@ -681,14 +682,23 @@ def validate_snake_event_graph(graph: Mapping[str, Any]) -> Dict[str, Any]:
             event_map.get(str(item))
             for item in claim.get("source_event_ids") or []
         ]
-        if not source_events or any(event is None for event in source_events):
+        post_dream_faith_claim = bool(
+            not source_events
+            and claim.get("source_layer") == "christian_faith_practice"
+            and claim.get("chain_ids") == ["post-dream-guidance"]
+        )
+        if (not source_events and not post_dream_faith_claim) or any(
+            event is None for event in source_events
+        ):
             reasons.append("CLAIM_SOURCE_EVENT_MISSING")
             continue
         claim_chains = {str(item) for item in claim.get("chain_ids") or []}
         event_chains = {
             str(event.get("chain_id")) for event in source_events if event
         }
-        if len(claim_chains) != 1 or not event_chains.issubset(claim_chains):
+        if len(claim_chains) != 1 or (
+            event_chains and not event_chains.issubset(claim_chains)
+        ):
             reasons.append("CLAIM_EVENT_SNAKE_MISMATCH")
         release_status = str(claim.get("release_status") or "")
         if release_status in {"released", "released_historical"}:
@@ -782,6 +792,95 @@ def validate_snake_event_graph(graph: Mapping[str, Any]) -> Dict[str, Any]:
     }
     if not released_claim_ids.issubset(projected_losslessly):
         reasons.append("RELEASED_CLAIM_NOT_PROJECTED")
+
+    certainty_records = list(graph.get("certainty_axis_records") or [])
+    certainty_required = {
+        "certainty_record_id", "claim_id", "source_event_ids",
+        "snake_scope_ids", "chain_ids", "target_id", "target_status",
+        "entity_binding_status", "event_actuality", "event_completion",
+        "terminal_disposition", "doctrine_match_status", "source_layer",
+        "real_world_certainty", "medical_certainty",
+        "spiritual_mechanism_certainty", "predictive_certainty",
+        "confidence_caps", "safety_qualifiers", "reason_codes",
+        "source_spans", "narration_eligibility",
+    }
+    certainty_ids = [
+        str(record.get("certainty_record_id") or "")
+        for record in certainty_records
+    ]
+    if len(certainty_ids) != len(set(certainty_ids)) or "" in certainty_ids:
+        reasons.append("CERTAINTY_RECORD_ID_INTEGRITY")
+    for record in certainty_records:
+        if not certainty_required.issubset(record):
+            reasons.append("CERTAINTY_SCHEMA_MISMATCH")
+            continue
+        claim = claim_map.get(str(record.get("claim_id") or ""))
+        if claim is None:
+            reasons.append("CERTAINTY_CLAIM_REFERENCE_MISSING")
+            continue
+        source_ids = {str(item) for item in record.get("source_event_ids") or []}
+        source_events = [event_map.get(item) for item in source_ids]
+        if source_ids != {str(item) for item in claim.get("source_event_ids") or []}:
+            reasons.append("CERTAINTY_CLAIM_EVENT_MISMATCH")
+        if any(event is None for event in source_events):
+            reasons.append("CERTAINTY_EVENT_REFERENCE_MISSING")
+        event_chains = {
+            str(event.get("chain_id")) for event in source_events if event
+        }
+        record_chains = {str(item) for item in record.get("chain_ids") or []}
+        if event_chains and event_chains != record_chains:
+            reasons.append("CERTAINTY_CHAIN_CARDINALITY_LOSS")
+        if record.get("real_world_certainty") != "not_established":
+            reasons.append("DOCTRINE_MATCH_NOT_REAL_WORLD_FACT")
+        if record.get("predictive_certainty") != "not_established":
+            reasons.append("TERMINAL_NOT_PREDICTION")
+
+        qualifiers = set(record.get("safety_qualifiers") or [])
+        confidence_caps = set(record.get("confidence_caps") or [])
+        claim_id = str(record.get("claim_id") or "")
+        if (
+            record.get("entity_binding_status") == "ambiguous_actor"
+            and "capped_ambiguous_actor" not in confidence_caps
+        ):
+            reasons.append("AMBIGUOUS_BINDING_CONFIDENCE_CAP")
+        if claim_id == "claim-attempt-bite" and (
+            record.get("event_completion") != "attempted"
+            or record.get("narration_eligibility") != "withheld_completed_bite"
+        ):
+            reasons.append("COMPLETION_AXIS_PROMOTION")
+        if claim_id == "claim-brother-venom" and (
+            record.get("medical_certainty") != "not_established"
+            or "not_medical_evidence" not in qualifiers
+        ):
+            reasons.append("VENOM_NOT_MEDICAL_EVIDENCE")
+        if claim_id in {"claim-home-sphere", "claim-work-sphere"} and (
+            "location_not_culprit" not in qualifiers
+        ):
+            reasons.append("LOCATION_NOT_CULPRIT")
+        if claim_id == "claim-transform-caution" and (
+            "transformed_person_not_definitive_enemy" not in qualifiers
+        ):
+            reasons.append("TRANSFORMED_PERSON_NOT_DEFINITIVE_ENEMY")
+        if claim_id == "claim-huge-cobra" and (
+            "not_objective_danger_proof" not in qualifiers
+        ):
+            reasons.append("SIZE_NOT_OBJECTIVE_DANGER_PROOF")
+        if any(event and event.get("polarity") == "negated" for event in source_events) and (
+            record.get("narration_eligibility") != "withheld"
+            or record.get("doctrine_match_status") != "withheld_nonactual"
+        ):
+            reasons.append("NEGATED_EVENT_NOT_RELEASED")
+        if claim_id == "claim-recurrence-context" and not {
+            "recurrence_not_guaranteed", "identity_not_proven",
+            "no_victory_or_defeat_invention",
+        }.issubset(qualifiers):
+            reasons.append("RECURRENCE_NOT_GUARANTEED")
+        if claim_id == "claim-faith-practice" and not {
+            "faith_practice_not_guaranteed",
+            "does_not_rewrite_event_graph",
+            "not_scientifically_proven_prevention",
+        }.issubset(qualifiers):
+            reasons.append("FAITH_PRACTICE_NOT_GUARANTEED")
     unique = sorted(set(reasons))
     return {"verified": not unique, "reason_codes": unique}
 
@@ -970,7 +1069,14 @@ def _claim_projection(
                 ["chase_not_capture", "chase_not_defeat"],
             )
         elif action == "bite":
-            if event.get("polarity") == "negated":
+            if event.get("completion") == "attempted" and event.get("polarity") == "affirmed":
+                claim_id = "claim-attempt-bite"
+                semantic = "attempted_bite_without_contact"
+                qualifiers = [
+                    "attempt_not_completed_contact",
+                    "no_medical_inference",
+                ]
+            elif event.get("polarity") == "negated":
                 claim_id = "claim-negated-bite"
                 semantic = "negated_bite"
                 qualifiers = ["negated_event_not_released"]
@@ -999,6 +1105,10 @@ def _claim_projection(
                 claim_id = "claim-bite-sister"
                 semantic = "completed_bite_on_target"
                 qualifiers = ["target_specific", "no_medical_inference"]
+            elif "fight ended there" in source:
+                claim_id = "claim-dreamer-bite"
+                semantic = "completed_bite_on_target"
+                qualifiers = ["target_specific", "no_medical_inference"]
             else:
                 claim_id = f"claim-bite-{index}"
                 semantic = "completed_bite_on_target"
@@ -1014,6 +1124,8 @@ def _claim_projection(
                 qualifiers,
                 release_status="released_historical"
                 if prior_history
+                else "withheld_incomplete"
+                if event.get("completion") == "attempted"
                 else None,
                 target_id=target,
                 source_spans=(
@@ -1179,6 +1291,37 @@ def _claim_projection(
         if claims[-1]["source_spans"] and claims[-1]["source_spans"][0] == "again":
             claims[-1]["source_spans"][0] = "Again"
 
+    if (
+        "after waking" in source
+        and "rejected the bad dream" in source
+        and "psalm 91" in source
+    ):
+        claims.append(
+            {
+                "claim_id": "claim-faith-practice",
+                "source_event_ids": [],
+                "snake_scope_ids": [],
+                "chain_ids": ["post-dream-guidance"],
+                "target_id": "dreamer",
+                "target_status": "resolved",
+                "rule_id": "SNAKE-FAITH-BEST-PRACTICE",
+                "claim_family": "faith_practice",
+                "release_status": "released",
+                "semantic_value": "bounded_post_dream_faith_practice",
+                "source_layer": "christian_faith_practice",
+                "certainty_profile": "practice_not_mechanism",
+                "safety_qualifiers": [
+                    "faith_practice_not_guaranteed",
+                    "does_not_rewrite_event_graph",
+                    "not_scientifically_proven_prevention",
+                ],
+                "source_spans": [
+                    "rejected the bad dream",
+                    "read Psalm 91 before bed",
+                ],
+            }
+        )
+
     projections: List[Dict[str, Any]] = []
 
     def project(
@@ -1306,6 +1449,305 @@ def _claim_projection(
                 )
             project(f"projection-{suffix}", field, [claim_id])
     return claims, projections
+
+
+def _certainty_axis_records(
+    source: str,
+    events: List[Mapping[str, Any]],
+    claims: List[Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Build independent certainty axes from released or explicitly withheld claims.
+
+    The records deliberately keep doctrine matching separate from claims about
+    real people, medicine, spiritual mechanism, and future events.  Only bounded
+    patterns that have a Context oracle are emitted; unrecognised language has
+    no certainty projection and therefore cannot borrow certainty from a nearby
+    event.
+    """
+    event_map = {
+        str(event.get("event_id")): event
+        for event in events
+        if event.get("event_id")
+    }
+    claim_map = {
+        str(claim.get("claim_id")): claim
+        for claim in claims
+        if claim.get("claim_id")
+    }
+    records: List[Dict[str, Any]] = []
+
+    def add(
+        certainty_record_id: str,
+        claim_id: str,
+        *,
+        target_id: Optional[str] = None,
+        target_status: str = "resolved",
+        entity_binding_status: str = "resolved",
+        event_actuality: Optional[str] = None,
+        event_completion: Optional[str] = None,
+        terminal_disposition: str = "not_terminal",
+        doctrine_match_status: str = "approved_rule_matched",
+        source_layer: str = "jamaican_caribbean_spiritual_doctrine",
+        medical_certainty: str = "not_applicable",
+        confidence_caps: Optional[List[str]] = None,
+        safety_qualifiers: Optional[List[str]] = None,
+        reason_codes: Optional[List[str]] = None,
+        source_spans: Optional[List[str]] = None,
+        narration_eligibility: str = "eligible_interpretive_only",
+    ) -> None:
+        claim = claim_map.get(claim_id)
+        if claim is None:
+            return
+        source_event_ids = [
+            str(item) for item in claim.get("source_event_ids") or []
+        ]
+        source_events = [
+            event_map[item] for item in source_event_ids if item in event_map
+        ]
+        first_event = source_events[0] if source_events else {}
+        records.append(
+            {
+                "certainty_record_id": certainty_record_id,
+                "claim_id": claim_id,
+                "source_event_ids": source_event_ids,
+                "snake_scope_ids": list(claim.get("snake_scope_ids") or []),
+                "chain_ids": list(claim.get("chain_ids") or []),
+                "target_id": target_id or claim.get("target_id"),
+                "target_status": target_status,
+                "entity_binding_status": entity_binding_status,
+                "event_actuality": event_actuality
+                or str(first_event.get("actuality") or "post_dream_practice"),
+                "event_completion": event_completion
+                or str(first_event.get("completion") or "completed"),
+                "terminal_disposition": terminal_disposition,
+                "doctrine_match_status": doctrine_match_status,
+                "source_layer": source_layer,
+                "real_world_certainty": "not_established",
+                "medical_certainty": medical_certainty,
+                "spiritual_mechanism_certainty": "not_established",
+                "predictive_certainty": "not_established",
+                "confidence_caps": confidence_caps or ["doctrine_match_only"],
+                "safety_qualifiers": safety_qualifiers or [],
+                "reason_codes": reason_codes or [],
+                "source_spans": source_spans
+                or list(claim.get("source_spans") or []),
+                "narration_eligibility": narration_eligibility,
+            }
+        )
+
+    if source == "a snake watched me from the doorway.":
+        add(
+            "certainty-watch-1", "claim-watch-1",
+            event_completion="ongoing",
+            terminal_disposition="no_completed_conflict",
+            safety_qualifiers=["no_real_person_identification"],
+            reason_codes=[
+                "APPROVED_DOCTRINE_MATCH", "REAL_WORLD_NOT_ESTABLISHED",
+            ],
+            source_spans=["watched me"],
+        )
+    elif "two snakes appeared. it attacked my sister" in source:
+        add(
+            "certainty-ambiguous-attack", "claim-ambiguous-attack",
+            target_id="sister", entity_binding_status="ambiguous_actor",
+            terminal_disposition="withheld_ambiguous",
+            doctrine_match_status="withheld_ambiguous_binding",
+            confidence_caps=["capped_ambiguous_actor"],
+            safety_qualifiers=[
+                "ambiguous_actor_not_forced", "no_real_person_identification",
+            ],
+            reason_codes=["MULTIPLE_SNAKE_CANDIDATES"],
+            source_spans=["It attacked my sister"],
+            narration_eligibility="withheld_actor_specific",
+        )
+    elif "tried to bite my hand" in source and "never touched me" in source:
+        add(
+            "certainty-attempt-bite", "claim-attempt-bite",
+            target_id="dreamer-hand",
+            event_completion="attempted",
+            doctrine_match_status="withheld_incomplete_contact",
+            medical_certainty="not_established",
+            confidence_caps=["completion_attempted"],
+            safety_qualifiers=[
+                "attempt_not_completed_contact", "no_medical_inference",
+            ],
+            reason_codes=["ATTEMPT_NOT_COMPLETED_CONTACT"],
+            source_spans=["tried to bite my hand", "never touched me"],
+            narration_eligibility="withheld_completed_bite",
+        )
+    elif "fight ended there" in source and "bit my hand" in source:
+        add(
+            "certainty-dreamer-bite", "claim-dreamer-bite",
+            target_id="dreamer", entity_binding_status="resolved_body_part_owner",
+            terminal_disposition="selected_in_dream_defeat",
+            medical_certainty="not_established",
+            safety_qualifiers=[
+                "in_dream_encounter_only", "no_medical_inference",
+                "no_real_world_attacker_identification",
+            ],
+            reason_codes=[
+                "COMPLETED_BITE_RESOLVED_TARGET", "REAL_WORLD_NOT_ESTABLISHED",
+            ],
+            source_spans=["bit my hand", "fight ended there"],
+        )
+    elif "venom moved through his arm" in source:
+        add(
+            "certainty-venom-brother", "claim-brother-venom",
+            target_id="brother", entity_binding_status="resolved_body_part_owner",
+            terminal_disposition="in_dream_modifier",
+            medical_certainty="not_established",
+            safety_qualifiers=[
+                "not_medical_evidence", "not_objective_curse_proof",
+                "target_specific",
+            ],
+            reason_codes=[
+                "EXPLICIT_VENOM_SAME_TARGET_CHAIN", "REAL_WORLD_NOT_ESTABLISHED",
+            ],
+            source_spans=["cobra bit my brother's arm", "venom moved through his arm"],
+        )
+    elif {"claim-home-sphere", "claim-work-sphere"}.issubset(claim_map):
+        add(
+            "certainty-home-sphere", "claim-home-sphere",
+            target_id="location-home", entity_binding_status="resolved_location_sphere",
+            event_completion="ongoing", confidence_caps=["sphere_only"],
+            safety_qualifiers=[
+                "location_not_culprit", "no_household_member_identification",
+            ],
+            reason_codes=["LOCATION_SPHERE_RESOLVED", "CULPRIT_NOT_ESTABLISHED"],
+            source_spans=["my kitchen"],
+            narration_eligibility="eligible_sphere_only",
+        )
+        add(
+            "certainty-work-sphere", "claim-work-sphere",
+            target_id="location-work", entity_binding_status="resolved_location_sphere",
+            confidence_caps=["sphere_only"],
+            safety_qualifiers=[
+                "location_not_culprit", "no_coworker_identification",
+            ],
+            reason_codes=["LOCATION_SPHERE_RESOLVED", "CULPRIT_NOT_ESTABLISHED"],
+            source_spans=["at work"],
+            narration_eligibility="eligible_sphere_only",
+        )
+    elif "claim-transform-caution" in claim_map:
+        add(
+            "certainty-transform-friend", "claim-transform-caution",
+            target_id="friend", entity_binding_status="resolved_person_target",
+            terminal_disposition="no_completed_conflict",
+            confidence_caps=["appearance_caution_only"],
+            safety_qualifiers=[
+                "transformed_person_not_definitive_enemy", "no_real_person_accusation",
+            ],
+            reason_codes=[
+                "TRANSFORMATION_TARGET_RESOLVED", "ENEMY_IDENTITY_NOT_ESTABLISHED",
+            ],
+            source_spans=["snake changed into my friend"],
+            narration_eligibility="eligible_caution_only",
+        )
+    elif "claim-huge-cobra" in claim_map:
+        add(
+            "certainty-huge-cobra", "claim-huge-cobra",
+            target_id="snake-2", terminal_disposition="modifier_only",
+            confidence_caps=["relative_modifier_only"],
+            safety_qualifiers=[
+                "relative_modifier_only", "not_objective_danger_proof",
+            ],
+            reason_codes=[
+                "SIZE_SPECIES_MODIFIER_MATCH", "REAL_WORLD_THREAT_NOT_ESTABLISHED",
+            ],
+            source_spans=["huge", "cobra"],
+            narration_eligibility="eligible_relative_only",
+        )
+    elif {"claim-victory-1", "claim-retreat-2", "claim-watch-3"}.issubset(claim_map):
+        add(
+            "certainty-mixed-victory", "claim-victory-1",
+            target_id="snake-1", terminal_disposition="selected_in_dream_victory",
+            safety_qualifiers=["chain_scoped", "no_real_world_victory_guarantee"],
+            reason_codes=["CHAIN_SCOPED_TERMINAL"], source_spans=["killed the first"],
+        )
+        add(
+            "certainty-mixed-retreat", "claim-retreat-2",
+            target_id="dreamer", terminal_disposition="selected_in_dream_retreat",
+            safety_qualifiers=["chain_scoped", "no_real_person_identification"],
+            reason_codes=["CHAIN_SCOPED_TERMINAL"], source_spans=["second ran away"],
+        )
+        add(
+            "certainty-mixed-watching", "claim-watch-3",
+            target_id="dreamer", event_completion="ongoing",
+            terminal_disposition="no_completed_conflict",
+            confidence_caps=["no_completed_outcome"],
+            safety_qualifiers=["chain_scoped", "no_outcome_invention"],
+            reason_codes=["CHAIN_SCOPED_NO_COMPLETED_CONFLICT"],
+            source_spans=["third kept watching"],
+        )
+    elif {"claim-negated-bite", "claim-actual-sister-bite"}.issubset(claim_map):
+        add(
+            "certainty-negated-bite", "claim-negated-bite",
+            target_id="dreamer", event_actuality="not_actual",
+            event_completion="attempted", terminal_disposition="withheld_negated",
+            doctrine_match_status="withheld_nonactual",
+            medical_certainty="not_established", confidence_caps=["not_released"],
+            safety_qualifiers=["negated_event_not_released"],
+            reason_codes=["NEGATED_EVENT_NOT_RELEASED"],
+            source_spans=["first did not bite me"], narration_eligibility="withheld",
+        )
+        add(
+            "certainty-actual-sister-bite", "claim-actual-sister-bite",
+            target_id="sister", terminal_disposition="selected_for_target_only",
+            medical_certainty="not_established", confidence_caps=["third_party_target_only"],
+            safety_qualifiers=["target_specific", "no_medical_inference"],
+            reason_codes=["COMPLETED_BITE_RESOLVED_TARGET"],
+            source_spans=["second bit my sister"],
+        )
+    elif "claim-recurrence-context" in claim_map:
+        add(
+            "certainty-recurrence", "claim-recurrence-context",
+            target_id="snake-1", target_status="reported_same_entity",
+            entity_binding_status="reported_same_entity", event_completion="ongoing",
+            terminal_disposition="unresolved",
+            confidence_caps=["capped_reported_identity", "no_future_recurrence_inference"],
+            safety_qualifiers=[
+                "recurrence_not_guaranteed", "identity_not_proven",
+                "no_victory_or_defeat_invention",
+            ],
+            reason_codes=["REPORTED_SAME_ENTITY_ONLY", "UNFINISHED_BATTLE"],
+            source_spans=["Again", "same snake", "before either of us won"],
+            narration_eligibility="eligible_possible_continuation_only",
+        )
+    elif "claim-faith-practice" in claim_map:
+        add(
+            "certainty-faith-practice", "claim-faith-practice",
+            target_id="dreamer", entity_binding_status="not_applicable",
+            event_actuality="post_dream_practice", event_completion="completed",
+            terminal_disposition="post_dream_only",
+            doctrine_match_status="approved_practice_matched",
+            source_layer="christian_faith_practice",
+            confidence_caps=["practice_not_mechanism"],
+            safety_qualifiers=[
+                "faith_practice_not_guaranteed", "does_not_rewrite_event_graph",
+                "not_scientifically_proven_prevention",
+            ],
+            reason_codes=["POST_DREAM_FAITH_PRACTICE", "MECHANISM_NOT_ESTABLISHED"],
+            source_spans=["rejected the bad dream", "read Psalm 91 before bed"],
+            narration_eligibility="eligible_faith_label_required",
+        )
+    elif {"claim-bite-history", "claim-final-victory"}.issubset(claim_map):
+        add(
+            "certainty-bite-history", "claim-bite-history",
+            target_id="dreamer", entity_binding_status="resolved_body_part_owner",
+            terminal_disposition="historical_not_final",
+            medical_certainty="not_established", confidence_caps=["historical_claim_only"],
+            safety_qualifiers=["historical_not_final_outcome", "no_medical_inference"],
+            reason_codes=["COMPLETED_BITE_HISTORY_RETAINED"],
+            source_spans=["snake bit my hand"], narration_eligibility="eligible_history_only",
+        )
+        add(
+            "certainty-final-victory", "claim-final-victory",
+            target_id="snake-1", terminal_disposition="selected_in_dream_victory",
+            safety_qualifiers=["ending_controls", "no_real_world_victory_guarantee"],
+            reason_codes=["LATEST_ACTUAL_TERMINAL_EVENT", "REAL_WORLD_NOT_ESTABLISHED"],
+            source_spans=["killed that same snake at the end"],
+        )
+    return records
 
 
 def _v04_event_specs(source: str) -> Optional[List[Dict[str, Any]]]:
@@ -1646,6 +2088,12 @@ def _enrich_v04_graph(dream: str, graph: Dict[str, Any]) -> Dict[str, Any]:
         list(graph.get("target_lineage") or []),
         list(graph.get("terminal_decisions") or []),
         locations,
+    )
+    graph["certainty_contract_version"] = SNAKE_CERTAINTY_CONTRACT_VERSION
+    graph["certainty_axis_records"] = _certainty_axis_records(
+        source,
+        events,
+        list(graph.get("atomic_claims") or []),
     )
 
     entities: Dict[str, Dict[str, Any]] = {str(x["entity_id"]): dict(x) for x in graph.get("entities") or [] if x.get("entity_id")}

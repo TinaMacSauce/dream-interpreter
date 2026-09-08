@@ -20,7 +20,7 @@ from app.snake_registry import get_snake_registry_snapshot, public_snake_registr
 qa_bp = Blueprint("qa", __name__)
 
 TEETH_QA_CONTRACT_VERSION = "teeth-qa-contract-v2"
-SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v5"
+SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v6"
 
 
 @qa_bp.post("/qa/interpret")
@@ -297,6 +297,19 @@ SNAKE_QA_CASES = (
     ("EVID-REG-SNAKE-031", "A snake moved through my house but never approached anyone."),
     ("EVID-REG-SNAKE-032", "A snake was hiding in my kitchen."),
     ("EVID-REG-SNAKE-033", "A snake was in my bathroom and did not attack."),
+    ("SNAKE-003-CERTAINTY-WATCHING-001", "A snake watched me from the doorway."),
+    ("SNAKE-003-CERTAINTY-AMBIGUOUS-ACTOR-001", "Two snakes appeared. It attacked my sister."),
+    ("SNAKE-003-CERTAINTY-ATTEMPTED-BITE-001", "The snake attacked me and tried to bite my hand, but it never touched me."),
+    ("SNAKE-003-CERTAINTY-DREAMER-BITE-001", "The snake bit my hand and the fight ended there."),
+    ("SNAKE-003-CERTAINTY-VENOM-001", "The cobra bit my brother's arm and venom moved through his arm."),
+    ("SNAKE-003-CERTAINTY-LOCATION-001", "One snake watched in my kitchen. Later another snake attacked me at work."),
+    ("SNAKE-003-CERTAINTY-TRANSFORMATION-001", "The snake changed into my friend and stood beside me."),
+    ("SNAKE-003-CERTAINTY-SIZE-DANGER-001", "A small snake watched me while a huge cobra attacked my brother."),
+    ("SNAKE-003-CERTAINTY-MIXED-CHAINS-001", "Three snakes surrounded me. I killed the first, the second ran away, and the third kept watching when the dream ended."),
+    ("SNAKE-003-CERTAINTY-NEGATED-ACTUAL-001", "Two snakes came close. The first did not bite me, but the second bit my sister."),
+    ("SNAKE-003-CERTAINTY-RECURRENCE-001", "Again I fought the same snake, but I woke before either of us won."),
+    ("SNAKE-003-CERTAINTY-FAITH-PRACTICE-001", "A snake attacked me and I woke before the fight ended. After waking I rejected the bad dream and planned to read Psalm 91 before bed."),
+    ("SNAKE-003-CERTAINTY-BITE-THEN-VICTORY-001", "The snake bit my hand, but I kept fighting and killed that same snake at the end."),
 )
 
 

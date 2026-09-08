@@ -5,6 +5,10 @@ from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Sequence
 
 from app.teeth_registry import rule_id_for
 from app.claim_provenance import finalize_claim_provenance, validate_claim_provenance
+from app.condition_provenance import (
+    CONDITION_PROVENANCE_CONTRACT_VERSION,
+    validate_condition_provenance,
+)
 
 
 GRAPH_CONTRACT_VERSION = "context-graph-referential-integrity/1.0"
@@ -52,14 +56,27 @@ _SPEECH = re.compile(
     re.IGNORECASE,
 )
 _NEGATED_LOSS = re.compile(
-    r"\b(?P<subject>my\s+(?:tooth|teeth)|no\s+tooth|none)\s+"
+    r"\b(?P<subject>my\s+(?:tooth|teeth)|no\s+tooth|none|neither)\s+"
     r"(?P<negation>did\s+not|didn't|never)?\s*(?P<verb>fall\s+out|fell\s+out)\b",
     re.IGNORECASE,
 )
 _IMPLICIT_NEGATED_LOSS = re.compile(r"\b(?:did\s+not|didn't|never)\s+fall\s+out\b", re.IGNORECASE)
-_LOOSE = re.compile(r"\b(?P<subject>my\s+tooth)\s+was\s+(?:loose|wobbly)\b", re.IGNORECASE)
-_NEGATED_LOOSE = re.compile(r"\b(?P<subject>no\s+tooth)\s+was\s+(?:loose|wobbly)\b", re.IGNORECASE)
+_LOOSE = re.compile(
+    rf"\b(?P<subject>(?:(?P<number>two)\s+of\s+)?my\s+(?:(?P<relationship>{_RELATIONSHIP_PATTERN})(?:'s|’s)\s+)?"
+    r"(?P<tooth>tooth|teeth))\s+(?P<verb>was|were|is|became)\s+"
+    r"(?P<negation>not\s+)?(?P<state>loose|wobbly)\b",
+    re.IGNORECASE,
+)
+_NO_TOOTH_LOOSE = re.compile(
+    r"\b(?P<subject>no\s+tooth)\s+(?:was|is)\s+(?P<state>loose|wobbly)\b",
+    re.IGNORECASE,
+)
 _GUM_BLOOD = re.compile(r"\b(?P<subject>my\s+gums)\s+were\s+bleeding\b", re.IGNORECASE)
+_PRONOUN_LOSS = re.compile(r"\b(?P<subject>it|the\s+tooth)\s+(?P<verb>fell\s+out|came\s+out)\b", re.IGNORECASE)
+_RETAINED_STATE = re.compile(
+    r"\b(?P<state>(?:every\s+tooth|my\s+own\s+tooth)\s+stayed\s+firm|stayed\s+in\s+my\s+mouth)\b",
+    re.IGNORECASE,
+)
 _PAIN = re.compile(r"\b(?:it\s+)?(?P<pain>hurt(?:\s+badly)?|was\s+painful)\b", re.IGNORECASE)
 _TOOTH_BLOOD = re.compile(
     r"\b(?P<blood>blood\s+on\s+(?:the\s+)?(?:fallen\s+)?tooth)\b",
@@ -82,6 +99,27 @@ def _span(text: str, start: int, end: int, event_id: str) -> Dict[str, Any]:
 
 def _overlaps(start: int, end: int, occupied: Sequence[tuple[int, int]]) -> bool:
     return any(start < used_end and used_start < end for used_start, used_end in occupied)
+
+
+def _quoted_ranges(text: str) -> List[tuple[int, int]]:
+    ranges: List[tuple[int, int]] = []
+    opened: int | None = None
+    for index, character in enumerate(text):
+        if character not in {'"', "“", "”", "'", "‘", "’"}:
+            continue
+        if character in {"'", "’"} and index > 0 and index + 1 < len(text):
+            if text[index - 1].isalnum() and text[index + 1].isalnum():
+                continue
+        if opened is None:
+            opened = index
+        else:
+            ranges.append((opened, index + 1))
+            opened = None
+    return ranges
+
+
+def _inside_ranges(start: int, end: int, ranges: Sequence[tuple[int, int]]) -> bool:
+    return any(range_start <= start and end <= range_end for range_start, range_end in ranges)
 
 
 def _loss_actuality(text: str, start: int) -> tuple[str, str, str, bool]:
@@ -324,6 +362,9 @@ def build_context_graph(dream: str, context: Mapping[str, Any]) -> Dict[str, Any
         target_id: str = "tooth-1", chain_id: str | None = "chain-tooth-1",
         owner: str = "dreamer", polarity: str = "affirmed",
         modality: str = "experienced", completion: str = "observed",
+        actuality: str | None = None, phase: str = "dream",
+        channel: str = "narrative", quantity: str = "one",
+        quantity_cardinality: int = 1,
     ) -> None:
         events.append({
             "event_id": event_id,
@@ -333,45 +374,213 @@ def build_context_graph(dream: str, context: Mapping[str, Any]) -> Dict[str, Any
             "target_entity_ids_or_ambiguous": [target_id],
             "event_chain_id_or_null": chain_id if eligible else None,
             "scene_id": "scene-1",
-            "phase": "dream",
-            "channel": "narrative",
+            "phase": phase,
+            "channel": channel,
             "polarity": polarity,
             "modality": modality,
-            "actuality": "actual" if eligible else "not_actual",
+            "actuality": actuality or ("actual" if eligible else "not_actual"),
             "completion": completion,
-            "quantity": "one",
-            "quantity_cardinality": 1,
+            "quantity": quantity,
+            "quantity_cardinality": quantity_cardinality,
             "doctrine_eligible": eligible,
             "source_span": _span(dream, match.start(), match.end(), event_id),
         })
 
-    loose_match = _LOOSE.search(dream)
-    if loose_match:
-        add_fact_event(loose_match, "loose-1", "loose_tooth_state", eligible=True)
-    negated_loose = _NEGATED_LOOSE.search(dream)
-    if negated_loose:
+    quoted_ranges = _quoted_ranges(dream)
+
+    def condition_scope(match: re.Match[str], negated: bool = False) -> Dict[str, Any]:
+        prefix = dream[max(0, match.start() - 80):match.start()].lower()
+        if _inside_ranges(match.start(), match.end(), quoted_ranges):
+            return {
+                "eligible": False, "polarity": "affirmed", "modality": "quoted",
+                "actuality": "nonactual", "phase": "dream_speech_or_thought",
+                "channel": "quoted_speech",
+            }
+        if re.search(r"(?:^|[.!?]\s*)if\s*$", prefix):
+            return {
+                "eligible": False, "polarity": "affirmed",
+                "modality": "conditional_hypothetical", "actuality": "nonactual",
+                "phase": "dream_speech_or_thought", "channel": "hypothetical",
+            }
+        if negated:
+            return {
+                "eligible": False, "polarity": "negated", "modality": "negated",
+                "actuality": "not_actual", "phase": "dream", "channel": "narrative",
+            }
+        return {
+            "eligible": True, "polarity": "affirmed", "modality": "experienced",
+            "actuality": "actual", "phase": "dream", "channel": "narrative",
+        }
+
+    condition_events: List[Dict[str, Any]] = []
+
+    def add_loose_condition(match: re.Match[str], *, forced_negated: bool = False) -> None:
+        subject = match.group("subject")
+        groups = match.groupdict()
+        relationship = str(groups.get("relationship") or "").lower()
+        owner = relationship or "dreamer"
+        negated = forced_negated or bool(groups.get("negation")) or subject.lower().startswith("no ")
+        scope = condition_scope(match, negated)
+        quoted = scope["modality"] == "quoted"
+        hypothetical = scope["modality"] == "conditional_hypothetical"
+        if quoted:
+            prior_speech = [speech for speech in _SPEECH.finditer(dream) if speech.start() < match.start()]
+            owner = prior_speech[-1].group("speaker").lower() if prior_speech else "ambiguous"
+        cardinality = 2 if groups.get("number") or "teeth" in subject.lower() else 1
+        if owner != "dreamer" and owner != "ambiguous":
+            targets = [f"{owner}-tooth-{index}" for index in range(1, cardinality + 1)]
+        else:
+            targets = [f"tooth-{index}" for index in range(1, cardinality + 1)]
+        if negated:
+            event_id = f"{owner}-negated-loose-1" if owner != "dreamer" else "negated-loose-1"
+        elif hypothetical:
+            event_id = "hypothetical-loose-1"
+        elif quoted:
+            event_id = "quoted-loose-1"
+        elif owner != "dreamer":
+            event_id = f"{owner}-loose-1"
+        else:
+            event_id = "loose-1"
+        chain_id = _tooth_chain_id(targets[0]) if scope["eligible"] else None
+        span_start = match.start()
+        if hypothetical:
+            prefix_start = max(0, match.start() - 12)
+            if_prefix = re.search(r"\bIf\s+$", dream[prefix_start:match.start()], re.IGNORECASE)
+            if if_prefix:
+                span_start = prefix_start + if_prefix.start()
+        events.append({
+            "event_id": event_id,
+            "event_type": "loose_tooth_condition",
+            "actor_id_or_null": None,
+            "owner_id_or_ambiguous": owner,
+            "target_entity_ids_or_ambiguous": targets,
+            "event_chain_id_or_null": chain_id,
+            "scene_id": "scene-1",
+            "phase": scope["phase"],
+            "channel": scope["channel"],
+            "polarity": scope["polarity"],
+            "modality": scope["modality"],
+            "actuality": scope["actuality"],
+            "completion": "observed" if scope["eligible"] else "not_observed",
+            "quantity": "multiple" if cardinality > 1 else "one",
+            "quantity_cardinality": cardinality,
+            "doctrine_eligible": scope["eligible"],
+            "state_alias": str(groups.get("state") or "loose").lower(),
+            "source_span": _span(dream, span_start, match.end(), event_id),
+        })
+        condition_events.append(events[-1])
+
+    for loose_match in _LOOSE.finditer(dream):
+        add_loose_condition(loose_match)
+    for loose_match in _NO_TOOTH_LOOSE.finditer(dream):
+        if not _overlaps(
+            loose_match.start(),
+            loose_match.end(),
+            [(e["source_span"]["start"], e["source_span"]["end"]) for e in condition_events],
+        ):
+            add_loose_condition(loose_match, forced_negated=True)
+
+    for gum_index, gum_match in enumerate(_GUM_BLOOD.finditer(dream), start=1):
+        scope = condition_scope(gum_match)
+        event_id = "gum-bleeding-1" if gum_index == 1 else f"gum-bleeding-{gum_index}"
         add_fact_event(
-            negated_loose, "negated-loose-1", "loose_tooth_state", eligible=False,
-            polarity="negated", modality="negated", completion="not_observed",
+            gum_match, event_id, "gum_bleeding_condition", eligible=scope["eligible"],
+            target_id="gums-1", chain_id="chain-gums-1", polarity=scope["polarity"],
+            modality=scope["modality"], completion="observed" if scope["eligible"] else "not_observed",
+            actuality=scope["actuality"], phase=scope["phase"], channel=scope["channel"],
         )
-    gum_match = _GUM_BLOOD.search(dream)
-    if gum_match:
+        condition_events.append(events[-1])
+
+    retained_match = _RETAINED_STATE.search(dream)
+    if retained_match:
+        prior_conditions = [
+            event for event in condition_events
+            if event["source_span"]["start"] < retained_match.start()
+            and event.get("owner_id_or_ambiguous") == "dreamer"
+            and event.get("event_type") == "loose_tooth_condition"
+        ]
+        bound = prior_conditions[-1] if prior_conditions else None
+        target_id = (
+            bound["target_entity_ids_or_ambiguous"][0]
+            if bound and isinstance(bound.get("target_entity_ids_or_ambiguous"), list)
+            else "tooth-1"
+        )
+        terminal_state = "retained_loose" if bound and bound.get("event_type") == "loose_tooth_condition" else "retained_firm"
         add_fact_event(
-            gum_match, "gum-blood-1", "gum_bleeding", eligible=True,
-            target_id="gums-1", chain_id="chain-gums-1",
+            retained_match, "retained-state-1", "retained_tooth_state", eligible=True,
+            target_id=target_id, chain_id=_tooth_chain_id(target_id), completion="retained",
         )
+        events[-1]["terminal_state"] = terminal_state
+
+    # Bind a later pronoun loss to the nearest preceding tooth condition.
+    for pronoun_loss in _PRONOUN_LOSS.finditer(dream):
+        if any(_overlaps(pronoun_loss.start(), pronoun_loss.end(), [(e["source_span"]["start"], e["source_span"]["end"])]) for e in losses):
+            continue
+        prior = [
+            event for event in condition_events
+            if event.get("event_type") == "loose_tooth_condition"
+            and event["source_span"]["start"] < pronoun_loss.start()
+        ]
+        if not prior:
+            continue
+        bound = prior[-1]
+        target_values = bound.get("target_entity_ids_or_ambiguous")
+        target_id = target_values[0] if isinstance(target_values, list) and target_values else "tooth-1"
+        event = {
+            "event_id": "loss-1",
+            "event_type": "tooth_loss",
+            "actor_id_or_null": None,
+            "owner_id_or_ambiguous": bound.get("owner_id_or_ambiguous"),
+            "target_entity_ids_or_ambiguous": [target_id],
+            "event_chain_id_or_null": _tooth_chain_id(target_id),
+            "scene_id": "scene-1",
+            "phase": "dream",
+            "channel": "narrative",
+            "polarity": "affirmed",
+            "modality": "experienced",
+            "actuality": "actual",
+            "completion": "completed",
+            "quantity": "one",
+            "quantity_cardinality": 1,
+            "doctrine_eligible": True,
+            "source_span": _span(dream, pronoun_loss.start(), pronoun_loss.end(), "loss-1"),
+        }
+        losses.append(event)
+        events.append(event)
     for negated_loss in _NEGATED_LOSS.finditer(dream):
         if not negated_loss.group("negation") and not negated_loss.group("subject").lower().startswith(("no ", "none")):
-            continue
+            if negated_loss.group("subject").lower() != "neither":
+                continue
+        prior_conditions = [
+            event for event in condition_events
+            if event.get("event_type") == "loose_tooth_condition"
+            and event["source_span"]["start"] < negated_loss.start()
+        ]
+        bound = prior_conditions[-1] if prior_conditions else None
+        targets = bound.get("target_entity_ids_or_ambiguous") if bound else None
+        target_id = targets[0] if isinstance(targets, list) and targets else "tooth-1"
+        owner = str(bound.get("owner_id_or_ambiguous")) if bound else "dreamer"
+        negated_event_id = f"{owner}-negated-loss-1" if owner != "dreamer" else "negated-loss-1"
         add_fact_event(
-            negated_loss, "negated-loss-1", "tooth_loss", eligible=False,
+            negated_loss, negated_event_id, "tooth_loss", eligible=False,
+            target_id=target_id, owner=owner,
             polarity="negated", modality="negated", completion="not_completed",
         )
-    if loose_match and not any(event["event_id"] == "negated-loss-1" for event in events):
-        implicit_negated_loss = _IMPLICIT_NEGATED_LOSS.search(dream, loose_match.end())
+    affirmed_loose = next((
+        event for event in condition_events
+        if event.get("event_type") == "loose_tooth_condition"
+        and event.get("doctrine_eligible")
+    ), None)
+    if affirmed_loose and not any(event["event_id"] == "negated-loss-1" for event in events):
+        implicit_negated_loss = _IMPLICIT_NEGATED_LOSS.search(dream, affirmed_loose["source_span"]["end"])
         if implicit_negated_loss:
+            targets = affirmed_loose.get("target_entity_ids_or_ambiguous")
+            target_id = targets[0] if isinstance(targets, list) and targets else "tooth-1"
+            owner = str(affirmed_loose.get("owner_id_or_ambiguous") or "dreamer")
+            event_id = f"{owner}-negated-loss-1" if owner != "dreamer" else "negated-loss-1"
             add_fact_event(
-                implicit_negated_loss, "negated-loss-1", "tooth_loss", eligible=False,
+                implicit_negated_loss, event_id, "tooth_loss", eligible=False,
+                target_id=target_id, owner=str(affirmed_loose.get("owner_id_or_ambiguous") or "dreamer"),
                 polarity="negated", modality="negated", completion="not_completed",
             )
 
@@ -461,7 +670,7 @@ def build_context_graph(dream: str, context: Mapping[str, Any]) -> Dict[str, Any
         if isinstance(targets, list):
             owner_id = event.get("owner_id_or_ambiguous")
             for tooth_id in targets:
-                entity_type = "gums" if event.get("event_type") == "gum_bleeding" else "tooth"
+                entity_type = "gums" if event.get("event_type") == "gum_bleeding_condition" else "tooth"
                 _put_entity(
                     entities,
                     _entity(
@@ -528,7 +737,10 @@ def build_context_graph(dream: str, context: Mapping[str, Any]) -> Dict[str, Any
     ]
 
     terminal_frontiers: List[Dict[str, Any]] = []
-    state_types = {"tooth_loss", "firm_same_tooth_return"}
+    state_types = {
+        "tooth_loss", "firm_same_tooth_return", "loose_tooth_condition",
+        "retained_tooth_state",
+    }
     for chain in chains.values():
         candidates = [
             event for event in events
@@ -550,6 +762,30 @@ def build_context_graph(dream: str, context: Mapping[str, Any]) -> Dict[str, Any
                 }
             )
 
+    condition_transition_edges: List[Dict[str, Any]] = []
+    for chain in chains.values():
+        ordered = sorted(
+            (event for event in events if event["event_id"] in chain["event_ids"]),
+            key=lambda event: event["source_span"]["start"],
+        )
+        for source in ordered:
+            if source.get("event_type") != "loose_tooth_condition":
+                continue
+            later_states = [
+                target for target in ordered
+                if target["source_span"]["start"] > source["source_span"]["start"]
+                and target.get("event_type") in {"tooth_loss", "retained_tooth_state"}
+            ]
+            if later_states:
+                target = later_states[0]
+                condition_transition_edges.append({
+                    "edge_id": f"{source['event_id']}_before_{target['event_id']}",
+                    "event_chain_id": chain["event_chain_id"],
+                    "from_event_id": source["event_id"],
+                    "to_event_id": target["event_id"],
+                    "relation": "before",
+                })
+
     return {
         "contract_version": GRAPH_CONTRACT_VERSION,
         "entity_inventory": list(entities.values()),
@@ -567,6 +803,9 @@ def build_context_graph(dream: str, context: Mapping[str, Any]) -> Dict[str, Any
         },
         "claim_manifest": [],
         "terminal_frontiers": terminal_frontiers,
+        "condition_provenance_contract_version": CONDITION_PROVENANCE_CONTRACT_VERSION,
+        "condition_transition_edges": condition_transition_edges,
+        "condition_provenance_integrity": {"verified": False, "reason_codes": ["NOT_FINALIZED"]},
         "provenance_contract_version": "claim-provenance-reachability/1.0",
         "provenance_paths": [],
         "provenance_edges": [],
@@ -643,8 +882,8 @@ def finalize_context_graph(
         rule_id_for(registry, "pain"): events_by_type.get("pain_modifier", []),
         rule_id_for(registry, "painless"): loss_ids,
         rule_id_for(registry, "tooth_blood"): events_by_type.get("tooth_blood_modifier", []),
-        rule_id_for(registry, "gum_blood"): events_by_type.get("gum_bleeding", []),
-        rule_id_for(registry, "loose"): events_by_type.get("loose_tooth_state", []),
+        rule_id_for(registry, "gum_blood"): events_by_type.get("gum_bleeding_condition", []),
+        rule_id_for(registry, "loose"): events_by_type.get("loose_tooth_condition", []),
         rule_id_for(registry, "external_pull"): [
             event["event_id"] for event in eligible_losses
             if event.get("actor_id_or_null") not in {None, "dreamer", "ambiguous", "unknown"}
@@ -714,8 +953,8 @@ def finalize_context_graph(
                 "comparison_scope": (
                     "owner_and_event_bound_aggregate"
                     if (
-                        len({event["owner_id_or_ambiguous"] for event in eligible_losses}) > 1
-                        or len({event["event_chain_id_or_null"] for event in eligible_losses}) > 1
+                        len({events[event_id]["owner_id_or_ambiguous"] for event_id in warning_event_ids}) > 1
+                        or len({events[event_id]["event_chain_id_or_null"] for event_id in warning_event_ids}) > 1
                     )
                     else ""
                 ),
@@ -757,11 +996,18 @@ def finalize_context_graph(
         if rule.get("rule_id")
     }
     finalize_claim_provenance(graph, result, registry)
+    graph["condition_provenance_integrity"] = validate_condition_provenance(graph)
     graph["integrity"] = validate_context_graph(graph)
     if not graph["provenance_integrity"]["verified"]:
         graph["integrity"]["verified"] = False
         graph["integrity"]["reason_codes"] = list(dict.fromkeys(
             graph["integrity"]["reason_codes"] + graph["provenance_integrity"]["reason_codes"]
+        ))
+    if not graph["condition_provenance_integrity"]["verified"]:
+        graph["integrity"]["verified"] = False
+        graph["integrity"]["reason_codes"] = list(dict.fromkeys(
+            graph["integrity"]["reason_codes"]
+            + graph["condition_provenance_integrity"]["reason_codes"]
         ))
     return dict(graph)
 
@@ -941,12 +1187,28 @@ def validate_context_graph(graph: Mapping[str, Any]) -> Dict[str, Any]:
             for candidate in chain.get("event_ids", [])
             if candidate in events
             and events[candidate].get("doctrine_eligible")
-            and events[candidate].get("event_type") in {"tooth_loss", "firm_same_tooth_return"}
+            and events[candidate].get("event_type") in {
+                "tooth_loss", "firm_same_tooth_return", "loose_tooth_condition",
+                "retained_tooth_state",
+            }
         ]
         if eligible_state_events:
             latest = max(eligible_state_events, key=lambda item: item["source_span"]["start"])
             if latest["event_id"] != event_id:
                 reasons.append("TERMINAL_FRONTIER_DANGLING")
+
+    for edge in graph.get("condition_transition_edges", []):
+        source = events.get(edge.get("from_event_id"))
+        target = events.get(edge.get("to_event_id"))
+        chain = chains.get(edge.get("event_chain_id"))
+        if (
+            not source
+            or not target
+            or not chain
+            or source.get("event_id") not in chain.get("event_ids", [])
+            or target.get("event_id") not in chain.get("event_ids", [])
+        ):
+            reasons.append("CONDITION_LOSS_COLLAPSE")
 
     unique_reasons = list(dict.fromkeys(reasons))
     if graph.get("provenance_paths"):

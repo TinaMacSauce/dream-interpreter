@@ -107,7 +107,26 @@ ATTEMPT_BINDING_QA_CASES = (
     ("CTX-001-ATTEMPT-BIND-REPORTED-001", "My tooth fell out. My sister told me that she tried to put her tooth back yesterday."),
 )
 
-TEETH_QA_CASES = BASE_TEETH_QA_CASES + ATTEMPT_BINDING_QA_CASES
+CONDITION_PROVENANCE_QA_CASES = (
+    ("CTX-003-COND-PROV-GUMS-NEGATED-001", "My gums were bleeding, but no tooth was loose and none fell out."),
+    ("CTX-003-COND-PROV-GUMS-ONLY-001", "My gums were bleeding."),
+    ("CTX-003-COND-PROV-GUMS-RETAINED-001", "My gums were bleeding and every tooth stayed firm."),
+    ("CTX-003-COND-PROV-LOOSE-NEGATED-LOSS-001", "My tooth was loose but did not fall out."),
+    ("CTX-003-COND-PROV-WOBBLY-RETAINED-001", "My tooth was wobbly and stayed in my mouth."),
+    ("CTX-003-COND-PROV-TWO-LOOSE-001", "Two of my teeth were loose, but neither fell out."),
+    ("CTX-003-COND-PROV-OTHER-OWNER-001", "My sister's tooth was loose but did not fall out."),
+    ("CTX-003-COND-PROV-NEGATED-LOOSE-THEN-LOSS-001", "My tooth was not loose, but it fell out."),
+    ("CTX-003-COND-PROV-LOOSE-THEN-LOSS-001", "My tooth became loose, then it fell out."),
+    ("CTX-003-COND-PROV-QUOTED-001", 'My aunt said, "My tooth is loose." My own tooth stayed firm.'),
+    ("CTX-003-COND-PROV-HYPOTHETICAL-001", "If my tooth were loose, I would visit a dentist."),
+    ("CTX-003-COND-PROV-MULTI-OWNER-001", "My gums were bleeding. My sister's tooth was loose but did not fall out."),
+)
+
+TEETH_QA_CASES = (
+    BASE_TEETH_QA_CASES
+    + ATTEMPT_BINDING_QA_CASES
+    + CONDITION_PROVENANCE_QA_CASES
+)
 
 
 @qa_bp.get("/qa/teeth-regression")

@@ -44,6 +44,7 @@ jobs:
           tests.test_teeth_ctx_003_narration_claim_consumption
           tests.test_snake_registry_runtime
           tests.test_snake_doctrine
+          tests.test_snake_context_event_graph
           tests.test_snake_qa_gate
           tests.test_release_evidence
           -v

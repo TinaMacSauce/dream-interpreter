@@ -45,10 +45,10 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
     if not isinstance(payload, dict):
         return ["payload is not an object"]
     errors: List[str] = []
-    if payload.get("contract_version") != "snake-qa-contract-v1":
+    if payload.get("contract_version") != "snake-qa-contract-v2":
         errors.append("contract_version mismatch")
-    if payload.get("case_count") != len(EXPECTED_CASES):
-        errors.append(f"case_count expected {len(EXPECTED_CASES)}, got {payload.get('case_count')!r}")
+    if not isinstance(payload.get("case_count"), int) or payload.get("case_count") < len(EXPECTED_CASES) + 31:
+        errors.append(f"case_count expected at least {len(EXPECTED_CASES) + 31}, got {payload.get('case_count')!r}")
     if payload.get("non_billable") is not True or payload.get("customer_credits_consumed") is not False:
         errors.append("bounded QA billing contract mismatch")
     release = payload.get("release") or {}
@@ -71,8 +71,8 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
             errors.append(f"registry.{field} expected {value!r}, got {registry.get(field)!r}")
 
     cases = {case.get("case_id"): case for case in payload.get("cases") or []}
-    if set(cases) != set(EXPECTED_CASES):
-        errors.append("case identifiers mismatch")
+    if not set(EXPECTED_CASES).issubset(cases):
+        errors.append("baseline case identifiers missing")
     for case_id, expected in EXPECTED_CASES.items():
         doctrine = (cases.get(case_id) or {}).get("doctrine") or {}
         rules = doctrine.get("applied_rule_ids") or []
@@ -95,6 +95,19 @@ def validate(payload: Any, *, expected_commit: str) -> List[str]:
         for forbidden in ("definitely", "will happen", "is the enemy", "will get sick"):
             if forbidden in narration:
                 errors.append(f"{case_id} narration contains forbidden phrase {forbidden!r}")
+    context_cases = [case for case_id, case in cases.items() if case_id.startswith("SNAKE-00")]
+    if len(context_cases) < 31:
+        errors.append(f"context case count expected at least 31, got {len(context_cases)}")
+    for case in context_cases:
+        doctrine = case.get("doctrine") or {}
+        graph = doctrine.get("event_graph") or {}
+        integrity = graph.get("graph_integrity") or {}
+        if graph.get("contract_version") != "snake-context-event-terminal-v1":
+            errors.append(f"{case.get('case_id')} event graph contract mismatch")
+        if integrity.get("verified") is not True or integrity.get("reason_codes"):
+            errors.append(f"{case.get('case_id')} event graph integrity failed")
+        if not graph.get("events") or not graph.get("terminal_frontiers"):
+            errors.append(f"{case.get('case_id')} event graph inventory missing")
     return errors
 
 

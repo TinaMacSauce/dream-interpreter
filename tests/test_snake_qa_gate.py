@@ -15,7 +15,7 @@ class SnakeQAReleaseGateTests(unittest.TestCase):
             response = app.test_client().get("/qa/snake-regression")
         payload = response.get_json()
         self.assertEqual(200, response.status_code)
-        self.assertEqual("snake-qa-contract-v1", payload["contract_version"])
+        self.assertEqual("snake-qa-contract-v2", payload["contract_version"])
         self.assertEqual(len(SNAKE_QA_CASES), payload["case_count"])
         self.assertTrue(payload["non_billable"])
         self.assertFalse(payload["customer_credits_consumed"])

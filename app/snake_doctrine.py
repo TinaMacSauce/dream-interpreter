@@ -14,7 +14,11 @@ from app.snake_registry import (
 def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
     registry = get_snake_registry_snapshot()
     context = extract_snake_context(dream)
-    active = bool(registry.get("verified") is True and context.get("has_snake"))
+    active = bool(
+        registry.get("verified") is True
+        and context.get("has_snake")
+        and (context.get("graph_integrity") or {}).get("verified") is True
+    )
     rules: List[str] = []
 
     def apply(key: str, condition: bool = True) -> None:
@@ -25,7 +29,10 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
 
     apply("snake_base_enemy")
     apply("snake_action_map", bool(context.get("action")))
-    apply("snake_attack", bool(context.get("attack")))
+    apply(
+        "snake_attack",
+        bool(context.get("attack") or context.get("completed_bite") or context.get("attempted_bite")),
+    )
     apply("snake_watching", bool(context.get("watching")))
     apply("snake_retreat", bool(context.get("retreat")))
     apply("snake_victory", context.get("outcome") == "dreamer_victory")
@@ -73,6 +80,12 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
         "applied_rule_ids": rules,
         "doctrine_version": registry.get("doctrine_version") or "DEC-SNAKE-2026-09-08-01",
         "context_version": SNAKE_CONTEXT_VERSION,
+        "event_graph": context.get("event_graph") or {},
+        "event_inventory": list(context.get("event_inventory") or []),
+        "target_lineage": list(context.get("target_lineage") or []),
+        "terminal_frontiers": list(context.get("terminal_frontiers") or []),
+        "rule_bindings": list(context.get("rule_bindings") or []),
+        "graph_integrity": dict(context.get("graph_integrity") or {}),
         "doctrine_source": DOCTRINE_REGISTRY,
         "doctrine_registry": public_snake_registry_metadata(registry),
         "context": context,

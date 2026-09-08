@@ -20,7 +20,7 @@ from app.snake_registry import get_snake_registry_snapshot, public_snake_registr
 qa_bp = Blueprint("qa", __name__)
 
 TEETH_QA_CONTRACT_VERSION = "teeth-qa-contract-v2"
-SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v1"
+SNAKE_QA_CONTRACT_VERSION = "snake-qa-contract-v2"
 
 
 @qa_bp.post("/qa/interpret")
@@ -219,6 +219,37 @@ SNAKE_QA_CASES = (
     ("ownership", "My neighbor owned the snake."),
     ("unfinished", "I was fighting the snake when I woke up."),
     ("color_excluded", "A red snake watched me."),
+    ("SNAKE-002-EVENT-WATCH-001", "A snake watched me from the doorway."),
+    ("SNAKE-002-EVENT-ATTEMPT-BITE-001", "The snake attacked me and tried to bite my hand, but it never touched me."),
+    ("SNAKE-002-EVENT-BITE-DREAMER-001", "The snake bit my ankle and I fell, unable to continue the fight."),
+    ("SNAKE-002-TARGET-THIRD-PARTY-001", "The snake ignored me and bit my sister on her wrist."),
+    ("SNAKE-003-VENOM-SCOPE-001", "The cobra bit my arm, and I saw venom enter and move through my arm."),
+    ("SNAKE-002-PROTECTION-BLOCK-001", "A snake struck at me, but a shield blocked it before it touched me."),
+    ("SNAKE-002-MULTI-MIXED-001", "Three snakes surrounded me: a small snake watched, a huge cobra attacked and I killed it, while the third snake ran away."),
+    ("SNAKE-002-NEGATION-001", "The snake did not bite me; it only watched me."),
+    ("SNAKE-002-HYPOTHETICAL-001", "I thought, if the snake bites me I will lose, but the snake actually ran away."),
+    ("SNAKE-002-TARGET-AMBIGUOUS-001", "The snake rushed between my sister and my cousin, then it bit her."),
+    ("SNAKE-003-TRANSFORM-SAFETY-001", "The snake changed into my friend and stood beside me."),
+    ("SNAKE-002-LOCATION-MULTI-SPHERE-001", "One snake watched me in my kitchen. Later another snake attacked me at work."),
+    ("SNAKE-002-COLOR-INVARIANT-BLACK-001", "A black snake attacked me and then ran away."),
+    ("SNAKE-002-COLOR-INVARIANT-GREEN-001", "A green snake attacked me and then ran away."),
+    ("SNAKE-002-ENDING-ALREADY-DEAD-001", "I discovered a snake already dead beside the road."),
+    ("SNAKE-002-ENDING-ESCAPE-001", "The snake chased me through the yard, but I escaped and woke up."),
+    ("SNAKE-002-RECURRENCE-UNFINISHED-001", "Again I fought the same snake, but I woke before either of us won."),
+    ("SNAKE-002-OWNERSHIP-LOW-001", "My neighbor said the snake was his, but the snake only watched me."),
+    ("SNAKE-003-FAITH-SEPARATION-001", "A snake attacked me and I woke before the fight ended. After waking I rejected the bad dream and planned to read Psalm 91 before bed."),
+    ("SNAKE-002-TARGET-LINEAGE-SELF-HAND-001", "The snake bit my hand and the fight ended there."),
+    ("SNAKE-002-TARGET-LINEAGE-THIRD-PARTY-WRIST-001", "The snake passed me and bit my sister's wrist."),
+    ("SNAKE-002-TARGET-LINEAGE-COREFERENCE-IT-001", "My sister held out her hand. The snake bit it."),
+    ("SNAKE-002-TARGET-LINEAGE-AMBIGUOUS-001", "My sister and cousin held out their hands. The snake bit one of them."),
+    ("SNAKE-002-TARGET-LINEAGE-MULTI-PERSON-001", "One snake bit my hand while a second snake bit my sister's wrist."),
+    ("SNAKE-002-TARGET-LINEAGE-SEQUENCE-001", "The snake attacked me, then turned and bit my sister's hand."),
+    ("SNAKE-003-TARGET-LINEAGE-VENOM-THIRD-PARTY-001", "The cobra bit my brother's arm and venom moved through his arm."),
+    ("SNAKE-002-TARGET-LINEAGE-ATTEMPT-001", "The snake tried to bite my ankle but never touched me."),
+    ("SNAKE-002-TARGET-LINEAGE-PROTECTION-001", "The snake tried to bite my child, but I blocked it before contact."),
+    ("SNAKE-002-TARGET-LINEAGE-NONPERSON-001", "The snake bit my travel bag and then disappeared."),
+    ("SNAKE-002-TARGET-LINEAGE-BITE-THEN-VICTORY-001", "The snake bit my hand, but I kept fighting and killed that same snake at the end."),
+    ("SNAKE-002-TARGET-LINEAGE-NEGATED-CORRECTION-001", "The snake did not bite my sister; it bit my hand instead."),
 )
 
 

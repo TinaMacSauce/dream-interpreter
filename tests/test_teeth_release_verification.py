@@ -26,7 +26,7 @@ RELEASE = {
     "teeth_registry_content_revision": "fnv1a64:c51447de5d35bd59",
     "teeth_registry_contract_version": "teeth-doctrine-registry-v1",
     "snake_doctrine_version": "DEC-SNAKE-2026-09-08-01",
-    "snake_context_version": "snake-context-v1",
+    "snake_context_version": "snake-context-event-terminal-v1",
     "snake_registry_range": "DoctrineRegistry!A25:M42",
     "snake_registry_sheet_revision": "6138",
     "snake_registry_content_revision": "fnv1a64:ae0190f42f79b9c8",

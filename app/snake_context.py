@@ -4,9 +4,13 @@ import re
 from typing import Any, Dict, List
 
 from app.utils import normalize_text
+from app.snake_event_graph import (
+    SNAKE_EVENT_CONTRACT_VERSION,
+    extract_snake_event_graph,
+)
 
 
-SNAKE_CONTEXT_VERSION = "snake-context-v1"
+SNAKE_CONTEXT_VERSION = "snake-context-event-terminal-v1"
 
 _SNAKE = r"(?:snake|snakes|serpent|serpents|cobra|cobras)"
 _COLORS = (
@@ -134,6 +138,74 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
         action = "retreat"
 
     target = _target(text, "bite" if completed_bite else "attack" if attack else "watch" if watching else "") if action else ""
+    event_graph = extract_snake_event_graph(dream) if has_snake else {
+        "contract_version": SNAKE_EVENT_CONTRACT_VERSION,
+        "entities": [], "events": [], "target_lineage": [],
+        "terminal_frontiers": [], "rule_bindings": [],
+        "graph_integrity": {"verified": True, "reason_codes": []},
+    }
+    graph_frontiers = event_graph.get("terminal_frontiers") or []
+    graph_events = event_graph.get("events") or []
+    graph_outcomes = [frontier.get("outcome") for frontier in graph_frontiers]
+    if "victory" in graph_outcomes:
+        outcome = "dreamer_victory"
+    elif "defeat" in graph_outcomes:
+        outcome = "opposition_victory_in_encounter"
+    elif graph_outcomes and all(value == "opposition_prevailed_for_target" for value in graph_outcomes):
+        outcome = "opposition_prevailed_for_target"
+    elif any(value == "unresolved" for value in graph_outcomes):
+        outcome = "unresolved"
+    elif graph_outcomes:
+        outcome = "not_established"
+
+    eligible_lineage_event_ids = {
+        lineage.get("event_id")
+        for lineage in event_graph.get("target_lineage") or []
+        if lineage.get("outcome_eligible") is True
+    }
+    completed_bite_events = [
+        event for event in graph_events
+        if event.get("action") == "bite"
+        and event.get("polarity") == "affirmed"
+        and event.get("actuality") == "actual"
+        and event.get("completion") == "completed"
+        and event.get("event_id") in eligible_lineage_event_ids
+    ]
+    attempted_bite_events = [
+        event for event in graph_events
+        if event.get("action") == "attempted_bite"
+        or (event.get("action") == "bite" and event.get("completion") == "attempted")
+    ]
+    if completed_bite_events:
+        completed_bite = True
+        attempted_bite = False
+        first_bite = completed_bite_events[0]
+        bite_target = next(
+            (
+                lineage.get("affected_person_id") or lineage.get("surface_target_id")
+                for lineage in event_graph.get("target_lineage") or []
+                if lineage.get("event_id") == first_bite.get("event_id")
+            ),
+            first_bite.get("target_id") or "",
+        )
+    elif attempted_bite_events:
+        attempted_bite = True
+        completed_bite = False
+    action_events = [event for event in graph_events if event.get("polarity") == "affirmed" and event.get("actuality") == "actual"]
+    if action_events:
+        first_action = action_events[0]
+        action_map = {
+            "watch": "watching", "attack": "attack", "chase": "attack",
+            "bite": "completed_bite", "attempted_bite": "attempted_bite",
+            "retreat": "retreat",
+        }
+        action = action_map.get(first_action.get("action"), action)
+        first_lineage = next(
+            (lineage for lineage in event_graph.get("target_lineage") or [] if lineage.get("event_id") == first_action.get("event_id")),
+            {},
+        )
+        target = first_lineage.get("affected_person_id") or first_action.get("target_id") or target
+
     return {
         "context_version": SNAKE_CONTEXT_VERSION,
         "has_snake": has_snake,
@@ -155,4 +227,10 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
         "transformed_into_person": transform_person,
         "ownership_mentioned": ownership_mentioned,
         "colors_ignored": colors,
+        "event_graph": event_graph,
+        "event_inventory": graph_events,
+        "target_lineage": event_graph.get("target_lineage") or [],
+        "terminal_frontiers": graph_frontiers,
+        "rule_bindings": event_graph.get("rule_bindings") or [],
+        "graph_integrity": event_graph.get("graph_integrity") or {"verified": False, "reason_codes": ["GRAPH_MISSING"]},
     }

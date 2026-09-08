@@ -25,7 +25,7 @@ EXPECTED = {
     "multiple": ({"loss-1"}, {"TEETH-FALLOUT-OWN", "TEETH-FALLOUT-MULTIPLE"}, 3, 1, 1),
     "pain": ({"loss-1", "pain-1"}, {"TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE", "TEETH-MOD-PAIN"}, 1, 1, 1),
     "blood": ({"loss-1", "blood-1"}, {"TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE", "TEETH-MOD-BLOOD"}, 1, 1, 1),
-    "gums": ({"gum-blood-1", "negated-loose-1", "negated-loss-1"}, {"TEETH-OMEN-GUM-BLOOD"}, 0, 0, 0),
+    "gums": ({"gum-bleeding-1", "negated-loose-1", "negated-loss-1"}, {"TEETH-OMEN-GUM-BLOOD"}, 0, 0, 0),
     "loose": ({"loose-1", "negated-loss-1"}, {"TEETH-STATE-LOOSE"}, 0, 0, 0),
     "other_owner": ({"loss-1"}, {"TEETH-FALLOUT-OTHER", "TEETH-FALLOUT-ONE"}, 1, 1, 1),
     "external_actor": ({"loss-1"}, {"TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE", "TEETH-PULL-EXTERNAL"}, 1, 1, 1),

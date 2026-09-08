@@ -107,11 +107,22 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
     )
     terminal_return = bool(actual_fallout and context.get("returned_same_tooth_firm"))
 
-    loose_warning = bool(context.get("loose_or_wobbly")) and not actual_fallout
+    eligible_loose_conditions = [
+        event for event in context_graph.get("event_inventory", [])
+        if event.get("event_type") == "loose_tooth_condition"
+        and event.get("doctrine_eligible") is True
+    ]
+    eligible_gum_conditions = [
+        event for event in context_graph.get("event_inventory", [])
+        if event.get("event_type") == "gum_bleeding_condition"
+        and event.get("doctrine_eligible") is True
+    ]
+
+    loose_warning = bool(eligible_loose_conditions) and not actual_fallout
     broken_warning = bool(context.get("broken_or_cracked")) and not actual_fallout
     rotten_warning = bool(context.get("rotten_or_decayed")) and not actual_fallout
     bleeding_gums_warning = (
-        bool(context.get("gum_bleeding"))
+        bool(eligible_gum_conditions)
         and not actual_fallout
         and not bool(context.get("bleeding_physical_cause"))
     )
@@ -120,6 +131,8 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
     if supported_subject and not terminal_return:
         if actual_fallout:
             warning_kind = "tooth_loss"
+        elif loose_warning and bleeding_gums_warning:
+            warning_kind = "multiple_condition_warnings"
         elif loose_warning:
             warning_kind = "loose_sickness"
         elif broken_warning:
@@ -217,6 +230,9 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
             "rule_sets",
             "claim_manifest",
             "terminal_frontiers",
+            "condition_provenance_contract_version",
+            "condition_transition_edges",
+            "condition_provenance_integrity",
             "provenance_contract_version",
             "provenance_nodes",
             "provenance_paths",
@@ -284,6 +300,9 @@ def build_teeth_doctrine_context(dream: str) -> Dict[str, Any]:
             result["pull_modifier"] = "external_interference"
             apply_rule("external_pull")
 
+    elif warning_kind == "multiple_condition_warnings":
+        apply_rule("loose")
+        apply_rule("gum_blood")
     elif warning_kind == "loose_sickness":
         apply_rule("loose")
     elif warning_kind == "broken_sickness":
@@ -418,6 +437,14 @@ def build_teeth_narration_facts(dream: str) -> Dict[str, Any]:
                 "as a completed restoration or terminal ending."
             )
 
+    elif doctrine.get("warning_kind") == "multiple_condition_warnings":
+        result["lead"] = (
+            "In Jamaican True Stories doctrine, the loose tooth and standalone bleeding gums "
+            "remain separate tradition-based warnings, not medical diagnoses or guaranteed outcomes."
+        )
+        details.append(
+            "Each warning remains bound to its own owner, condition event, and source wording."
+        )
     elif doctrine.get("warning_kind") in {"loose_sickness", "broken_sickness", "rotten_sickness"}:
         labels = {
             "loose_sickness": "loose or wobbly tooth",

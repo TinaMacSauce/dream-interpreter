@@ -205,6 +205,118 @@ ATTEMPT_BINDING_EXPECTED: Dict[str, Dict[str, Any]] = {
 
 GRAPH_CONTRACT_VERSION = "context-graph-referential-integrity/1.0"
 PROVENANCE_CONTRACT_VERSION = "claim-provenance-reachability/1.0"
+CONDITION_PROVENANCE_CONTRACT_VERSION = "condition-state-provenance/1.0"
+CONDITION_GRAPH_EXPECTED: Dict[str, Dict[str, Any]] = {
+    "CTX-003-COND-PROV-GUMS-NEGATED-001": {
+        "events": {"gum-bleeding-1", "negated-loose-1", "negated-loss-1"},
+        "rules": {"TEETH-OMEN-GUM-BLOOD"},
+    },
+    "CTX-003-COND-PROV-GUMS-ONLY-001": {
+        "events": {"gum-bleeding-1"}, "rules": {"TEETH-OMEN-GUM-BLOOD"},
+    },
+    "CTX-003-COND-PROV-GUMS-RETAINED-001": {
+        "events": {"gum-bleeding-1", "retained-state-1"},
+        "rules": {"TEETH-OMEN-GUM-BLOOD"},
+    },
+    "CTX-003-COND-PROV-LOOSE-NEGATED-LOSS-001": {
+        "events": {"loose-1", "negated-loss-1"}, "rules": {"TEETH-STATE-LOOSE"},
+    },
+    "CTX-003-COND-PROV-WOBBLY-RETAINED-001": {
+        "events": {"loose-1", "retained-state-1"}, "rules": {"TEETH-STATE-LOOSE"},
+        "frontier": "retained-state-1",
+    },
+    "CTX-003-COND-PROV-TWO-LOOSE-001": {
+        "events": {"loose-1", "negated-loss-1"}, "rules": {"TEETH-STATE-LOOSE"},
+    },
+    "CTX-003-COND-PROV-OTHER-OWNER-001": {
+        "events": {"sister-loose-1", "sister-negated-loss-1"},
+        "rules": {"TEETH-STATE-LOOSE"},
+    },
+    "CTX-003-COND-PROV-NEGATED-LOOSE-THEN-LOSS-001": {
+        "events": {"negated-loose-1", "loss-1"},
+        "rules": {"TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE"},
+    },
+    "CTX-003-COND-PROV-LOOSE-THEN-LOSS-001": {
+        "events": {"loose-1", "loss-1"},
+        "rules": {"TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE"},
+        "edge": "loose-1_before_loss-1", "frontier": "loss-1",
+    },
+    "CTX-003-COND-PROV-QUOTED-001": {
+        "events": {"speech-1", "quoted-loose-1", "retained-state-1"}, "rules": set(),
+    },
+    "CTX-003-COND-PROV-HYPOTHETICAL-001": {
+        "events": {"hypothetical-loose-1"}, "rules": set(),
+    },
+    "CTX-003-COND-PROV-MULTI-OWNER-001": {
+        "events": {"gum-bleeding-1", "sister-loose-1", "sister-negated-loss-1"},
+        "rules": {"TEETH-OMEN-GUM-BLOOD", "TEETH-STATE-LOOSE"},
+    },
+}
+
+CONDITION_PUBLIC_EXPECTED: Dict[str, Dict[str, Any]] = {
+    "CTX-003-COND-PROV-GUMS-NEGATED-001": {"warning_kind": "bleeding_gums", "exact_rules": ["TEETH-OMEN-GUM-BLOOD"]},
+    "CTX-003-COND-PROV-GUMS-ONLY-001": {"warning_kind": "bleeding_gums", "exact_rules": ["TEETH-OMEN-GUM-BLOOD"]},
+    "CTX-003-COND-PROV-GUMS-RETAINED-001": {"warning_kind": "bleeding_gums", "exact_rules": ["TEETH-OMEN-GUM-BLOOD"]},
+    "CTX-003-COND-PROV-LOOSE-NEGATED-LOSS-001": {"warning_kind": "loose_sickness", "exact_rules": ["TEETH-STATE-LOOSE"]},
+    "CTX-003-COND-PROV-WOBBLY-RETAINED-001": {"warning_kind": "loose_sickness", "exact_rules": ["TEETH-STATE-LOOSE"]},
+    "CTX-003-COND-PROV-TWO-LOOSE-001": {"warning_kind": "loose_sickness", "exact_rules": ["TEETH-STATE-LOOSE"]},
+    "CTX-003-COND-PROV-OTHER-OWNER-001": {"warning_kind": "loose_sickness", "exact_rules": ["TEETH-STATE-LOOSE"]},
+    "CTX-003-COND-PROV-NEGATED-LOOSE-THEN-LOSS-001": {"warning_kind": "tooth_loss", "exact_rules": ["TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE"]},
+    "CTX-003-COND-PROV-LOOSE-THEN-LOSS-001": {"warning_kind": "tooth_loss", "exact_rules": ["TEETH-FALLOUT-OWN", "TEETH-FALLOUT-ONE"]},
+    "CTX-003-COND-PROV-QUOTED-001": {"active_warning": False, "exact_rules": []},
+    "CTX-003-COND-PROV-HYPOTHETICAL-001": {"active_warning": False, "exact_rules": []},
+    "CTX-003-COND-PROV-MULTI-OWNER-001": {"warning_kind": "multiple_condition_warnings", "exact_rules": ["TEETH-STATE-LOOSE", "TEETH-OMEN-GUM-BLOOD"]},
+}
+
+for _condition_case_id, _condition_expected in CONDITION_PUBLIC_EXPECTED.items():
+    EXPECTED[_condition_case_id] = {**_condition_expected, "condition_graph": True}
+
+
+def _validate_condition_graph(case_id: str, dream: str, doctrine: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    graph = doctrine.get("context_graph") or {}
+    expected = CONDITION_GRAPH_EXPECTED[case_id]
+    if graph.get("condition_provenance_contract_version") != CONDITION_PROVENANCE_CONTRACT_VERSION:
+        return [f"{case_id}: missing condition provenance contract {CONDITION_PROVENANCE_CONTRACT_VERSION}"]
+    integrity = graph.get("condition_provenance_integrity") or {}
+    if integrity.get("verified") is not True or integrity.get("reason_codes") != []:
+        errors.append(f"{case_id}: condition provenance integrity did not pass: {integrity!r}")
+    events = {item.get("event_id"): item for item in graph.get("event_inventory", [])}
+    if set(events) != expected["events"]:
+        errors.append(f"{case_id}: condition graph events expected {sorted(expected['events'])}, got {sorted(events)}")
+    for event in events.values():
+        span = event.get("source_span") or {}
+        if dream[span.get("start", 0):span.get("end", 0)] != span.get("text"):
+            errors.append(f"{case_id}: condition event source span does not round-trip")
+    public = graph.get("rule_sets", {}).get("public_applied", [])
+    public_rules = {record.get("rule_id") for record in public}
+    if public_rules != expected["rules"]:
+        errors.append(f"{case_id}: condition graph rules expected {sorted(expected['rules'])}, got {sorted(public_rules)}")
+    type_by_rule = {
+        "TEETH-OMEN-GUM-BLOOD": "gum_bleeding_condition",
+        "TEETH-STATE-LOOSE": "loose_tooth_condition",
+    }
+    for record in public:
+        expected_type = type_by_rule.get(record.get("rule_id"))
+        if expected_type and any(events.get(event_id, {}).get("event_type") != expected_type for event_id in record.get("source_event_ids", [])):
+            errors.append(f"{case_id}: condition rule is bound to the wrong event type")
+    condition_rules = public_rules & set(type_by_rule)
+    if condition_rules:
+        claims = [
+            claim for claim in graph.get("claim_manifest", [])
+            if set(claim.get("consumed_rule_ids", [])) & condition_rules
+        ]
+        if not claims or any(not claim.get("consumed_event_ids") or not claim.get("consumed_span_ids") for claim in claims):
+            errors.append(f"{case_id}: released condition warning lacks an event-rule-span claim path")
+    elif any(set(claim.get("consumed_rule_ids", [])) & set(type_by_rule) for claim in graph.get("claim_manifest", [])):
+        errors.append(f"{case_id}: inactive condition produced a released claim")
+    expected_edge = expected.get("edge")
+    if expected_edge and expected_edge not in {edge.get("edge_id") for edge in graph.get("condition_transition_edges", [])}:
+        errors.append(f"{case_id}: missing condition transition edge {expected_edge}")
+    expected_frontier = expected.get("frontier")
+    if expected_frontier and expected_frontier not in {frontier.get("terminal_event_id") for frontier in graph.get("terminal_frontiers", [])}:
+        errors.append(f"{case_id}: missing terminal frontier {expected_frontier}")
+    return errors
 GRAPH_EXPECTED: Dict[str, Dict[str, Any]] = {
     "CTX-001-ATTEMPT-BIND-DREAMER-001": {
         "entities": {"dreamer", "tooth-1"},
@@ -524,6 +636,7 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
             if field in {
                 "include", "exclude", "exact_rules", "unresolved_include",
                 "narration_contains", "narration_excludes", "attempt_record",
+                "condition_graph",
             }:
                 continue
             if doctrine.get(field) != value:
@@ -570,6 +683,9 @@ def validate(payload: Any, *, expected_commit: str) -> Dict[str, Any]:
                         f"{case_id}: attempt source span does not round-trip to dream text"
                     )
             case_errors.extend(_validate_graph(case_id, item.get("dream", ""), doctrine))
+
+        if expected.get("condition_graph"):
+            case_errors.extend(_validate_condition_graph(case_id, item.get("dream", ""), doctrine))
 
         case_errors.extend(_validate_provenance(case_id, doctrine))
 

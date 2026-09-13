@@ -140,11 +140,14 @@ def extract_snake_context(dream: str) -> Dict[str, Any]:
     elif _has(rf"\b{_SNAKE}\b.{{0,60}}\bkitchen\b|\bkitchen\b.{{0,60}}\b{_SNAKE}\b", text):
         location = "productivity_healing_replenishment_sphere"
         location_observed = "kitchen"
-    elif _has(rf"\b{_SNAKE}\b.{{0,60}}\b(?:home|house|yard)\b|\b(?:home|house|yard)\b.{{0,60}}\b{_SNAKE}\b", text):
-        location = "life_sphere"
-        location_observed = "house"
     elif _has(rf"\b{_SNAKE}\b.{{0,60}}\bbathroom\b|\bbathroom\b.{{0,60}}\b{_SNAKE}\b", text):
         location_observed = "bathroom"
+    elif _has(rf"\b{_SNAKE}\b.{{0,60}}\b(?:living room|living area|yard)\b|\b(?:living room|living area|yard)\b.{{0,60}}\b{_SNAKE}\b", text):
+        # These physical locations have no approved house-equivalence rule.
+        location_observed = "yard" if _has(r"\byard\b", text) else "living_area"
+    elif _has(rf"\b{_SNAKE}\b.{{0,60}}\b(?:home|house)\b|\b(?:home|house)\b.{{0,60}}\b{_SNAKE}\b", text):
+        location = "life_sphere"
+        location_observed = "house"
     elif _has(rf"\b{_SNAKE}\b.{{0,60}}\b(?:work|workplace|office|job)\b|\b(?:work|workplace|office|job)\b.{{0,60}}\b{_SNAKE}\b", text):
         location = "work_sphere"
         location_observed = "work"

@@ -7,6 +7,8 @@ credentials.json
 
 # --- Private app data ---
 data/
+private/
+*.private.json
 
 # --- Python caches & build ---
 __pycache__/

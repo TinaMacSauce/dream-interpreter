@@ -350,6 +350,11 @@ class Config:
         "DoctrineRegistry",
     ).strip()
 
+    # Private, independently approved release metadata. Never commit this file.
+    SNAKE_REGISTRY_APPROVALS_FILE = os.getenv(
+        "SNAKE_REGISTRY_APPROVALS_FILE", "",
+    ).strip()
+
     SHEET_DREAM_JOURNAL = os.getenv(
         "SHEET_DREAM_JOURNAL",
         "DreamJournal",

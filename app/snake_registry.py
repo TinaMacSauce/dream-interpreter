@@ -5,6 +5,11 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from app.cache import SNAKE_REGISTRY_CACHE
 from app.config import Config
+from app.registry_approvals import (
+    load_approval_manifest,
+    registry_snapshot_sha256,
+    validate_approval_manifest,
+)
 from app.sheets import get_spreadsheet
 from app.teeth_registry import (
     REQUIRED_HEADERS,
@@ -81,6 +86,8 @@ def _rows_from_values(
         raise RuntimeError("snake_registry_schema_mismatch")
     rows: List[Dict[str, str]] = []
     for raw in values[1:]:
+        if len(raw) != len(headers):
+            raise RuntimeError("snake_registry_row_width_mismatch")
         padded = list(raw) + [""] * max(0, len(headers) - len(raw))
         row = {
             headers[index]: str(padded[index] or "").strip()
@@ -95,11 +102,19 @@ def validate_snake_registry_values(
     values: Sequence[Sequence[Any]],
     *,
     expected_content_revision: str | None = None,
+    approval_manifest: Mapping[str, Any] | None = None,
 ) -> Dict[str, Any]:
     scoped_values = cluster_registry_values(values, "Snake")
     _headers, rows = _rows_from_values(scoped_values)
     content_revision = registry_content_revision(scoped_values)
-    if content_revision != (expected_content_revision or EXPECTED_CONTENT_REVISION):
+    profile = None
+    if approval_manifest is not None:
+        if expected_content_revision is not None:
+            raise RuntimeError("snake_registry_approval_override_conflict")
+        profiles = validate_approval_manifest(approval_manifest, EXPECTED_RULES)
+        digest = registry_snapshot_sha256(scoped_values)
+        profile = next((item for item in profiles if item["snapshot_sha256"] == digest), None)
+    if profile is None and content_revision != (expected_content_revision or EXPECTED_CONTENT_REVISION):
         raise RuntimeError("snake_registry_content_revision_mismatch")
     if len(rows) != len(EXPECTED_RULES):
         raise RuntimeError("snake_registry_rule_count_mismatch")
@@ -110,6 +125,8 @@ def validate_snake_registry_values(
         if not key or key in rules or key not in EXPECTED_RULES:
             raise RuntimeError("snake_registry_implementation_key_mismatch")
         expected_rule_id, expected_status, expected_active = EXPECTED_RULES[key]
+        if row["active"].lower() not in {"1", "0", "true", "false", "yes", "no", "on", "off"}:
+            raise RuntimeError("snake_registry_activation_mismatch")
         active = _truthy(row["active"])
         if row["rule_id"] != expected_rule_id:
             raise RuntimeError("snake_registry_rule_id_mismatch")
@@ -119,6 +136,11 @@ def validate_snake_registry_values(
         expected_version = LEGACY_DOCTRINE_VERSION if legacy else EXPECTED_DOCTRINE_VERSION
         expected_authority = LEGACY_AUTHORITY if legacy else EXPECTED_AUTHORITY
         expected_timestamp = LEGACY_UPDATED_AT_UTC if legacy else EXPECTED_UPDATED_AT_UTC
+        if profile is not None:
+            metadata = profile["rule_metadata"][key]
+            expected_version = metadata["doctrine_version"]
+            expected_authority = metadata["authority"]
+            expected_timestamp = metadata["updated_at_utc"]
         if row["doctrine_version"] != expected_version:
             raise RuntimeError("snake_registry_doctrine_version_mismatch")
         if row["decision_id"] != expected_version:
@@ -129,9 +151,12 @@ def validate_snake_registry_values(
             raise RuntimeError("snake_registry_authority_mismatch")
         if row["updated_at_utc"] != expected_timestamp:
             raise RuntimeError("snake_registry_timestamp_mismatch")
+        if any(not row[field] for field in (
+            "trigger_context", "governing_meaning", "precedence", "safety_boundary",
+        )):
+            raise RuntimeError("snake_registry_required_field_missing")
         rules[key] = {
-            "rule_id": row["rule_id"],
-            "status": row["status"],
+            **row,
             "active": active,
         }
 
@@ -146,10 +171,12 @@ def validate_snake_registry_values(
         "contract_version": REGISTRY_CONTRACT_VERSION,
         "sheet_name": Config.SHEET_DOCTRINE_REGISTRY,
         "sheet_range": "DoctrineRegistry!A25:M54",
-        "sheet_revision": EXPECTED_SHEET_REVISION,
+        "sheet_revision": profile["sheet_revision"] if profile is not None else EXPECTED_SHEET_REVISION,
         "content_revision": content_revision,
-        "doctrine_version": EXPECTED_DOCTRINE_VERSION,
-        "decision_id": EXPECTED_DOCTRINE_VERSION,
+        "doctrine_version": profile["doctrine_version"] if profile is not None else EXPECTED_DOCTRINE_VERSION,
+        "decision_id": profile["doctrine_version"] if profile is not None else EXPECTED_DOCTRINE_VERSION,
+        "decision_ids": sorted({row["decision_id"] for row in rows}),
+        "canonical_location_text": profile is not None,
         "rule_count": len(rules),
         "active_rule_count": len(active_rule_ids),
         "unresolved_rule_count": len(unresolved_rule_ids),
@@ -220,8 +247,11 @@ def get_snake_registry_snapshot(*, force: bool = False) -> Dict[str, Any]:
     ):
         return cached
     try:
+        approval_manifest = load_approval_manifest(Config.SNAKE_REGISTRY_APPROVALS_FILE)
         worksheet = get_spreadsheet().worksheet(Config.SHEET_DOCTRINE_REGISTRY)
-        snapshot = validate_snake_registry_values(worksheet.get_all_values())
+        snapshot = validate_snake_registry_values(
+            worksheet.get_all_values(), approval_manifest=approval_manifest,
+        )
     except Exception as error:
         snapshot = _failed_snapshot(error)
     SNAKE_REGISTRY_CACHE["snapshot"] = snapshot
@@ -250,6 +280,7 @@ def public_snake_registry_metadata(
         "content_revision",
         "doctrine_version",
         "decision_id",
+        "decision_ids",
         "rule_count",
         "active_rule_count",
         "unresolved_rule_count",

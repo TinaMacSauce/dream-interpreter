@@ -65,6 +65,20 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
     apply("snake_faith_response", bool(context.get("faith_response_eligible")))
     apply("snake_faith_best_practice", bool(context.get("faith_best_practice_eligible")))
 
+    # Stable keys route context; approved wording comes from the private source.
+    location_key = {
+        "life_sphere": "snake_location_house_life",
+        "intimate_life_sphere": "snake_location_bedroom_intimacy",
+        "productivity_healing_replenishment_sphere":
+            "snake_location_kitchen_productivity_healing_replenishment",
+    }.get(context.get("location_scope"))
+    location_rule = (
+        (registry.get("rules") or {}).get(location_key) or {}
+        if active and registry.get("canonical_location_text") is True
+        and snake_rule_id_for(registry, location_key) in rules
+        else {}
+    )
+
     return {
         "active_doctrine": active,
         "symbol": "Snake" if active else "",
@@ -82,6 +96,11 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
         "strength": context.get("strength", "") if active else "",
         "location_scope": context.get("location_scope", "") if active else "",
         "location_observed": context.get("location_observed", "") if active else "",
+        "location_governing_meaning": location_rule.get("governing_meaning", ""),
+        "location_rule_provenance": {
+            field: location_rule.get(field, "")
+            for field in ("rule_id", "doctrine_version", "decision_id", "updated_at_utc")
+        } if location_rule else {},
         "completed_bite": bool(active and context.get("completed_bite")),
         "attempted_bite": bool(active and context.get("attempted_bite")),
         "venom": bool(active and context.get("venom")),
@@ -117,10 +136,10 @@ def build_snake_doctrine_context(dream: str) -> Dict[str, Any]:
         "target_rule_contract_version": context.get("target_rule_contract_version") or "",
         "target_intent_records": list(context.get("target_intent_records") or []),
         "rule_provenance_records": list(context.get("rule_provenance_records") or []),
-        "snake_registry_decision_ids": [
+        "snake_registry_decision_ids": list(registry.get("decision_ids") or [
             "DEC-SNAKE-2026-09-08-01",
             "DEC-SNAKE-2026-09-08-02",
-        ],
+        ]),
         "snake_registry_content_revision": registry.get("content_revision") or "",
         "location_scopes": list(context.get("location_scopes") or []),
         "rule_bindings": list(context.get("rule_bindings") or []),
@@ -165,11 +184,23 @@ def build_snake_narration_facts(dream: str) -> Dict[str, Any]:
     elif doctrine.get("strength") == "stronger_or_more_dangerous":
         parts.append("Its larger, fiercer, or dangerous form indicates stronger opposition.")
     if doctrine.get("location_scope") == "life_sphere":
-        parts.append("The house location associates the warning with the dreamer's life generally, without identifying a culprit.")
+        parts.append(
+            doctrine["location_governing_meaning"] + " This does not identify a culprit."
+            if doctrine.get("location_governing_meaning") else
+            "The house location associates the warning with the dreamer's life generally, without identifying a culprit."
+        )
     elif doctrine.get("location_scope") == "intimate_life_sphere":
-        parts.append("The bedroom location associates the warning with the intimate sphere, without identifying a partner or culprit.")
+        parts.append(
+            doctrine["location_governing_meaning"] + " This is without identifying a partner or culprit."
+            if doctrine.get("location_governing_meaning") else
+            "The bedroom location associates the warning with the intimate sphere, without identifying a partner or culprit."
+        )
     elif doctrine.get("location_scope") == "productivity_healing_replenishment_sphere":
-        parts.append("The kitchen location associates the warning with productivity, healing, and replenishment, without implying contamination, illness, or a culprit.")
+        parts.append(
+            doctrine["location_governing_meaning"] + " This is without implying contamination, illness, or a culprit."
+            if doctrine.get("location_governing_meaning") else
+            "The kitchen location associates the warning with productivity, healing, and replenishment, without implying contamination, illness, or a culprit."
+        )
     elif doctrine.get("location_scope") == "work_sphere":
         parts.append("The location associates the issue with the work sphere without identifying a culprit.")
     if doctrine.get("venom"):

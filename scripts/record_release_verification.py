@@ -159,6 +159,10 @@ def main() -> int:
     for label, path in (("teeth", "qa/teeth-regression"), ("snake", "qa/snake-regression")):
         status, payload = fetch_json(f"{base}/{path}", timeout=120.0)
         require_ok(status, payload, path)
+        if label == "snake" and payload.get("contract_pass") is not True:
+            raise RuntimeError(
+                f"{path} contract failed: {payload.get('failure_reason') or 'unspecified'}"
+            )
         release = payload.get("release") or {}
         if release.get("build_commit") != args.expected_commit:
             raise RuntimeError(f"{path} is not serving the expected commit")

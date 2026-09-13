@@ -15,11 +15,14 @@ from app.utils import normalize_header
 
 
 REGISTRY_CONTRACT_VERSION = "snake-doctrine-registry-v1"
-EXPECTED_DOCTRINE_VERSION = "DEC-SNAKE-2026-09-08-01"
-EXPECTED_SHEET_REVISION = "6138"
-EXPECTED_CONTENT_REVISION = "fnv1a64:ae0190f42f79b9c8"
-EXPECTED_UPDATED_AT_UTC = "2026-09-08T07:35:00Z"
-EXPECTED_AUTHORITY = "Tina, explicit founder teaching"
+EXPECTED_DOCTRINE_VERSION = "DEC-SNAKE-2026-09-08-02"
+EXPECTED_SHEET_REVISION = "6144"
+EXPECTED_CONTENT_REVISION = "fnv1a64:1c8decb0fe7b56da"
+EXPECTED_UPDATED_AT_UTC = "2026-09-08T14:06:13Z"
+EXPECTED_AUTHORITY = "Tina, explicit founder clarification"
+LEGACY_DOCTRINE_VERSION = "DEC-SNAKE-2026-09-08-01"
+LEGACY_UPDATED_AT_UTC = "2026-09-08T07:35:00Z"
+LEGACY_AUTHORITY = "Tina, explicit founder teaching"
 
 EXPECTED_RULES: Mapping[str, Tuple[str, str, bool]] = {
     "snake_base_enemy": ("SNAKE-BASE-ENEMY", "APPROVED", True),
@@ -44,7 +47,24 @@ EXPECTED_RULES: Mapping[str, Tuple[str, str, bool]] = {
         "APPROVED",
         True,
     ),
+    "snake_watching_target": ("SNAKE-WATCHING-TARGET", "APPROVED", True),
+    "snake_bite_attempt_target": ("SNAKE-BITE-ATTEMPT-TARGET", "APPROVED", True),
+    "snake_representation_carving": ("SNAKE-REP-CARVING", "APPROVED", True),
+    "snake_location_house_life": ("SNAKE-LOC-HOUSE", "APPROVED", True),
+    "snake_location_bedroom_intimacy": ("SNAKE-LOC-BEDROOM", "APPROVED", True),
+    "snake_location_kitchen_productivity_healing_replenishment": (
+        "SNAKE-LOC-KITCHEN",
+        "APPROVED",
+        True,
+    ),
+    "pending_snake_location_bathroom": ("SNAKE-LOC-BATHROOM", "UNRESOLVED", False),
+    "pending_snake_location_living_area": ("SNAKE-LOC-LIVING-AREA", "UNRESOLVED", False),
+    "pending_snake_noncarving_representation": ("SNAKE-REP-NONCARVING", "UNRESOLVED", False),
+    "pending_snake_unusual_control_ownership": ("SNAKE-OWNERSHIP-CONTROL", "UNRESOLVED", False),
+    "pending_snake_faith_eligibility_extended": ("SNAKE-FAITH-ELIGIBILITY-EXTENDED", "UNRESOLVED", False),
 }
+
+LEGACY_IMPLEMENTATION_KEYS = frozenset(list(EXPECTED_RULES)[:18])
 
 
 def _truthy(value: Any) -> bool:
@@ -95,15 +115,19 @@ def validate_snake_registry_values(
             raise RuntimeError("snake_registry_rule_id_mismatch")
         if row["status"] != expected_status or active is not expected_active:
             raise RuntimeError("snake_registry_activation_mismatch")
-        if row["doctrine_version"] != EXPECTED_DOCTRINE_VERSION:
+        legacy = key in LEGACY_IMPLEMENTATION_KEYS
+        expected_version = LEGACY_DOCTRINE_VERSION if legacy else EXPECTED_DOCTRINE_VERSION
+        expected_authority = LEGACY_AUTHORITY if legacy else EXPECTED_AUTHORITY
+        expected_timestamp = LEGACY_UPDATED_AT_UTC if legacy else EXPECTED_UPDATED_AT_UTC
+        if row["doctrine_version"] != expected_version:
             raise RuntimeError("snake_registry_doctrine_version_mismatch")
-        if row["decision_id"] != EXPECTED_DOCTRINE_VERSION:
+        if row["decision_id"] != expected_version:
             raise RuntimeError("snake_registry_decision_id_mismatch")
         if row["cluster"] != "Snake":
             raise RuntimeError("snake_registry_cluster_mismatch")
-        if row["authority"] != EXPECTED_AUTHORITY:
+        if row["authority"] != expected_authority:
             raise RuntimeError("snake_registry_authority_mismatch")
-        if row["updated_at_utc"] != EXPECTED_UPDATED_AT_UTC:
+        if row["updated_at_utc"] != expected_timestamp:
             raise RuntimeError("snake_registry_timestamp_mismatch")
         rules[key] = {
             "rule_id": row["rule_id"],
@@ -114,20 +138,23 @@ def validate_snake_registry_values(
     active_rule_ids = sorted(
         rule["rule_id"] for rule in rules.values() if rule["active"]
     )
+    unresolved_rule_ids = sorted(
+        rule["rule_id"] for rule in rules.values() if not rule["active"]
+    )
     return {
         "verified": True,
         "contract_version": REGISTRY_CONTRACT_VERSION,
         "sheet_name": Config.SHEET_DOCTRINE_REGISTRY,
-        "sheet_range": "DoctrineRegistry!A25:M42",
+        "sheet_range": "DoctrineRegistry!A25:M54",
         "sheet_revision": EXPECTED_SHEET_REVISION,
         "content_revision": content_revision,
         "doctrine_version": EXPECTED_DOCTRINE_VERSION,
         "decision_id": EXPECTED_DOCTRINE_VERSION,
         "rule_count": len(rules),
         "active_rule_count": len(active_rule_ids),
-        "unresolved_rule_count": 0,
+        "unresolved_rule_count": len(unresolved_rule_ids),
         "active_rule_ids": active_rule_ids,
-        "unresolved_rule_ids": [],
+        "unresolved_rule_ids": unresolved_rule_ids,
         "rules": rules,
         "loaded_from": "canonical_sheet",
         "error": "",
@@ -143,16 +170,16 @@ def _test_manifest_snapshot() -> Dict[str, Any]:
         "verified": True,
         "contract_version": REGISTRY_CONTRACT_VERSION,
         "sheet_name": Config.SHEET_DOCTRINE_REGISTRY,
-        "sheet_range": "DoctrineRegistry!A25:M42",
+        "sheet_range": "DoctrineRegistry!A25:M54",
         "sheet_revision": EXPECTED_SHEET_REVISION,
         "content_revision": EXPECTED_CONTENT_REVISION,
         "doctrine_version": EXPECTED_DOCTRINE_VERSION,
         "decision_id": EXPECTED_DOCTRINE_VERSION,
         "rule_count": len(rules),
-        "active_rule_count": len(rules),
-        "unresolved_rule_count": 0,
-        "active_rule_ids": sorted(rule["rule_id"] for rule in rules.values()),
-        "unresolved_rule_ids": [],
+        "active_rule_count": sum(1 for rule in rules.values() if rule["active"]),
+        "unresolved_rule_count": sum(1 for rule in rules.values() if not rule["active"]),
+        "active_rule_ids": sorted(rule["rule_id"] for rule in rules.values() if rule["active"]),
+        "unresolved_rule_ids": sorted(rule["rule_id"] for rule in rules.values() if not rule["active"]),
         "rules": rules,
         "loaded_from": "verified_test_manifest",
         "error": "",
@@ -164,7 +191,7 @@ def _failed_snapshot(error: Exception) -> Dict[str, Any]:
         "verified": False,
         "contract_version": REGISTRY_CONTRACT_VERSION,
         "sheet_name": Config.SHEET_DOCTRINE_REGISTRY,
-        "sheet_range": "DoctrineRegistry!A25:M42",
+        "sheet_range": "DoctrineRegistry!A25:M54",
         "sheet_revision": EXPECTED_SHEET_REVISION,
         "content_revision": "",
         "doctrine_version": EXPECTED_DOCTRINE_VERSION,

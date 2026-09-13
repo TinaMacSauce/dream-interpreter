@@ -25,11 +25,11 @@ RELEASE = {
     "teeth_registry_sheet_revision": "6138",
     "teeth_registry_content_revision": "fnv1a64:c51447de5d35bd59",
     "teeth_registry_contract_version": "teeth-doctrine-registry-v1",
-    "snake_doctrine_version": "DEC-SNAKE-2026-09-08-01",
-    "snake_context_version": "snake-context-v1",
-    "snake_registry_range": "DoctrineRegistry!A25:M42",
-    "snake_registry_sheet_revision": "6138",
-    "snake_registry_content_revision": "fnv1a64:ae0190f42f79b9c8",
+    "snake_doctrine_version": "DEC-SNAKE-2026-09-08-02",
+    "snake_context_version": "snake-context-event-terminal-v1",
+    "snake_registry_range": "DoctrineRegistry!A25:M54",
+    "snake_registry_sheet_revision": "6144",
+    "snake_registry_content_revision": "fnv1a64:1c8decb0fe7b56da",
     "snake_registry_contract_version": "snake-doctrine-registry-v1",
 }
 
@@ -48,13 +48,13 @@ REGISTRY = {
 SNAKE_REGISTRY = {
     "verified": True,
     "contract_version": "snake-doctrine-registry-v1",
-    "sheet_range": "DoctrineRegistry!A25:M42",
-    "sheet_revision": "6138",
-    "content_revision": "fnv1a64:ae0190f42f79b9c8",
-    "doctrine_version": "DEC-SNAKE-2026-09-08-01",
-    "rule_count": 18,
-    "active_rule_count": 18,
-    "unresolved_rule_count": 0,
+    "sheet_range": "DoctrineRegistry!A25:M54",
+    "sheet_revision": "6144",
+    "content_revision": "fnv1a64:1c8decb0fe7b56da",
+    "doctrine_version": "DEC-SNAKE-2026-09-08-02",
+    "rule_count": 29,
+    "active_rule_count": 24,
+    "unresolved_rule_count": 5,
     "loaded_from": "canonical_sheet",
 }
 
